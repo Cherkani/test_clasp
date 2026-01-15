@@ -1,0 +1,1621 @@
+<script>
+// App State
+const AppState = {
+  currentPage: 'dashboard',
+  tasks: [],
+  objectives: [],
+  categories: [],
+  statuses: [],
+  isSyncing: false,
+  sidebarCollapsed: false,
+  timelineView: 'month'
+};
+
+// Google Apps Script API
+const API = {
+  async getTasks() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching tasks:', error);
+          resolve([]);
+        })
+        .getDatags();
+    });
+  },
+
+  async saveTasks(tasks) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addDatags(tasks);
+    });
+  },
+
+  async getObjectives() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching objectives:', error);
+          resolve([]);
+        })
+        .getObjectives();
+    });
+  },
+
+  async addObjective(objective) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addObjective(objective);
+    });
+  },
+
+  async updateObjective(objective) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateObjective(objective);
+    });
+  },
+
+  async deleteObjective(objectiveId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteObjective(objectiveId);
+    });
+  },
+
+  async getCategories() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching categories:', error);
+          resolve([]);
+        })
+        .getCategories();
+    });
+  },
+
+  async addCategory(category) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addCategory(category);
+    });
+  },
+
+  async updateCategory(category) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateCategory(category);
+    });
+  },
+
+  async deleteCategory(categoryId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteCategory(categoryId);
+    });
+  },
+
+  async getStatuses() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching statuses:', error);
+          resolve([]);
+        })
+        .getStatuses();
+    });
+  },
+
+  async addStatus(status) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addStatus(status);
+    });
+  },
+
+  async updateStatus(status) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateStatus(status);
+    });
+  },
+
+  async deleteStatus(statusId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteStatus(statusId);
+    });
+  }
+};
+
+// DOM Utilities
+const DOM = {
+  create(tag, className = '', content = '') {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (content) el.textContent = content;
+    return el;
+  },
+
+  createIcon(name) {
+    const icon = this.create('span', 'nav-item-icon');
+    icon.innerHTML = this.getIconSVG(name);
+    return icon;
+  },
+
+  getIconSVG(name) {
+    const icons = {
+      home: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>',
+      tasks: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>',
+      calendar: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>',
+      timeline: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+      target: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>',
+      sync: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
+      check: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
+      loading: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="animate-spin"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
+      close: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
+      chevronLeft: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>',
+      chevronRight: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>',
+      tag: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>'
+    };
+    return icons[name] || '';
+  }
+};
+
+// Sidebar Component
+const Sidebar = {
+  render() {
+    const sidebar = DOM.create('aside', 'sidebar');
+    if (AppState.sidebarCollapsed) sidebar.classList.add('collapsed');
+
+    // Header
+    const header = DOM.create('div', 'sidebar-header');
+    const logo = DOM.create('div', 'sidebar-logo');
+    logo.innerHTML = '<span style="font-size: 1.5rem;">T</span>';
+    if (!AppState.sidebarCollapsed) {
+      const logoText = DOM.create('div', '');
+      logoText.innerHTML = '<p style="font-weight: bold; margin: 0;">Task Pro</p><p style="font-size: 0.75rem; color: #6b7280; margin: 0;">Manage your tasks</p>';
+      logo.appendChild(logoText);
+    }
+    header.appendChild(logo);
+
+    // Toggle button
+    const toggleBtn = DOM.create('button', 'sidebar-toggle');
+    toggleBtn.innerHTML = AppState.sidebarCollapsed ? DOM.getIconSVG('chevronRight') : DOM.getIconSVG('chevronLeft');
+    toggleBtn.onclick = () => {
+      AppState.sidebarCollapsed = !AppState.sidebarCollapsed;
+      this.render();
+    };
+    header.appendChild(toggleBtn);
+    sidebar.appendChild(header);
+
+    // Navigation
+    const nav = DOM.create('nav', 'sidebar-nav');
+    const navList = DOM.create('ul', 'nav-list');
+    
+    const navItems = [
+      { id: 'dashboard', label: 'Dashboard', icon: 'home' },
+      { id: 'tasks', label: 'Tasks', icon: 'tasks' },
+      { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+      { id: 'timeline', label: 'Timeline', icon: 'timeline' },
+      { id: 'objectives', label: 'Objectives', icon: 'target' },
+      { id: 'categories', label: 'Categories', icon: 'tag' },
+      { id: 'statuses', label: 'Statuses', icon: 'check' }
+    ];
+
+    navItems.forEach(item => {
+      const li = DOM.create('li', 'nav-item');
+      if (AppState.currentPage === item.id) li.classList.add('active');
+      li.onclick = () => Router.navigate(item.id);
+      
+      li.appendChild(DOM.createIcon(item.icon));
+      const text = DOM.create('span', 'nav-item-text', item.label);
+      li.appendChild(text);
+      navList.appendChild(li);
+    });
+
+    nav.appendChild(navList);
+    sidebar.appendChild(nav);
+
+    // Sync Section
+    const syncSection = DOM.create('div', 'sync-section');
+    const syncBtn = DOM.create('button', `sync-button ${AppState.isSyncing ? 'syncing' : ''}`);
+    syncBtn.onclick = () => this.sync();
+    
+    if (AppState.isSyncing) {
+      syncBtn.innerHTML = DOM.getIconSVG('loading') + (AppState.sidebarCollapsed ? '' : ' Syncing...');
+    } else {
+      syncBtn.innerHTML = DOM.getIconSVG('check') + (AppState.sidebarCollapsed ? '' : ' Synced');
+    }
+    
+    syncSection.appendChild(syncBtn);
+    sidebar.appendChild(syncSection);
+
+    // Replace existing sidebar
+    const existing = document.querySelector('.sidebar');
+    if (existing) existing.replaceWith(sidebar);
+    else document.body.insertBefore(sidebar, document.body.firstChild);
+  },
+
+  async sync() {
+    AppState.isSyncing = true;
+    this.render();
+    
+    try {
+      AppState.tasks = await API.getTasks();
+      AppState.objectives = await API.getObjectives();
+      AppState.categories = await API.getCategories();
+      AppState.statuses = await API.getStatuses();
+      this.render();
+      Router.render();
+    } catch (error) {
+      console.error('Sync error:', error);
+    } finally {
+      AppState.isSyncing = false;
+      this.render();
+    }
+  }
+};
+
+// Router
+const Router = {
+  navigate(page) {
+    AppState.currentPage = page;
+    Sidebar.render();
+    this.render();
+  },
+
+  render() {
+    const content = document.querySelector('.main-content .content-wrapper') || DOM.create('div', 'content-wrapper');
+    
+    let pageContent;
+    switch (AppState.currentPage) {
+      case 'dashboard':
+        pageContent = Dashboard.render();
+        break;
+      case 'tasks':
+        pageContent = TasksPage.render();
+        break;
+      case 'calendar':
+        pageContent = CalendarPage.render();
+        break;
+      case 'timeline':
+        pageContent = TimelinePage.render();
+        break;
+      case 'objectives':
+        pageContent = ObjectivesPage.render();
+        break;
+      case 'categories':
+        pageContent = CategoriesPage.render();
+        break;
+      case 'statuses':
+        pageContent = StatusesPage.render();
+        break;
+      default:
+        pageContent = Dashboard.render();
+    }
+
+    content.innerHTML = '';
+    content.appendChild(pageContent);
+
+    const mainContent = document.querySelector('.main-content');
+    if (!mainContent) {
+      const main = DOM.create('main', 'main-content');
+      main.appendChild(content);
+      document.body.appendChild(main);
+    } else {
+      const existing = mainContent.querySelector('.content-wrapper');
+      if (existing) existing.replaceWith(content);
+      else mainContent.appendChild(content);
+    }
+  }
+};
+
+// Dashboard Page
+const Dashboard = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.appendChild(DOM.create('h1', 'page-title', 'Dashboard'));
+    header.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks'));
+    container.appendChild(header);
+
+    const stats = DOM.create('div', 'card');
+    stats.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div>
+          <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${AppState.tasks.length}</div>
+          <div style="color: #6b7280;">Total Tasks</div>
+        </div>
+        <div>
+          <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${AppState.tasks.filter(t => t.status === 'completed').length}</div>
+          <div style="color: #6b7280;">Completed</div>
+        </div>
+        <div>
+          <div style="font-size: 2rem; font-weight: bold; color: #ef4444;">${AppState.tasks.filter(t => t.status === 'overdue').length}</div>
+          <div style="color: #6b7280;">Overdue</div>
+        </div>
+        <div>
+          <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${AppState.tasks.filter(t => t.status === 'pending').length}</div>
+          <div style="color: #6b7280;">Pending</div>
+        </div>
+      </div>
+    `;
+    container.appendChild(stats);
+
+    const recentTasks = DOM.create('div', 'card');
+    recentTasks.appendChild(DOM.create('h2', '', 'Recent Tasks'));
+    const taskList = DOM.create('div', 'task-list');
+    
+    AppState.tasks.slice(0, 5).forEach(task => {
+      taskList.appendChild(this.renderTask(task));
+    });
+    
+    recentTasks.appendChild(taskList);
+    container.appendChild(recentTasks);
+
+    return container;
+  },
+
+  renderTask(task) {
+    const item = DOM.create('div', 'task-item');
+    item.style.borderLeftColor = task.color || '#3b82f6';
+    
+    const header = DOM.create('div', 'task-header');
+    header.appendChild(DOM.create('div', 'task-title', task.task));
+    header.appendChild(DOM.create('span', `task-status ${task.status}`, task.status));
+    item.appendChild(header);
+    
+    item.appendChild(DOM.create('span', 'task-category', task.category));
+    
+    if (task.objective) {
+      const objectiveBadge = DOM.create('span', 'task-objective');
+      objectiveBadge.textContent = `🎯 ${task.objective}`;
+      objectiveBadge.style.marginLeft = '0.5rem';
+      objectiveBadge.style.fontSize = '0.75rem';
+      objectiveBadge.style.color = '#3b82f6';
+      item.appendChild(objectiveBadge);
+    }
+    
+    const meta = DOM.create('div', 'task-meta');
+    if (task.startDate) meta.appendChild(DOM.create('span', '', `Start: ${task.startDate}`));
+    if (task.dueDate) meta.appendChild(DOM.create('span', '', `Due: ${task.dueDate}`));
+    item.appendChild(meta);
+
+    return item;
+  }
+};
+
+// Tasks Page
+const TasksPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Tasks'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your tasks'));
+    header.appendChild(titleSection);
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ Add Task';
+    addBtn.onclick = () => TaskModal.show();
+    header.appendChild(addBtn);
+    
+    container.appendChild(header);
+
+    const taskList = DOM.create('div', 'task-list');
+    AppState.tasks.forEach(task => {
+      const item = Dashboard.renderTask(task);
+      item.onclick = () => TaskModal.show(task);
+      taskList.appendChild(item);
+    });
+    
+    container.appendChild(taskList);
+
+    return container;
+  }
+};
+
+// Calendar Page
+const CalendarPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.appendChild(DOM.create('h1', 'page-title', 'Calendar'));
+    header.appendChild(DOM.create('p', 'page-subtitle', 'View your tasks on the calendar'));
+    container.appendChild(header);
+
+    const calendar = DOM.create('div', 'calendar');
+    
+    // Simple calendar grid (you can enhance this)
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    days.forEach(day => {
+      const dayHeader = DOM.create('div', 'calendar-day');
+      dayHeader.style.textAlign = 'center';
+      dayHeader.style.fontWeight = 'bold';
+      dayHeader.textContent = day;
+      calendar.appendChild(dayHeader);
+    });
+
+    // Add calendar days (simplified - you can add full calendar logic)
+    for (let i = 1; i <= 31; i++) {
+      const day = DOM.create('div', 'calendar-day');
+      day.appendChild(DOM.create('div', 'calendar-day-number', i));
+      const tasks = AppState.tasks.filter(t => {
+        const dueDate = new Date(t.dueDate);
+        return dueDate.getDate() === i;
+      });
+      if (tasks.length > 0) {
+        day.appendChild(DOM.create('div', 'calendar-day-tasks', `${tasks.length} tasks`));
+      }
+      calendar.appendChild(day);
+    }
+
+    container.appendChild(calendar);
+    return container;
+  }
+};
+
+// Timeline Page
+const TimelinePage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Timeline'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'View your tasks along a timeline'));
+    header.appendChild(titleSection);
+    
+    const viewControls = DOM.create('div', '');
+    viewControls.style.display = 'flex';
+    viewControls.style.gap = '0.5rem';
+    
+    const currentView = AppState.timelineView || 'month';
+    
+    const monthBtn = DOM.create('button', `btn btn-sm ${currentView === 'month' ? 'btn-primary' : 'btn-secondary'}`);
+    monthBtn.textContent = 'Month';
+    monthBtn.onclick = () => this.setView('month');
+    viewControls.appendChild(monthBtn);
+    
+    const weekBtn = DOM.create('button', `btn btn-sm ${currentView === 'week' ? 'btn-primary' : 'btn-secondary'}`);
+    weekBtn.textContent = 'Week';
+    weekBtn.onclick = () => this.setView('week');
+    viewControls.appendChild(weekBtn);
+    
+    header.appendChild(viewControls);
+    container.appendChild(header);
+
+    const timelineWrapper = DOM.create('div', 'timeline-wrapper');
+    timelineWrapper.style.overflowX = 'auto';
+    timelineWrapper.style.marginTop = '2rem';
+    timelineWrapper.setAttribute('data-view', AppState.timelineView || 'month');
+    
+    const timeline = DOM.create('div', 'timeline-container');
+    this.renderTimeline(timeline);
+    timelineWrapper.appendChild(timeline);
+    
+    container.appendChild(timelineWrapper);
+
+    return container;
+  },
+
+  setView(view) {
+    AppState.timelineView = view;
+    Router.render();
+  },
+
+  renderTimeline(container) {
+    const view = AppState.timelineView || 'month';
+    const now = new Date();
+    let startDate, endDate, days = [];
+
+    if (view === 'week') {
+      // Get current week
+      const dayOfWeek = now.getDay();
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - dayOfWeek);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        days.push(date);
+      }
+    } else {
+      // Get current month
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      // Add days from previous month to fill first week
+      const firstDay = startDate.getDay();
+      for (let i = firstDay - 1; i >= 0; i--) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() - i - 1);
+        days.push(date);
+      }
+      
+      // Add all days of current month
+      for (let i = 1; i <= endDate.getDate(); i++) {
+        const date = new Date(now.getFullYear(), now.getMonth(), i);
+        days.push(date);
+      }
+      
+      // Add days from next month to fill last week
+      const lastDay = endDate.getDay();
+      for (let i = 1; i <= 6 - lastDay; i++) {
+        const date = new Date(endDate);
+        date.setDate(endDate.getDate() + i);
+        days.push(date);
+      }
+    }
+
+    // Timeline header with dates
+    const header = DOM.create('div', 'timeline-header');
+    days.forEach(day => {
+      const dayHeader = DOM.create('div', 'timeline-day-header');
+      const isToday = this.isToday(day);
+      if (isToday) dayHeader.classList.add('today');
+      
+      dayHeader.appendChild(DOM.create('div', 'timeline-day-name', 
+        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getDay()]));
+      dayHeader.appendChild(DOM.create('div', 'timeline-day-number', day.getDate()));
+      
+      if (isToday) {
+        dayHeader.style.backgroundColor = '#dbeafe';
+        dayHeader.style.borderColor = '#3b82f6';
+      }
+      
+      header.appendChild(dayHeader);
+    });
+    container.appendChild(header);
+
+    // Timeline body with tasks
+    const body = DOM.create('div', 'timeline-body');
+    
+    // Group tasks by date
+    const tasksByDate = {};
+    AppState.tasks.forEach(task => {
+      if (task.dueDate) {
+        const taskDate = new Date(task.dueDate);
+        const dateKey = this.getDateKey(taskDate);
+        if (!tasksByDate[dateKey]) {
+          tasksByDate[dateKey] = [];
+        }
+        tasksByDate[dateKey].push(task);
+      }
+    });
+
+    // Create timeline rows for each day
+    days.forEach(day => {
+      const dayColumn = DOM.create('div', 'timeline-day-column');
+      const dateKey = this.getDateKey(day);
+      const dayTasks = tasksByDate[dateKey] || [];
+      
+      dayTasks.forEach((task, index) => {
+        const taskBar = DOM.create('div', 'timeline-task-bar');
+        taskBar.style.backgroundColor = task.color || '#3b82f6';
+        taskBar.style.borderLeftColor = task.color || '#3b82f6';
+        
+        const taskContent = DOM.create('div', 'timeline-task-content');
+        taskContent.appendChild(DOM.create('div', 'timeline-task-title', task.task));
+        taskContent.appendChild(DOM.create('div', 'timeline-task-meta', 
+          `${task.category} • ${task.status}`));
+        
+        taskBar.appendChild(taskContent);
+        taskBar.onclick = () => TaskModal.show(task);
+        taskBar.title = `${task.task} - Due: ${task.dueDate}`;
+        
+        // Add status indicator
+        const statusIndicator = DOM.create('div', `timeline-task-status ${task.status}`);
+        taskBar.appendChild(statusIndicator);
+        
+        dayColumn.appendChild(taskBar);
+      });
+      
+      // Add empty state if no tasks
+      if (dayTasks.length === 0) {
+        const emptyDay = DOM.create('div', 'timeline-day-empty');
+        emptyDay.textContent = 'No tasks';
+        dayColumn.appendChild(emptyDay);
+      }
+      
+      body.appendChild(dayColumn);
+    });
+    
+    container.appendChild(body);
+  },
+
+  getDateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  },
+
+  isToday(date) {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  }
+};
+
+// Objectives Page
+const ObjectivesPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Objectives'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your objectives and goals'));
+    header.appendChild(titleSection);
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ Add Objective';
+    addBtn.onclick = () => ObjectiveModal.show();
+    header.appendChild(addBtn);
+    
+    container.appendChild(header);
+
+    const objectivesList = DOM.create('div', 'objectives-list');
+    
+    if (AppState.objectives.length === 0) {
+      const emptyState = DOM.create('div', 'empty-state');
+      emptyState.style.textAlign = 'center';
+      emptyState.style.padding = '3rem';
+      emptyState.style.color = '#6b7280';
+      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No objectives yet</p><p>Create your first objective to get started</p>';
+      objectivesList.appendChild(emptyState);
+    } else {
+      AppState.objectives.forEach(objective => {
+        objectivesList.appendChild(this.renderObjective(objective));
+      });
+    }
+    
+    container.appendChild(objectivesList);
+
+    return container;
+  },
+
+  renderObjective(objective) {
+    const card = DOM.create('div', 'objective-card');
+    card.style.borderLeftColor = objective.color || '#3b82f6';
+    
+    const header = DOM.create('div', 'objective-header');
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h3', 'objective-title', objective.name));
+    if (objective.description) {
+      titleSection.appendChild(DOM.create('p', 'objective-description', objective.description));
+    }
+    if (objective.category) {
+      const categoryBadge = DOM.create('span', 'task-category');
+      categoryBadge.textContent = `📁 ${objective.category}`;
+      categoryBadge.style.marginTop = '0.5rem';
+      categoryBadge.style.display = 'inline-block';
+      titleSection.appendChild(categoryBadge);
+    }
+    header.appendChild(titleSection);
+    
+    const actions = DOM.create('div', 'objective-actions');
+    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => ObjectiveModal.show(objective);
+    actions.appendChild(editBtn);
+    
+    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = () => this.deleteObjective(objective);
+    actions.appendChild(deleteBtn);
+    
+    header.appendChild(actions);
+    card.appendChild(header);
+
+    // Show tasks with this objective
+    const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
+    if (tasksWithObjective.length > 0) {
+      const tasksSection = DOM.create('div', 'objective-tasks');
+      tasksSection.appendChild(DOM.create('p', 'objective-tasks-label', `Tasks: ${tasksWithObjective.length}`));
+      const taskList = DOM.create('div', 'objective-task-list');
+      tasksWithObjective.slice(0, 5).forEach(task => {
+        const taskItem = DOM.create('div', 'objective-task-item');
+        taskItem.textContent = task.task;
+        taskItem.onclick = () => {
+          Router.navigate('tasks');
+          setTimeout(() => TaskModal.show(task), 100);
+        };
+        taskList.appendChild(taskItem);
+      });
+      if (tasksWithObjective.length > 5) {
+        const more = DOM.create('div', 'objective-task-more');
+        more.textContent = `+${tasksWithObjective.length - 5} more`;
+        taskList.appendChild(more);
+      }
+      tasksSection.appendChild(taskList);
+      card.appendChild(tasksSection);
+    }
+
+    return card;
+  },
+
+  async deleteObjective(objective) {
+    if (!confirm(`Are you sure you want to delete "${objective.name}"?`)) return;
+    
+    try {
+      await API.deleteObjective(objective.id);
+      AppState.objectives = AppState.objectives.filter(o => o.id !== objective.id);
+      // Remove objective from tasks
+      AppState.tasks.forEach(task => {
+        if (task.objective === objective.name) {
+          task.objective = '';
+        }
+      });
+      Router.render();
+    } catch (error) {
+      console.error('Error deleting objective:', error);
+      alert('Error deleting objective. Please try again.');
+    }
+  }
+};
+
+// Objective Modal
+const ObjectiveModal = {
+  show(objective = null, onSaveCallback = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    
+    const modalHeader = DOM.create('div', 'modal-header');
+    modalHeader.appendChild(DOM.create('h2', 'modal-title', objective ? 'Edit Objective' : 'New Objective'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    modalHeader.appendChild(closeBtn);
+    modal.appendChild(modalHeader);
+
+    const form = DOM.create('form', '');
+    
+    // Objective name
+    const nameGroup = DOM.create('div', 'form-group');
+    nameGroup.appendChild(DOM.create('label', 'form-label', 'Objective Name'));
+    const nameInput = DOM.create('input', 'form-input');
+    nameInput.type = 'text';
+    nameInput.name = 'name';
+    nameInput.value = objective?.name || '';
+    nameInput.required = true;
+    nameInput.placeholder = 'e.g., Work, Personal, Health';
+    nameGroup.appendChild(nameInput);
+    form.appendChild(nameGroup);
+
+    // Description
+    const descGroup = DOM.create('div', 'form-group');
+    descGroup.appendChild(DOM.create('label', 'form-label', 'Description'));
+    const descInput = DOM.create('textarea', 'form-input');
+    descInput.name = 'description';
+    descInput.value = objective?.description || '';
+    descInput.rows = 3;
+    descInput.style.minHeight = '80px';
+    descInput.placeholder = 'Optional description for this objective';
+    descGroup.appendChild(descInput);
+    form.appendChild(descGroup);
+
+    // Category
+    const categoryGroup = DOM.create('div', 'form-group');
+    categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
+    const categorySelect = DOM.create('select', 'form-select');
+    categorySelect.name = 'category';
+    
+    const noneCategoryOption = DOM.create('option', '');
+    noneCategoryOption.value = '';
+    noneCategoryOption.textContent = 'None';
+    if (!objective?.category) noneCategoryOption.selected = true;
+    categorySelect.appendChild(noneCategoryOption);
+    
+    AppState.categories.forEach(cat => {
+      const option = DOM.create('option', '');
+      option.value = cat.name;
+      option.textContent = cat.name;
+      if (objective?.category === cat.name) option.selected = true;
+      categorySelect.appendChild(option);
+    });
+    
+    categoryGroup.appendChild(categorySelect);
+    
+    const newCategoryBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    newCategoryBtn.type = 'button';
+    newCategoryBtn.textContent = '+ New Category';
+    newCategoryBtn.style.marginTop = '0.5rem';
+    newCategoryBtn.onclick = () => {
+      this.hide();
+      CategoryModal.show(null, (newCategory) => {
+        this.show(objective);
+      });
+    };
+    categoryGroup.appendChild(newCategoryBtn);
+    form.appendChild(categoryGroup);
+
+    // Color
+    const colorGroup = DOM.create('div', 'form-group');
+    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
+    const colorInput = DOM.create('input', 'form-input');
+    colorInput.type = 'color';
+    colorInput.name = 'color';
+    colorInput.value = objective?.color || '#3b82f6';
+    colorGroup.appendChild(colorInput);
+    form.appendChild(colorGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(objective, new FormData(form), onSaveCallback);
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(objective, formData, callback) {
+    const objectiveData = {
+      name: formData.get('name'),
+      description: formData.get('description'),
+      color: formData.get('color'),
+      category: formData.get('category') || ''
+    };
+
+    try {
+      if (objective) {
+        objectiveData.id = objective.id;
+        await API.updateObjective(objectiveData);
+        const index = AppState.objectives.findIndex(o => o.id === objective.id);
+        AppState.objectives[index] = objectiveData;
+      } else {
+        const newId = await API.addObjective(objectiveData);
+        objectiveData.id = newId;
+        AppState.objectives.push(objectiveData);
+      }
+      
+      this.hide();
+      Router.render();
+      if (callback) callback(objectiveData);
+    } catch (error) {
+      console.error('Error saving objective:', error);
+      alert('Error saving objective. Please try again.');
+    }
+  }
+};
+
+// Categories Page
+const CategoriesPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Categories'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your categories'));
+    header.appendChild(titleSection);
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ Add Category';
+    addBtn.onclick = () => CategoryModal.show();
+    header.appendChild(addBtn);
+    
+    container.appendChild(header);
+
+    const categoriesList = DOM.create('div', 'objectives-list');
+    
+    if (AppState.categories.length === 0) {
+      const emptyState = DOM.create('div', 'empty-state');
+      emptyState.style.textAlign = 'center';
+      emptyState.style.padding = '3rem';
+      emptyState.style.color = '#6b7280';
+      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No categories yet</p><p>Create your first category to get started</p>';
+      categoriesList.appendChild(emptyState);
+    } else {
+      AppState.categories.forEach(category => {
+        categoriesList.appendChild(this.renderCategory(category));
+      });
+    }
+    
+    container.appendChild(categoriesList);
+
+    return container;
+  },
+
+  renderCategory(category) {
+    const card = DOM.create('div', 'objective-card');
+    card.style.borderLeftColor = category.color || '#3b82f6';
+    
+    const header = DOM.create('div', 'objective-header');
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h3', 'objective-title', category.name));
+    header.appendChild(titleSection);
+    
+    const actions = DOM.create('div', 'objective-actions');
+    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => CategoryModal.show(category);
+    actions.appendChild(editBtn);
+    
+    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = () => this.deleteCategory(category);
+    actions.appendChild(deleteBtn);
+    
+    header.appendChild(actions);
+    card.appendChild(header);
+
+    // Show objectives with this category
+    const objectivesWithCategory = AppState.objectives.filter(o => o.category === category.name);
+    if (objectivesWithCategory.length > 0) {
+      const objectivesSection = DOM.create('div', 'objective-tasks');
+      objectivesSection.appendChild(DOM.create('p', 'objective-tasks-label', `Objectives: ${objectivesWithCategory.length}`));
+      const objectiveList = DOM.create('div', 'objective-task-list');
+      objectivesWithCategory.forEach(objective => {
+        const objectiveItem = DOM.create('div', 'objective-task-item');
+        objectiveItem.textContent = objective.name;
+        objectiveItem.onclick = () => {
+          Router.navigate('objectives');
+          setTimeout(() => ObjectiveModal.show(objective), 100);
+        };
+        objectiveList.appendChild(objectiveItem);
+      });
+      objectivesSection.appendChild(objectiveList);
+      card.appendChild(objectivesSection);
+    }
+
+    return card;
+  },
+
+  async deleteCategory(category) {
+    if (!confirm(`Are you sure you want to delete "${category.name}"?`)) return;
+    
+    try {
+      await API.deleteCategory(category.id);
+      AppState.categories = AppState.categories.filter(c => c.id !== category.id);
+      // Remove category from objectives
+      AppState.objectives.forEach(objective => {
+        if (objective.category === category.name) {
+          objective.category = '';
+        }
+      });
+      Router.render();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      alert('Error deleting category. Please try again.');
+    }
+  }
+};
+
+// Category Modal
+const CategoryModal = {
+  show(category = null, onSaveCallback = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    
+    const modalHeader = DOM.create('div', 'modal-header');
+    modalHeader.appendChild(DOM.create('h2', 'modal-title', category ? 'Edit Category' : 'New Category'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    modalHeader.appendChild(closeBtn);
+    modal.appendChild(modalHeader);
+
+    const form = DOM.create('form', '');
+    
+    // Category name
+    const nameGroup = DOM.create('div', 'form-group');
+    nameGroup.appendChild(DOM.create('label', 'form-label', 'Category Name'));
+    const nameInput = DOM.create('input', 'form-input');
+    nameInput.type = 'text';
+    nameInput.name = 'name';
+    nameInput.value = category?.name || '';
+    nameInput.required = true;
+    nameInput.placeholder = 'e.g., Work, Personal, Health';
+    nameGroup.appendChild(nameInput);
+    form.appendChild(nameGroup);
+
+    // Color
+    const colorGroup = DOM.create('div', 'form-group');
+    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
+    const colorInput = DOM.create('input', 'form-input');
+    colorInput.type = 'color';
+    colorInput.name = 'color';
+    colorInput.value = category?.color || '#3b82f6';
+    colorGroup.appendChild(colorInput);
+    form.appendChild(colorGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(category, new FormData(form), onSaveCallback);
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(category, formData, callback) {
+    const categoryData = {
+      name: formData.get('name'),
+      color: formData.get('color')
+    };
+
+    try {
+      if (category) {
+        categoryData.id = category.id;
+        await API.updateCategory(categoryData);
+        const index = AppState.categories.findIndex(c => c.id === category.id);
+        AppState.categories[index] = categoryData;
+      } else {
+        const newId = await API.addCategory(categoryData);
+        categoryData.id = newId;
+        AppState.categories.push(categoryData);
+      }
+      
+      this.hide();
+      Router.render();
+      if (callback) callback(categoryData);
+    } catch (error) {
+      console.error('Error saving category:', error);
+      alert('Error saving category. Please try again.');
+    }
+  }
+};
+
+// Statuses Page
+const StatusesPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Statuses'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your task statuses'));
+    header.appendChild(titleSection);
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ Add Status';
+    addBtn.onclick = () => StatusModal.show();
+    header.appendChild(addBtn);
+    
+    container.appendChild(header);
+
+    const statusesList = DOM.create('div', 'objectives-list');
+    
+    if (AppState.statuses.length === 0) {
+      const emptyState = DOM.create('div', 'empty-state');
+      emptyState.style.textAlign = 'center';
+      emptyState.style.padding = '3rem';
+      emptyState.style.color = '#6b7280';
+      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No statuses yet</p><p>Create your first status to get started</p>';
+      statusesList.appendChild(emptyState);
+    } else {
+      AppState.statuses.forEach(status => {
+        statusesList.appendChild(this.renderStatus(status));
+      });
+    }
+    
+    container.appendChild(statusesList);
+
+    return container;
+  },
+
+  renderStatus(status) {
+    const card = DOM.create('div', 'objective-card');
+    card.style.borderLeftColor = status.color || '#3b82f6';
+    
+    const header = DOM.create('div', 'objective-header');
+    const titleSection = DOM.create('div', '');
+    const titleDiv = DOM.create('div', '');
+    titleDiv.style.display = 'flex';
+    titleDiv.style.alignItems = 'center';
+    titleDiv.style.gap = '0.5rem';
+    
+    const statusDot = DOM.create('div', '');
+    statusDot.style.width = '12px';
+    statusDot.style.height = '12px';
+    statusDot.style.borderRadius = '50%';
+    statusDot.style.backgroundColor = status.color || '#3b82f6';
+    titleDiv.appendChild(statusDot);
+    titleDiv.appendChild(DOM.create('h3', 'objective-title', status.name.charAt(0).toUpperCase() + status.name.slice(1).replace('-', ' ')));
+    titleSection.appendChild(titleDiv);
+    header.appendChild(titleSection);
+    
+    const actions = DOM.create('div', 'objective-actions');
+    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => StatusModal.show(status);
+    actions.appendChild(editBtn);
+    
+    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = () => this.deleteStatus(status);
+    actions.appendChild(deleteBtn);
+    
+    header.appendChild(actions);
+    card.appendChild(header);
+
+    // Show tasks with this status
+    const tasksWithStatus = AppState.tasks.filter(t => t.status === status.name);
+    if (tasksWithStatus.length > 0) {
+      const tasksSection = DOM.create('div', 'objective-tasks');
+      tasksSection.appendChild(DOM.create('p', 'objective-tasks-label', `Tasks: ${tasksWithStatus.length}`));
+      const taskList = DOM.create('div', 'objective-task-list');
+      tasksWithStatus.slice(0, 5).forEach(task => {
+        const taskItem = DOM.create('div', 'objective-task-item');
+        taskItem.textContent = task.task;
+        taskItem.onclick = () => {
+          Router.navigate('tasks');
+          setTimeout(() => TaskModal.show(task), 100);
+        };
+        taskList.appendChild(taskItem);
+      });
+      if (tasksWithStatus.length > 5) {
+        const more = DOM.create('div', 'objective-task-more');
+        more.textContent = `+${tasksWithStatus.length - 5} more`;
+        taskList.appendChild(more);
+      }
+      tasksSection.appendChild(taskList);
+      card.appendChild(tasksSection);
+    }
+
+    return card;
+  },
+
+  async deleteStatus(status) {
+    if (!confirm(`Are you sure you want to delete "${status.name}"?`)) return;
+    
+    try {
+      await API.deleteStatus(status.id);
+      AppState.statuses = AppState.statuses.filter(s => s.id !== status.id);
+      Router.render();
+    } catch (error) {
+      console.error('Error deleting status:', error);
+      alert('Error deleting status. Please try again.');
+    }
+  }
+};
+
+// Status Modal
+const StatusModal = {
+  show(status = null, onSaveCallback = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    
+    const modalHeader = DOM.create('div', 'modal-header');
+    modalHeader.appendChild(DOM.create('h2', 'modal-title', status ? 'Edit Status' : 'New Status'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    modalHeader.appendChild(closeBtn);
+    modal.appendChild(modalHeader);
+
+    const form = DOM.create('form', '');
+    
+    // Status name
+    const nameGroup = DOM.create('div', 'form-group');
+    nameGroup.appendChild(DOM.create('label', 'form-label', 'Status Name'));
+    const nameInput = DOM.create('input', 'form-input');
+    nameInput.type = 'text';
+    nameInput.name = 'name';
+    nameInput.value = status?.name || '';
+    nameInput.required = true;
+    nameInput.placeholder = 'e.g., pending, completed, in-progress';
+    nameGroup.appendChild(nameInput);
+    form.appendChild(nameGroup);
+
+    // Color
+    const colorGroup = DOM.create('div', 'form-group');
+    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
+    const colorInput = DOM.create('input', 'form-input');
+    colorInput.type = 'color';
+    colorInput.name = 'color';
+    colorInput.value = status?.color || '#3b82f6';
+    colorGroup.appendChild(colorInput);
+    form.appendChild(colorGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(status, new FormData(form), onSaveCallback);
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(status, formData, callback) {
+    const statusData = {
+      name: formData.get('name'),
+      color: formData.get('color')
+    };
+
+    try {
+      if (status) {
+        statusData.id = status.id;
+        await API.updateStatus(statusData);
+        const index = AppState.statuses.findIndex(s => s.id === status.id);
+        AppState.statuses[index] = statusData;
+      } else {
+        const newId = await API.addStatus(statusData);
+        statusData.id = newId;
+        AppState.statuses.push(statusData);
+      }
+      
+      this.hide();
+      Router.render();
+      if (callback) callback(statusData);
+    } catch (error) {
+      console.error('Error saving status:', error);
+      alert('Error saving status. Please try again.');
+    }
+  }
+};
+
+// Task Modal
+const TaskModal = {
+  show(task = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    
+    const modalHeader = DOM.create('div', 'modal-header');
+    modalHeader.appendChild(DOM.create('h2', 'modal-title', task ? 'Edit Task' : 'New Task'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    modalHeader.appendChild(closeBtn);
+    modal.appendChild(modalHeader);
+
+    const form = DOM.create('form', '');
+    
+    // Task name
+    const taskGroup = DOM.create('div', 'form-group');
+    taskGroup.appendChild(DOM.create('label', 'form-label', 'Task Name'));
+    const taskInput = DOM.create('input', 'form-input');
+    taskInput.type = 'text';
+    taskInput.name = 'task';
+    taskInput.value = task?.task || '';
+    taskInput.required = true;
+    taskGroup.appendChild(taskInput);
+    form.appendChild(taskGroup);
+
+    // Category
+    const catGroup = DOM.create('div', 'form-group');
+    catGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
+    const catSelect = DOM.create('select', 'form-select');
+    catSelect.name = 'category';
+    
+    const noneCatOption = DOM.create('option', '');
+    noneCatOption.value = '';
+    noneCatOption.textContent = 'None';
+    if (!task?.category) noneCatOption.selected = true;
+    catSelect.appendChild(noneCatOption);
+    
+    AppState.categories.forEach(cat => {
+      const option = DOM.create('option', '');
+      option.value = cat.name;
+      option.textContent = cat.name;
+      if (task?.category === cat.name) option.selected = true;
+      catSelect.appendChild(option);
+    });
+    
+    catGroup.appendChild(catSelect);
+    
+    const newCatBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    newCatBtn.type = 'button';
+    newCatBtn.textContent = '+ New Category';
+    newCatBtn.style.marginTop = '0.5rem';
+    newCatBtn.onclick = () => {
+      this.hide();
+      CategoryModal.show(null, (newCategory) => {
+        this.show(task);
+      });
+    };
+    catGroup.appendChild(newCatBtn);
+    form.appendChild(catGroup);
+
+    // Due Date
+    const dueDateGroup = DOM.create('div', 'form-group');
+    dueDateGroup.appendChild(DOM.create('label', 'form-label', 'Due Date'));
+    const dueDateInput = DOM.create('input', 'form-input');
+    dueDateInput.type = 'date';
+    dueDateInput.name = 'dueDate';
+    dueDateInput.value = task?.dueDate || '';
+    dueDateGroup.appendChild(dueDateInput);
+    form.appendChild(dueDateGroup);
+
+    // Status
+    const statusGroup = DOM.create('div', 'form-group');
+    statusGroup.appendChild(DOM.create('label', 'form-label', 'Status'));
+    const statusSelect = DOM.create('select', 'form-select');
+    statusSelect.name = 'status';
+    
+    AppState.statuses.forEach(status => {
+      const option = DOM.create('option', '');
+      option.value = status.name;
+      option.textContent = status.name.charAt(0).toUpperCase() + status.name.slice(1).replace('-', ' ');
+      if (task?.status === status.name) option.selected = true;
+      statusSelect.appendChild(option);
+    });
+    
+    statusGroup.appendChild(statusSelect);
+    
+    const newStatusBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    newStatusBtn.type = 'button';
+    newStatusBtn.textContent = '+ New Status';
+    newStatusBtn.style.marginTop = '0.5rem';
+    newStatusBtn.onclick = () => {
+      this.hide();
+      StatusModal.show(null, (newStatus) => {
+        this.show(task);
+      });
+    };
+    statusGroup.appendChild(newStatusBtn);
+    form.appendChild(statusGroup);
+
+    // Objective
+    const objectiveGroup = DOM.create('div', 'form-group');
+    objectiveGroup.appendChild(DOM.create('label', 'form-label', 'Objective'));
+    const objectiveSelect = DOM.create('select', 'form-select');
+    objectiveSelect.name = 'objective';
+    
+    const noneOption = DOM.create('option', '');
+    noneOption.value = '';
+    noneOption.textContent = 'None';
+    if (!task?.objective) noneOption.selected = true;
+    objectiveSelect.appendChild(noneOption);
+    
+    AppState.objectives.forEach(obj => {
+      const option = DOM.create('option', '');
+      option.value = obj.name;
+      option.textContent = obj.name;
+      if (task?.objective === obj.name) option.selected = true;
+      objectiveSelect.appendChild(option);
+    });
+    
+    objectiveGroup.appendChild(objectiveSelect);
+    
+    const newObjectiveBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    newObjectiveBtn.type = 'button';
+    newObjectiveBtn.textContent = '+ New Objective';
+    newObjectiveBtn.style.marginTop = '0.5rem';
+    newObjectiveBtn.onclick = () => {
+      this.hide();
+      ObjectiveModal.show(null, (newObjective) => {
+        this.show(task);
+      });
+    };
+    objectiveGroup.appendChild(newObjectiveBtn);
+    form.appendChild(objectiveGroup);
+
+    // Color
+    const colorGroup = DOM.create('div', 'form-group');
+    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
+    const colorInput = DOM.create('input', 'form-input');
+    colorInput.type = 'color';
+    colorInput.name = 'color';
+    colorInput.value = task?.color || '#3b82f6';
+    colorGroup.appendChild(colorInput);
+    form.appendChild(colorGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(task, new FormData(form));
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(task, formData) {
+    const taskData = {
+      id: task?.id || Date.now(),
+      task: formData.get('task'),
+      category: formData.get('category'),
+      dueDate: formData.get('dueDate'),
+      color: formData.get('color'),
+      status: formData.get('status') || 'pending',
+      objective: formData.get('objective') || ''
+    };
+
+    if (task) {
+      const index = AppState.tasks.findIndex(t => t.id === task.id);
+      AppState.tasks[index] = taskData;
+    } else {
+      AppState.tasks.push(taskData);
+    }
+
+    try {
+      await API.saveTasks(AppState.tasks);
+      this.hide();
+      Router.render();
+      Sidebar.render();
+    } catch (error) {
+      console.error('Error saving task:', error);
+      alert('Error saving task. Please try again.');
+    }
+  }
+};
+
+// Initialize App
+async function init() {
+  // Show loader
+  const loader = document.getElementById('loader');
+  if (loader) {
+    loader.classList.remove('hidden');
+  }
+  
+  try {
+    // Load tasks, objectives, categories, and statuses
+    AppState.tasks = await API.getTasks();
+    AppState.objectives = await API.getObjectives();
+    AppState.categories = await API.getCategories();
+    AppState.statuses = await API.getStatuses();
+    
+    // Render sidebar and initial page
+    Sidebar.render();
+    Router.render();
+  } catch (error) {
+    console.error('Error initializing app:', error);
+  } finally {
+    // Hide loader after a short delay for smooth transition
+    setTimeout(() => {
+      if (loader) {
+        loader.classList.add('hidden');
+        // Remove loader from DOM after animation
+        setTimeout(() => {
+          if (loader.parentNode) {
+            loader.parentNode.removeChild(loader);
+          }
+        }, 300);
+      }
+    }, 500);
+  }
+}
+
+// Start app when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
