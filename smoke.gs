@@ -7,12 +7,14 @@ function seedSmokeData() {
     "category",
     "startDate",
     "startTime",
-    "dueDate",
-    "dueTime",
+    "endDate",
+    "endTime",
     "color",
     "status",
     "objective",
-    "priority"
+    "priority",
+    "repeatType",
+    "repeatUntil"
   ]);
 
   const objectivesSheet = ensureSheet(ss, "Objectives", [
@@ -67,12 +69,12 @@ function seedSmokeData() {
   ];
 
   const tasks = [
-    [1001, "Prep launch deck", "Work", "2025-01-05", "09:00:00", "2025-01-08", "17:00:00", "#5470c6", "pending", "Launch Plan", "high"],
-    [1002, "Review roadmap", "Work", "2025-01-06", "10:00:00", "2025-01-07", "12:00:00", "#73c0de", "completed", "Launch Plan", "medium"],
-    [1003, "Morning run", "Health", "2025-01-03", "07:00:00", "2025-01-03", "08:00:00", "#91cc75", "completed", "Fitness", "low"],
-    [1004, "Strength session", "Health", "2025-01-04", "18:00:00", "2025-01-04", "19:30:00", "#ef4444", "pending", "Fitness", "medium"],
-    [1005, "Finish online course", "Learning", "2025-01-02", "20:00:00", "2025-01-09", "23:00:00", "#f59e0b", "in-progress", "Courses", "high"],
-    [1006, "Plan weekend", "Personal", "2025-01-01", "10:00:00", "2025-01-02", "12:00:00", "#10b981", "overdue", "", "low"]
+    [1001, "Prep launch deck", "Work", "2025-01-05", "", "2025-01-08", "", "#5470c6", "pending", "Launch Plan", "high", "none", ""],
+    [1002, "Review roadmap", "Work", "2025-01-06", "", "2025-01-07", "", "#73c0de", "completed", "Launch Plan", "medium", "none", ""],
+    [1003, "Morning run", "Health", "2025-01-03", "", "2025-01-03", "", "#91cc75", "completed", "Fitness", "low", "daily", "2025-01-20"],
+    [1004, "Strength session", "Health", "2025-01-04", "", "2025-01-04", "", "#ef4444", "pending", "Fitness", "medium", "monthly", "2025-04-30"],
+    [1005, "Finish online course", "Learning", "2025-01-02", "", "2025-01-09", "", "#f59e0b", "in-progress", "Courses", "high", "none", ""],
+    [1006, "Plan weekend", "Personal", "2025-01-01", "", "2025-01-02", "", "#10b981", "overdue", "", "low", "none", ""]
   ];
 
   const extraStatuses = ["pending", "completed", "overdue", "in-progress"];
@@ -92,13 +94,15 @@ function seedSmokeData() {
       `Sample task ${i + 1}`,
       extraCategories[i % extraCategories.length],
       startDate,
-      "09:30:00",
+      "",
       dueDate,
-      "18:00:00",
+      "",
       extraColors[i % extraColors.length],
       extraStatuses[i % extraStatuses.length],
       extraObjectives[i % extraObjectives.length],
-      extraPriorities[i % extraPriorities.length]
+      extraPriorities[i % extraPriorities.length],
+      i % 3 === 0 ? "daily" : "none",
+      i % 3 === 0 ? "2025-01-28" : ""
     ]);
   }
 

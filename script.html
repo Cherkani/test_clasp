@@ -273,6 +273,85 @@ function updateTaskReferences(field, oldValue, newValue) {
   return changed;
 }
 
+const DateUtils = {
+  parseDate(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setHours(0, 0, 0, 0);
+    return date;
+  },
+
+  formatDate(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  },
+
+  addDays(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+  }
+};
+
+function getTaskRange(task) {
+  const start = DateUtils.parseDate(task.startDate || task.endDate);
+  const end = DateUtils.parseDate(task.endDate || task.startDate);
+  if (!start && !end) return { start: null, end: null };
+  if (start && !end) return { start, end: new Date(start) };
+  if (!start && end) return { start: new Date(end), end };
+  if (end < start) return { start: end, end: start };
+  return { start, end };
+}
+
+function getTaskDurationDays(task) {
+  const { start, end } = getTaskRange(task);
+  if (!start || !end) return 0;
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+function getTaskOccurrences(tasks, rangeStart, rangeEnd) {
+  const occurrences = [];
+  tasks.forEach(task => {
+    const range = getTaskRange(task);
+    if (!range.start || !range.end) return;
+    const repeatType = task.repeatType || 'none';
+    const repeatUntil = DateUtils.parseDate(task.repeatUntil) || range.end;
+    const durationDays = Math.max(0, Math.round((range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24)));
+
+    const addOccurrence = (startDate) => {
+      const endDate = DateUtils.addDays(startDate, durationDays);
+      if (endDate < rangeStart || startDate > rangeEnd) return;
+      occurrences.push({
+        ...task,
+        occurrenceStart: DateUtils.formatDate(startDate),
+        occurrenceEnd: DateUtils.formatDate(endDate),
+        isRecurringInstance: repeatType !== 'none'
+      });
+    };
+
+    if (repeatType === 'daily' || repeatType === 'monthly') {
+      let cursor = new Date(range.start);
+      const dayOfMonth = range.start.getDate();
+      while (cursor <= rangeEnd && cursor <= repeatUntil) {
+        addOccurrence(cursor);
+        if (repeatType === 'daily') {
+          cursor = DateUtils.addDays(cursor, 1);
+        } else {
+          cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, dayOfMonth);
+        }
+      }
+    } else {
+      addOccurrence(range.start);
+    }
+  });
+  return occurrences;
+}
+
+function getObjectiveColor(name) {
+  if (!name) return '';
+  return AppState.objectives.find(objective => objective.name === name)?.color || '';
+}
+
 // DOM Utilities
 const DOM = {
   create(tag, className = '', content = '') {
@@ -414,7 +493,6 @@ const Sidebar = {
     const navItems = [
       { id: 'dashboard', label: 'Dashboard', icon: 'home' },
       { id: 'tasks', label: 'Tasks', icon: 'tasks' },
-      { id: 'calendar', label: 'Calendar', icon: 'calendar' },
       { id: 'timeline', label: 'Timeline', icon: 'timeline' },
       { id: 'finance', label: 'Finance', icon: 'finance' },
       { id: 'reference', label: 'Reference', icon: 'tag' }
@@ -584,6 +662,25 @@ const Dashboard = {
     const sideColumn = DOM.create('aside', 'dashboard-side');
 
     const filteredTasks = TaskFilters.applySearch(AppState.tasks);
+    const calendarMonth = new Date();
+    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+    const occurrences = getTaskOccurrences(filteredTasks, monthStart, monthEnd);
+    const tasksByDate = {};
+    occurrences.forEach(task => {
+      const start = DateUtils.parseDate(task.occurrenceStart || task.startDate);
+      const end = DateUtils.parseDate(task.occurrenceEnd || task.endDate || task.startDate);
+      if (!start || !end) return;
+      let cursor = new Date(start);
+      while (cursor <= end) {
+        if (cursor.getMonth() === calendarMonth.getMonth() && cursor.getFullYear() === calendarMonth.getFullYear()) {
+          const key = DateUtils.formatDate(cursor);
+          if (!tasksByDate[key]) tasksByDate[key] = 0;
+          tasksByDate[key] += 1;
+        }
+        cursor = DateUtils.addDays(cursor, 1);
+      }
+    });
     const fallbackStats = {
       total: AppState.tasks.length,
       completed: AppState.tasks.filter(t => t.status === 'completed').length,
@@ -956,9 +1053,9 @@ const Dashboard = {
   getTasksForMonth(date) {
     const { start, end } = this.getMonthRange(date);
     return AppState.tasks.filter(task => {
-      if (!task.dueDate) return false;
-      const due = this.parseDate(task.dueDate);
-      return due && due >= start && due <= end;
+      const range = getTaskRange(task);
+      if (!range.start || !range.end) return false;
+      return range.start <= end && range.end >= start;
     });
   },
 
@@ -1018,10 +1115,7 @@ const Dashboard = {
   },
 
   parseDate(value) {
-    if (!value) return null;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    return date;
+    return DateUtils.parseDate(value);
   },
 
   formatTrend(current, previous) {
@@ -1196,7 +1290,8 @@ const Dashboard = {
 
   renderTask(task) {
     const item = DOM.create('div', 'task-item');
-    item.style.borderLeftColor = task.color || '#3b82f6';
+    const objectiveColor = getObjectiveColor(task.objective);
+    item.style.borderLeftColor = objectiveColor || task.color || '#3b82f6';
     
     const header = DOM.create('div', 'task-header');
     header.appendChild(DOM.create('div', 'task-title', task.task));
@@ -1219,7 +1314,11 @@ const Dashboard = {
     
     const meta = DOM.create('div', 'task-meta');
     if (task.startDate) meta.appendChild(DOM.create('span', '', `Start: ${task.startDate}`));
-    if (task.dueDate) meta.appendChild(DOM.create('span', '', `Due: ${task.dueDate}`));
+    if (task.endDate) meta.appendChild(DOM.create('span', '', `End: ${task.endDate}`));
+    if (task.startTime || task.endTime) {
+      const range = [task.startTime, task.endTime].filter(Boolean).join(' - ');
+      meta.appendChild(DOM.create('span', '', `Time: ${range}`));
+    }
     item.appendChild(meta);
 
     return item;
@@ -1299,13 +1398,10 @@ const CalendarPage = {
     for (let i = 1; i <= 31; i++) {
       const day = DOM.create('div', 'calendar-day');
       day.appendChild(DOM.create('div', 'calendar-day-number', i));
-      const tasks = filteredTasks.filter(t => {
-        if (!t.dueDate) return false;
-        const dueDate = new Date(t.dueDate);
-        return dueDate.getDate() === i;
-      });
-      if (tasks.length > 0) {
-        day.appendChild(DOM.create('div', 'calendar-day-tasks', `${tasks.length} tasks`));
+      const dateKey = DateUtils.formatDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), i));
+      const count = tasksByDate[dateKey] || 0;
+      if (count > 0) {
+        day.appendChild(DOM.create('div', 'calendar-day-tasks', `${count} tasks`));
       }
       calendar.appendChild(day);
     }
@@ -1593,25 +1689,41 @@ const TimelinePage = {
   async handleDrop(e, newDate) {
     try {
       const task = JSON.parse(e.dataTransfer.getData('application/json'));
+      if (task.repeatType && task.repeatType !== 'none') {
+        Toast.error('Edit recurring tasks in the task form.');
+        return;
+      }
       const dateStr = newDate.getFullYear() + '-' +
         String(newDate.getMonth() + 1).padStart(2, '0') + '-' +
         String(newDate.getDate()).padStart(2, '0');
 
-      // Update task due date
-      const updatedTask = { ...task, dueDate: dateStr };
-      await API.saveTasks([updatedTask]);
+      const durationDays = getTaskDurationDays(task);
+      const endDate = DateUtils.formatDate(DateUtils.addDays(newDate, durationDays));
+      const updatedTask = { ...task, startDate: dateStr, endDate };
 
-      // Update local state
       const taskIndex = AppState.tasks.findIndex(t => t.id === task.id);
       if (taskIndex !== -1) {
         AppState.tasks[taskIndex] = updatedTask;
       }
+
+      await API.saveTasks(AppState.tasks);
+      await DataStore.refresh();
 
       Router.render();
     } catch (error) {
       console.error('Error updating task date:', error);
       Toast.error('Error updating task date. Please try again.');
     }
+  },
+
+  async updateTaskData(taskId, updates) {
+    const taskIndex = AppState.tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) return;
+    const updatedTask = { ...AppState.tasks[taskIndex], ...updates };
+    AppState.tasks[taskIndex] = updatedTask;
+    await API.saveTasks(AppState.tasks);
+    await DataStore.refresh();
+    Router.render();
   },
 
   isToday(date) {
@@ -1626,7 +1738,11 @@ const TimelinePage = {
     const currentDate = AppState.timelineCurrentDate;
     let startDate, endDate, days = [];
 
-    if (view === 'week') {
+    if (view === 'day') {
+      startDate = DateUtils.parseDate(currentDate);
+      endDate = DateUtils.parseDate(currentDate);
+      days = [new Date(startDate)];
+    } else if (view === 'week') {
       // Get current week for the selected month
       const dayOfWeek = currentDate.getDay();
       startDate = new Date(currentDate);
@@ -1669,18 +1785,25 @@ const TimelinePage = {
 
     // Timeline body with tasks
     const body = DOM.create('div', 'timeline-body');
-    
+
     // Apply filters and group tasks by date
     const filteredTasks = this.applyFilters(AppState.tasks);
+    const rangeStart = days[0];
+    const rangeEnd = days[days.length - 1];
+    const occurrences = getTaskOccurrences(filteredTasks, rangeStart, rangeEnd);
     const tasksByDate = {};
-    filteredTasks.forEach(task => {
-      if (task.dueDate) {
-        const taskDate = new Date(task.dueDate);
-        const dateKey = this.getDateKey(taskDate);
+    occurrences.forEach(task => {
+      const start = DateUtils.parseDate(task.occurrenceStart || task.startDate);
+      const end = DateUtils.parseDate(task.occurrenceEnd || task.endDate || task.startDate);
+      if (!start || !end) return;
+      let cursor = new Date(start);
+      while (cursor <= end) {
+        const dateKey = this.getDateKey(cursor);
         if (!tasksByDate[dateKey]) {
           tasksByDate[dateKey] = [];
         }
         tasksByDate[dateKey].push(task);
+        cursor = DateUtils.addDays(cursor, 1);
       }
     });
 
@@ -1707,6 +1830,15 @@ const TimelinePage = {
         ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getDay()]));
       headerInfo.appendChild(DOM.create('div', 'timeline-day-number', day.getDate()));
       dayHeader.appendChild(headerInfo);
+
+      const dateStr = DateUtils.formatDate(day);
+      const addBtn = DOM.create('button', 'timeline-day-add');
+      addBtn.innerHTML = DOM.getIconSVG('plus');
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        TaskModal.show(null, null, dateStr);
+      };
+      dayHeader.appendChild(addBtn);
 
       const collapseButton = DOM.create('button', 'timeline-day-toggle');
       collapseButton.textContent = isCollapsed ? 'Show' : 'Hide';
@@ -1737,9 +1869,6 @@ const TimelinePage = {
       // Make day clickable to add task
       dayColumn.onclick = (e) => {
         if (e.target === dayColumn || e.target.classList.contains('timeline-day-empty')) {
-          const dateStr = day.getFullYear() + '-' +
-            String(day.getMonth() + 1).padStart(2, '0') + '-' +
-            String(day.getDate()).padStart(2, '0');
           TaskModal.show(null, null, dateStr);
         }
       };
@@ -1808,8 +1937,10 @@ const TimelinePage = {
   renderTaskCard(task) {
     const taskBar = DOM.create('div', 'timeline-task-bar');
     const statusColor = AppState.statuses.find(s => s.name === task.status)?.color || '#3b82f6';
-    taskBar.style.backgroundColor = statusColor;
-    taskBar.style.borderLeftColor = statusColor;
+    const objectiveColor = getObjectiveColor(task.objective);
+    const accentColor = objectiveColor || statusColor;
+    taskBar.style.backgroundColor = accentColor;
+    taskBar.style.borderLeftColor = accentColor;
 
     const taskContent = DOM.create('div', 'timeline-task-content');
 
@@ -1819,24 +1950,39 @@ const TimelinePage = {
     taskContent.appendChild(title);
 
     const meta = DOM.create('div', 'timeline-task-meta');
-    const timeInfo = task.startTime ? `${task.startTime}` : '';
+    const rangeStart = task.occurrenceStart || task.startDate;
+    const rangeEnd = task.occurrenceEnd || task.endDate || task.startDate;
+    const rangeInfo = rangeStart && rangeEnd ? ` • ${rangeStart} → ${rangeEnd}` : '';
+    const timeInfo = task.startTime || task.endTime
+      ? ` • ${(task.startTime || '')}${task.endTime ? `-${task.endTime}` : ''}`
+      : '';
     const categoryInfo = task.category ? ` • ${task.category}` : '';
     const objectiveInfo = task.objective ? ` • ${task.objective}` : '';
     const priorityInfo = task.priority ? ` • ${task.priority}` : '';
-    meta.textContent = `${task.status}${timeInfo}${categoryInfo}${objectiveInfo}${priorityInfo}`;
+    const repeatInfo = task.repeatType && task.repeatType !== 'none' ? ` • ${task.repeatType}` : '';
+    meta.textContent = `${task.status}${rangeInfo}${timeInfo}${categoryInfo}${objectiveInfo}${priorityInfo}${repeatInfo}`;
     taskContent.appendChild(meta);
 
     taskBar.appendChild(taskContent);
 
-    taskBar.draggable = true;
-    taskBar.ondragstart = (e) => this.handleDragStart(e, task);
-    taskBar.ondragend = (e) => this.handleDragEnd(e);
+    if (!task.repeatType || task.repeatType === 'none') {
+      taskBar.draggable = true;
+      taskBar.ondragstart = (e) => this.handleDragStart(e, task);
+      taskBar.ondragend = (e) => this.handleDragEnd(e);
+    }
 
     taskBar.onclick = (e) => {
       if (!e.defaultPrevented) TaskModal.show(task);
     };
 
-    taskBar.title = `${task.task}\nStatus: ${task.status}\nDue: ${task.dueDate}${task.startTime ? '\nTime: ' + task.startTime : ''}${task.category ? '\nCategory: ' + task.category : ''}${task.objective ? '\nObjective: ' + task.objective : ''}${task.priority ? '\nPriority: ' + task.priority : ''}`;
+    const tooltipRange = rangeStart && rangeEnd ? `${rangeStart} → ${rangeEnd}` : '';
+    const repeatInfoText = task.repeatType && task.repeatType !== 'none'
+      ? `\nRepeat: ${task.repeatType}${task.repeatUntil ? ' until ' + task.repeatUntil : ''}`
+      : '';
+    const timeRangeText = task.startTime || task.endTime
+      ? `\nTime: ${task.startTime || ''}${task.endTime ? ' - ' + task.endTime : ''}`
+      : '';
+    taskBar.title = `${task.task}\nStatus: ${task.status}${tooltipRange ? '\nRange: ' + tooltipRange : ''}${timeRangeText}${repeatInfoText}${task.category ? '\nCategory: ' + task.category : ''}${task.objective ? '\nObjective: ' + task.objective : ''}${task.priority ? '\nPriority: ' + task.priority : ''}`;
 
     const statusIndicator = DOM.create('div', `timeline-task-status ${task.status}`);
     taskBar.appendChild(statusIndicator);
@@ -1846,7 +1992,6 @@ const TimelinePage = {
 
   renderDaySchedule(container, dayTasks) {
     const allDayTasks = [];
-    const timedTasks = [];
     const tasksByHour = {};
 
     dayTasks.forEach(task => {
@@ -1854,15 +1999,10 @@ const TimelinePage = {
       if (minutes === null) {
         allDayTasks.push(task);
       } else {
-        timedTasks.push({ task, minutes });
+        const hour = Math.floor(minutes / 60);
+        if (!tasksByHour[hour]) tasksByHour[hour] = [];
+        tasksByHour[hour].push(task);
       }
-    });
-
-    timedTasks.sort((a, b) => a.minutes - b.minutes);
-    timedTasks.forEach(({ task, minutes }) => {
-      const hour = Math.floor(minutes / 60);
-      if (!tasksByHour[hour]) tasksByHour[hour] = [];
-      tasksByHour[hour].push(task);
     });
 
     if (allDayTasks.length > 0) {
@@ -3135,15 +3275,79 @@ const TaskModal = {
     catGroup.appendChild(newCatBtn);
     form.appendChild(catGroup);
 
-    // Due Date
-    const dueDateGroup = DOM.create('div', 'form-group');
-    dueDateGroup.appendChild(DOM.create('label', 'form-label', 'Due Date'));
-    const dueDateInput = DOM.create('input', 'form-input');
-    dueDateInput.type = 'date';
-    dueDateInput.name = 'dueDate';
-    dueDateInput.value = task?.dueDate || prefillDate || '';
-    dueDateGroup.appendChild(dueDateInput);
-    form.appendChild(dueDateGroup);
+    // Date range
+    const startDateGroup = DOM.create('div', 'form-group');
+    startDateGroup.appendChild(DOM.create('label', 'form-label', 'Start Date'));
+    const startDateInput = DOM.create('input', 'form-input');
+    startDateInput.type = 'date';
+    startDateInput.name = 'startDate';
+    startDateInput.value = task?.startDate || task?.endDate || prefillDate || '';
+    startDateGroup.appendChild(startDateInput);
+    form.appendChild(startDateGroup);
+
+    const endDateGroup = DOM.create('div', 'form-group');
+    endDateGroup.appendChild(DOM.create('label', 'form-label', 'End Date'));
+    const endDateInput = DOM.create('input', 'form-input');
+    endDateInput.type = 'date';
+    endDateInput.name = 'endDate';
+    endDateInput.value = task?.endDate || task?.startDate || prefillDate || '';
+    endDateGroup.appendChild(endDateInput);
+    form.appendChild(endDateGroup);
+
+    const repeatGroup = DOM.create('div', 'form-group');
+    repeatGroup.appendChild(DOM.create('label', 'form-label', 'Repeat'));
+    const repeatSelect = DOM.create('select', 'form-select');
+    repeatSelect.name = 'repeatType';
+    const repeatOptions = [
+      { value: 'none', label: 'No repeat' },
+      { value: 'daily', label: 'Daily' },
+      { value: 'monthly', label: 'Monthly' }
+    ];
+    repeatOptions.forEach(optionData => {
+      const option = DOM.create('option', '');
+      option.value = optionData.value;
+      option.textContent = optionData.label;
+      if ((task?.repeatType || 'none') === optionData.value) option.selected = true;
+      repeatSelect.appendChild(option);
+    });
+    repeatGroup.appendChild(repeatSelect);
+    form.appendChild(repeatGroup);
+
+    const repeatUntilGroup = DOM.create('div', 'form-group');
+    repeatUntilGroup.appendChild(DOM.create('label', 'form-label', 'Repeat Until'));
+    const repeatUntilInput = DOM.create('input', 'form-input');
+    repeatUntilInput.type = 'date';
+    repeatUntilInput.name = 'repeatUntil';
+    repeatUntilInput.value = task?.repeatUntil || '';
+    repeatUntilGroup.appendChild(repeatUntilInput);
+    form.appendChild(repeatUntilGroup);
+
+    const timeGroup = DOM.create('div', 'form-group');
+    timeGroup.appendChild(DOM.create('label', 'form-label', 'Time Range'));
+    const timeRow = DOM.create('div', 'time-range-row');
+
+    const startTimeWrap = DOM.create('div', '');
+    const startTimeLabel = DOM.create('label', 'form-label', 'Start Time');
+    const startTimeInput = DOM.create('input', 'form-input');
+    startTimeInput.type = 'time';
+    startTimeInput.name = 'startTime';
+    startTimeInput.value = task?.startTime || '';
+    startTimeWrap.appendChild(startTimeLabel);
+    startTimeWrap.appendChild(startTimeInput);
+
+    const endTimeWrap = DOM.create('div', '');
+    const endTimeLabel = DOM.create('label', 'form-label', 'End Time');
+    const endTimeInput = DOM.create('input', 'form-input');
+    endTimeInput.type = 'time';
+    endTimeInput.name = 'endTime';
+    endTimeInput.value = task?.endTime || '';
+    endTimeWrap.appendChild(endTimeLabel);
+    endTimeWrap.appendChild(endTimeInput);
+
+    timeRow.appendChild(startTimeWrap);
+    timeRow.appendChild(endTimeWrap);
+    timeGroup.appendChild(timeRow);
+    form.appendChild(timeGroup);
 
     // Status
     const statusGroup = DOM.create('div', 'form-group');
@@ -3229,16 +3433,6 @@ const TaskModal = {
     objectiveGroup.appendChild(newObjectiveBtn);
     form.appendChild(objectiveGroup);
 
-    // Color
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.name = 'color';
-    colorInput.value = task?.color || '#3b82f6';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
-
     form.onsubmit = (e) => {
       e.preventDefault();
       this.save(task, new FormData(form));
@@ -3269,15 +3463,24 @@ const TaskModal = {
   },
 
   async save(task, formData) {
+    const rawStartDate = formData.get('startDate') || '';
+    const rawEndDate = formData.get('endDate') || '';
+    const startDate = rawStartDate || rawEndDate;
+    const endDate = rawEndDate || startDate;
     const taskData = {
       id: task?.id || Date.now(),
       task: formData.get('task'),
       category: formData.get('category'),
-      dueDate: formData.get('dueDate'),
-      color: formData.get('color'),
+      startDate,
+      endDate,
+      startTime: formData.get('startTime') || '',
+      endTime: formData.get('endTime') || '',
+      color: getObjectiveColor(formData.get('objective')),
       status: formData.get('status') || 'pending',
       objective: formData.get('objective') || '',
-      priority: formData.get('priority') || 'medium'
+      priority: formData.get('priority') || 'medium',
+      repeatType: formData.get('repeatType') || 'none',
+      repeatUntil: formData.get('repeatUntil') || ''
     };
 
     if (task) {

@@ -71,36 +71,42 @@ function getDatags() {
       task: "Thank you for using this product",
       category: "Work",
       startDate: "2025-11-22",
-      startTime: "17:00:00",
-      dueDate: "2025-11-24",
-      dueTime: "19:00:00",
+      startTime: "09:00",
+      endDate: "2025-11-24",
+      endTime: "17:00",
       color: "#5470c6",
       status: "completed",
-      priority: "medium"
+      priority: "medium",
+      repeatType: "none",
+      repeatUntil: ""
     },
     {
       id: 2,
       task: "Create new tasks then delete Sample tasks",
       category: "Health",
       startDate: "2025-11-25",
-      startTime: "10:00:00",
-      dueDate: "2025-11-29",
-      dueTime: "13:00:00",
+      startTime: "10:00",
+      endDate: "2025-11-29",
+      endTime: "16:00",
       color: "#73c0de",
       status: "completed",
-      priority: "high"
+      priority: "high",
+      repeatType: "none",
+      repeatUntil: ""
     },
     {
       id: 3,
       task: "Match Sheet TimeZone with your Computer",
       category: "Learning",
       startDate: "2025-10-30",
-      startTime: "09:00:00",
-      dueDate: "2025-11-02",
-      dueTime: "12:00:00",
+      startTime: "08:30",
+      endDate: "2025-11-02",
+      endTime: "12:00",
       color: "#91cc75",
       status: "pending",
-      priority: "low"
+      priority: "low",
+      repeatType: "none",
+      repeatUntil: ""
     }
   ];
 
@@ -108,7 +114,7 @@ function getDatags() {
   if (values.length <= 1 || values.slice(1).every(row => row.join('') === '')) {
     return sampleData.map(item => {
       const startDateTime = makeDateTimeFromStrings(item.startDate, item.startTime);
-      const dueDateTime = makeDateTimeFromStrings(item.dueDate, item.dueTime);
+      const dueDateTime = makeDateTimeFromStrings(item.endDate, item.endTime);
       return addDerivedFields(item, startDateTime, dueDateTime, item.status);
     });
   }
@@ -133,12 +139,14 @@ function getDatags() {
       category: row[2],
       startDate: formatDateTime(row[3], "date"),
       startTime: formatDateTime(row[4], "time"),
-      dueDate: formatDateTime(row[5], "date"),
-      dueTime: formatDateTime(row[6], "time"),
+      endDate: formatDateTime(row[5], "date"),
+      endTime: formatDateTime(row[6], "time"),
       color: row[7],
       status: newStatus,
       objective: row[9] || '', // Add objective from column 10 (index 9)
-      priority: row[10] || 'medium'
+      priority: row[10] || 'medium',
+      repeatType: row[11] || 'none',
+      repeatUntil: formatDateTime(row[12], "date") || ''
     };
     return addDerivedFields(task, startDateTime, dueDateTime, newStatus);
   });
@@ -164,13 +172,15 @@ function addDatags(taskbase) {
       item.task,
       item.category,
       item.startDate,
-      item.startTime,
-      item.dueDate,
-      item.dueTime,
+      item.startTime || '',
+      item.endDate,
+      item.endTime || '',
       item.color,
       item.status,
       item.objective || '', // Add objective column
-      item.priority || 'medium'
+      item.priority || 'medium',
+      item.repeatType || 'none',
+      item.repeatUntil || ''
     ]);
 
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
