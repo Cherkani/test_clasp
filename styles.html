@@ -1123,8 +1123,8 @@ body {
 }
 
 .timeline-hour-tasks {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.5rem;
   padding: 0.5rem;
   border: 1px dashed #e5e7eb;
