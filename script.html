@@ -14,9 +14,11 @@ const AppState = {
   timelineFilters: { statuses: [], categories: [], objectives: [] },
   financeRecords: [],
   financeSettings: {},
+  stats: null,
   financeMonth: new Date(),
   dashboardCharts: {},
-  searchQuery: ''
+  searchQuery: '',
+  referenceTab: 'objectives'
 };
 
 // Google Apps Script API
@@ -199,8 +201,57 @@ const API = {
         .withFailureHandler(reject)
         .saveFinanceSettings(settings);
     });
+  },
+
+  async getAppData() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching app data:', error);
+          resolve({
+            tasks: [],
+            objectives: [],
+            categories: [],
+            statuses: [],
+            financeRecords: [],
+            financeSettings: {},
+            stats: null
+          });
+        })
+        .getAppData();
+    });
   }
 };
+
+const DataStore = {
+  apply(data) {
+    AppState.tasks = data.tasks || [];
+    AppState.objectives = data.objectives || [];
+    AppState.categories = data.categories || [];
+    AppState.statuses = data.statuses || [];
+    AppState.financeRecords = data.financeRecords || [];
+    AppState.financeSettings = data.financeSettings || {};
+    AppState.stats = data.stats || null;
+  },
+
+  async refresh() {
+    const data = await API.getAppData();
+    this.apply(data);
+  }
+};
+
+function updateTaskReferences(field, oldValue, newValue) {
+  let changed = false;
+  AppState.tasks = AppState.tasks.map(task => {
+    if (task[field] === oldValue) {
+      changed = true;
+      return { ...task, [field]: newValue };
+    }
+    return task;
+  });
+  return changed;
+}
 
 // DOM Utilities
 const DOM = {
@@ -343,9 +394,7 @@ const Sidebar = {
       { id: 'calendar', label: 'Calendar', icon: 'calendar' },
       { id: 'timeline', label: 'Timeline', icon: 'timeline' },
       { id: 'finance', label: 'Finance', icon: 'finance' },
-      { id: 'objectives', label: 'Objectives', icon: 'target' },
-      { id: 'categories', label: 'Categories', icon: 'tag' },
-      { id: 'statuses', label: 'Statuses', icon: 'check' }
+      { id: 'reference', label: 'Reference', icon: 'tag' }
     ];
 
     navItems.forEach(item => {
@@ -387,12 +436,7 @@ const Sidebar = {
     this.render();
     
     try {
-      AppState.tasks = await API.getTasks();
-      AppState.objectives = await API.getObjectives();
-      AppState.categories = await API.getCategories();
-      AppState.statuses = await API.getStatuses();
-      AppState.financeRecords = await API.getFinanceRecords();
-      AppState.financeSettings = await API.getFinanceSettings();
+      await DataStore.refresh();
       this.render();
       Router.render();
       Toast.success('Sync complete');
@@ -409,7 +453,13 @@ const Sidebar = {
 // Router
 const Router = {
   navigate(page) {
-    AppState.currentPage = page;
+    const referenceTabs = ['objectives', 'categories', 'statuses'];
+    if (referenceTabs.includes(page)) {
+      AppState.referenceTab = page;
+      AppState.currentPage = 'reference';
+    } else {
+      AppState.currentPage = page;
+    }
     Sidebar.render();
     this.render();
   },
@@ -434,14 +484,20 @@ const Router = {
       case 'finance':
         pageContent = FinancePage.render();
         break;
+      case 'reference':
+        pageContent = ReferencePage.render();
+        break;
       case 'objectives':
-        pageContent = ObjectivesPage.render();
+        AppState.referenceTab = 'objectives';
+        pageContent = ReferencePage.render();
         break;
       case 'categories':
-        pageContent = CategoriesPage.render();
+        AppState.referenceTab = 'categories';
+        pageContent = ReferencePage.render();
         break;
       case 'statuses':
-        pageContent = StatusesPage.render();
+        AppState.referenceTab = 'statuses';
+        pageContent = ReferencePage.render();
         break;
       default:
         pageContent = Dashboard.render();
@@ -478,23 +534,38 @@ const Dashboard = {
     const sideColumn = DOM.create('aside', 'dashboard-side');
 
     const filteredTasks = TaskFilters.applySearch(AppState.tasks);
+    const fallbackStats = {
+      total: AppState.tasks.length,
+      completed: AppState.tasks.filter(t => t.status === 'completed').length,
+      overdue: AppState.tasks.filter(t => t.status === 'overdue').length,
+      pending: AppState.tasks.filter(t => t.status === 'pending').length
+    };
+    const baseStats = AppState.stats?.tasks || fallbackStats;
+    const statsData = AppState.searchQuery.trim()
+      ? {
+          total: filteredTasks.length,
+          completed: filteredTasks.filter(t => t.status === 'completed').length,
+          overdue: filteredTasks.filter(t => t.status === 'overdue').length,
+          pending: filteredTasks.filter(t => t.status === 'pending').length
+        }
+      : baseStats;
     const stats = DOM.create('div', 'card');
     stats.innerHTML = `
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${filteredTasks.length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${statsData.total}</div>
           <div style="color: #6b7280;">Total Tasks</div>
         </div>
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${filteredTasks.filter(t => t.status === 'completed').length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${statsData.completed}</div>
           <div style="color: #6b7280;">Completed</div>
         </div>
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #ef4444;">${filteredTasks.filter(t => t.status === 'overdue').length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #ef4444;">${statsData.overdue}</div>
           <div style="color: #6b7280;">Overdue</div>
         </div>
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${filteredTasks.filter(t => t.status === 'pending').length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${statsData.pending}</div>
           <div style="color: #6b7280;">Pending</div>
         </div>
       </div>
@@ -2136,6 +2207,58 @@ const FinancePage = {
   }
 };
 
+const ReferenceTabs = {
+  open(tab) {
+    AppState.referenceTab = tab;
+    AppState.currentPage = 'reference';
+    Sidebar.render();
+    Router.render();
+  }
+};
+
+const ReferencePage = {
+  render() {
+    const container = DOM.create('div', '');
+
+    const header = DOM.create('div', 'page-header');
+    header.appendChild(DOM.create('h1', 'page-title', 'Reference'));
+    header.appendChild(DOM.create('p', 'page-subtitle', 'Manage objectives, categories, and statuses'));
+    container.appendChild(header);
+
+    const tabs = DOM.create('div', 'reference-tabs');
+    const tabList = [
+      { id: 'objectives', label: 'Objectives' },
+      { id: 'categories', label: 'Categories' },
+      { id: 'statuses', label: 'Statuses' }
+    ];
+
+    tabList.forEach(tab => {
+      const tabBtn = DOM.create('button', 'reference-tab');
+      tabBtn.textContent = tab.label;
+      if (AppState.referenceTab === tab.id) tabBtn.classList.add('active');
+      tabBtn.onclick = () => {
+        AppState.referenceTab = tab.id;
+        Router.render();
+      };
+      tabs.appendChild(tabBtn);
+    });
+
+    container.appendChild(tabs);
+
+    const content = DOM.create('div', 'reference-content');
+    if (AppState.referenceTab === 'categories') {
+      content.appendChild(CategoriesPage.render());
+    } else if (AppState.referenceTab === 'statuses') {
+      content.appendChild(StatusesPage.render());
+    } else {
+      content.appendChild(ObjectivesPage.render());
+    }
+
+    container.appendChild(content);
+    return container;
+  }
+};
+
 // Objectives Page
 const ObjectivesPage = {
   render() {
@@ -2251,12 +2374,11 @@ const ObjectivesPage = {
     try {
       await API.deleteObjective(objective.id);
       AppState.objectives = AppState.objectives.filter(o => o.id !== objective.id);
-      // Remove objective from tasks
-      AppState.tasks.forEach(task => {
-        if (task.objective === objective.name) {
-          task.objective = '';
-        }
-      });
+      const tasksUpdated = updateTaskReferences('objective', objective.name, '');
+      if (tasksUpdated) {
+        await API.saveTasks(AppState.tasks);
+      }
+      await DataStore.refresh();
       Router.render();
       Toast.success('Objective deleted');
     } catch (error) {
@@ -2402,6 +2524,7 @@ const ObjectiveModal = {
       category: formData.get('category') || '',
       dueDate: formData.get('dueDate') || ''
     };
+    const previousName = objective?.name || '';
 
     try {
       if (objective) {
@@ -2409,6 +2532,12 @@ const ObjectiveModal = {
         await API.updateObjective(objectiveData);
         const index = AppState.objectives.findIndex(o => o.id === objective.id);
         AppState.objectives[index] = objectiveData;
+        if (previousName && previousName !== objectiveData.name) {
+          const tasksUpdated = updateTaskReferences('objective', previousName, objectiveData.name);
+          if (tasksUpdated) {
+            await API.saveTasks(AppState.tasks);
+          }
+        }
       } else {
         const newId = await API.addObjective(objectiveData);
         objectiveData.id = newId;
@@ -2416,6 +2545,7 @@ const ObjectiveModal = {
       }
       
       this.hide();
+      await DataStore.refresh();
       Router.render();
       if (callback) callback(objectiveData);
       Toast.success('Objective saved');
@@ -2501,7 +2631,7 @@ const CategoriesPage = {
         const objectiveItem = DOM.create('div', 'objective-task-item');
         objectiveItem.textContent = objective.name;
         objectiveItem.onclick = () => {
-          Router.navigate('objectives');
+          ReferenceTabs.open('objectives');
           setTimeout(() => ObjectiveModal.show(objective), 100);
         };
         objectiveList.appendChild(objectiveItem);
@@ -2519,12 +2649,18 @@ const CategoriesPage = {
     try {
       await API.deleteCategory(category.id);
       AppState.categories = AppState.categories.filter(c => c.id !== category.id);
-      // Remove category from objectives
-      AppState.objectives.forEach(objective => {
-        if (objective.category === category.name) {
-          objective.category = '';
-        }
+      const objectivesToUpdate = AppState.objectives.filter(o => o.category === category.name);
+      objectivesToUpdate.forEach(objective => {
+        objective.category = '';
       });
+      if (objectivesToUpdate.length > 0) {
+        await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
+      }
+      const tasksUpdated = updateTaskReferences('category', category.name, '');
+      if (tasksUpdated) {
+        await API.saveTasks(AppState.tasks);
+      }
+      await DataStore.refresh();
       Router.render();
       Toast.success('Category deleted');
     } catch (error) {
@@ -2610,6 +2746,7 @@ const CategoryModal = {
       name: formData.get('name'),
       color: formData.get('color')
     };
+    const previousName = category?.name || '';
 
     try {
       if (category) {
@@ -2617,6 +2754,19 @@ const CategoryModal = {
         await API.updateCategory(categoryData);
         const index = AppState.categories.findIndex(c => c.id === category.id);
         AppState.categories[index] = categoryData;
+        if (previousName && previousName !== categoryData.name) {
+          const objectivesToUpdate = AppState.objectives.filter(o => o.category === previousName);
+          objectivesToUpdate.forEach(objective => {
+            objective.category = categoryData.name;
+          });
+          if (objectivesToUpdate.length > 0) {
+            await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
+          }
+          const tasksUpdated = updateTaskReferences('category', previousName, categoryData.name);
+          if (tasksUpdated) {
+            await API.saveTasks(AppState.tasks);
+          }
+        }
       } else {
         const newId = await API.addCategory(categoryData);
         categoryData.id = newId;
@@ -2624,6 +2774,7 @@ const CategoryModal = {
       }
       
       this.hide();
+      await DataStore.refresh();
       Router.render();
       if (callback) callback(categoryData);
       Toast.success('Category saved');
@@ -2744,6 +2895,12 @@ const StatusesPage = {
     try {
       await API.deleteStatus(status.id);
       AppState.statuses = AppState.statuses.filter(s => s.id !== status.id);
+      const fallbackStatus = AppState.statuses.find(s => s.name === 'pending') ? 'pending' : '';
+      const tasksUpdated = updateTaskReferences('status', status.name, fallbackStatus);
+      if (tasksUpdated) {
+        await API.saveTasks(AppState.tasks);
+      }
+      await DataStore.refresh();
       Router.render();
       Toast.success('Status deleted');
     } catch (error) {
@@ -2829,6 +2986,7 @@ const StatusModal = {
       name: formData.get('name'),
       color: formData.get('color')
     };
+    const previousName = status?.name || '';
 
     try {
       if (status) {
@@ -2836,6 +2994,12 @@ const StatusModal = {
         await API.updateStatus(statusData);
         const index = AppState.statuses.findIndex(s => s.id === status.id);
         AppState.statuses[index] = statusData;
+        if (previousName && previousName !== statusData.name) {
+          const tasksUpdated = updateTaskReferences('status', previousName, statusData.name);
+          if (tasksUpdated) {
+            await API.saveTasks(AppState.tasks);
+          }
+        }
       } else {
         const newId = await API.addStatus(statusData);
         statusData.id = newId;
@@ -2843,6 +3007,7 @@ const StatusModal = {
       }
       
       this.hide();
+      await DataStore.refresh();
       Router.render();
       if (callback) callback(statusData);
       Toast.success('Status saved');
@@ -3074,6 +3239,7 @@ const TaskModal = {
     try {
       await API.saveTasks(AppState.tasks);
       this.hide();
+      await DataStore.refresh();
       Router.render();
       Sidebar.render();
       Toast.success(task ? 'Task updated' : 'Task created');
@@ -3094,13 +3260,8 @@ async function init() {
   
   try {
     Toast.init();
-    // Load tasks, objectives, categories, and statuses
-    AppState.tasks = await API.getTasks();
-    AppState.objectives = await API.getObjectives();
-    AppState.categories = await API.getCategories();
-    AppState.statuses = await API.getStatuses();
-    AppState.financeRecords = await API.getFinanceRecords();
-    AppState.financeSettings = await API.getFinanceSettings();
+    // Load tasks, objectives, categories, statuses, and finance data
+    await DataStore.refresh();
     
     // Render sidebar and initial page
     Sidebar.render();

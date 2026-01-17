@@ -39,6 +39,31 @@ function getDatags() {
     return date;
   }
 
+  function makeDateTimeFromStrings(dateStr, timeStr) {
+    if (!dateStr) return null;
+    const timePart = timeStr || "00:00:00";
+    const dateTime = new Date(`${dateStr}T${timePart}`);
+    if (Number.isNaN(dateTime.getTime())) return null;
+    return dateTime;
+  }
+
+  function addDerivedFields(task, startDateTime, dueDateTime, status) {
+    const startTimestamp = startDateTime ? startDateTime.getTime() : null;
+    const dueTimestamp = dueDateTime ? dueDateTime.getTime() : null;
+    const isOverdue = status === "overdue";
+    const daysRemaining = dueDateTime
+      ? Math.ceil((dueDateTime.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    return {
+      ...task,
+      startTimestamp,
+      dueTimestamp,
+      isOverdue,
+      daysRemaining
+    };
+  }
+
  
   const sampleData = [
     {
@@ -81,11 +106,16 @@ function getDatags() {
 
 
   if (values.length <= 1 || values.slice(1).every(row => row.join('') === '')) {
-    return sampleData;
+    return sampleData.map(item => {
+      const startDateTime = makeDateTimeFromStrings(item.startDate, item.startTime);
+      const dueDateTime = makeDateTimeFromStrings(item.dueDate, item.dueTime);
+      return addDerivedFields(item, startDateTime, dueDateTime, item.status);
+    });
   }
 
   
   return values.slice(1).map(row => {
+    const startDateTime = makeDateTime(row[3], row[4]);
     const dueDateTime = makeDateTime(row[5], row[6]);
 
     let newStatus = row[8];
@@ -97,7 +127,7 @@ function getDatags() {
       }
     }
 
-    return {
+    const task = {
       id: row[0],
       task: row[1],
       category: row[2],
@@ -110,6 +140,7 @@ function getDatags() {
       objective: row[9] || '', // Add objective from column 10 (index 9)
       priority: row[10] || 'medium'
     };
+    return addDerivedFields(task, startDateTime, dueDateTime, newStatus);
   });
 }
 
@@ -574,4 +605,52 @@ function saveFinanceSettings(settings) {
     const rows = entries.map(([monthKey, budget]) => [monthKey, budget]);
     sheet.getRange(2, 1, rows.length, 2).setValues(rows);
   }
+}
+
+function getAppData() {
+  const tasks = getDatags();
+  const objectives = getObjectives();
+  const categories = getCategories();
+  const statuses = getStatuses();
+  const financeRecords = getFinanceRecords();
+  const financeSettings = getFinanceSettings();
+  const stats = getDerivedStats(tasks, financeRecords, objectives, categories, statuses);
+
+  return {
+    tasks,
+    objectives,
+    categories,
+    statuses,
+    financeRecords,
+    financeSettings,
+    stats
+  };
+}
+
+function getDerivedStats(tasks, financeRecords, objectives, categories, statuses) {
+  const taskTotals = tasks.reduce((acc, task) => {
+    acc.total += 1;
+    if (task.status === "completed") acc.completed += 1;
+    if (task.status === "overdue") acc.overdue += 1;
+    if (task.status === "pending") acc.pending += 1;
+    return acc;
+  }, { total: 0, completed: 0, overdue: 0, pending: 0 });
+
+  const financeTotals = financeRecords.reduce((acc, record) => {
+    const amount = Number(record.amount) || 0;
+    if (record.type === "income") acc.income += amount;
+    else acc.expenses += amount;
+    acc.net = acc.income - acc.expenses;
+    return acc;
+  }, { income: 0, expenses: 0, net: 0 });
+
+  return {
+    tasks: taskTotals,
+    finance: financeTotals,
+    reference: {
+      objectives: objectives.length,
+      categories: categories.length,
+      statuses: statuses.length
+    }
+  };
 }
