@@ -8,7 +8,9 @@ const AppState = {
   statuses: [],
   isSyncing: false,
   sidebarCollapsed: false,
-  timelineView: 'month'
+  timelineView: 'month',
+  timelineCurrentDate: new Date(),
+  timelineFilters: { statuses: [], categories: [], objectives: [] }
 };
 
 // Google Apps Script API
@@ -180,7 +182,8 @@ const DOM = {
       close: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
       chevronLeft: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>',
       chevronRight: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>',
-      tag: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>'
+      tag: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>',
+      plus: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>'
     };
     return icons[name] || '';
   }
@@ -491,45 +494,82 @@ const CalendarPage = {
 const TimelinePage = {
   render() {
     const container = DOM.create('div', '');
-    
+
     const header = DOM.create('div', 'page-header');
     header.style.display = 'flex';
     header.style.justifyContent = 'space-between';
     header.style.alignItems = 'center';
-    
-    const titleSection = DOM.create('div', '');
-    titleSection.appendChild(DOM.create('h1', 'page-title', 'Timeline'));
-    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'View your tasks along a timeline'));
-    header.appendChild(titleSection);
-    
-    const viewControls = DOM.create('div', '');
-    viewControls.style.display = 'flex';
-    viewControls.style.gap = '0.5rem';
-    
+
+    // Left section: Title and navigation
+    const leftSection = DOM.create('div', '');
+    leftSection.style.display = 'flex';
+    leftSection.style.alignItems = 'center';
+    leftSection.style.gap = '1rem';
+
+    const navControls = DOM.create('div', 'timeline-nav');
+    navControls.style.display = 'flex';
+    navControls.style.alignItems = 'center';
+    navControls.style.gap = '0.5rem';
+
+    const prevBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    prevBtn.innerHTML = DOM.getIconSVG('chevronLeft');
+    prevBtn.onclick = () => this.navigateMonth(-1);
+    navControls.appendChild(prevBtn);
+
+    const monthYear = DOM.create('div', 'timeline-month-year');
+    monthYear.textContent = this.formatMonthYear(AppState.timelineCurrentDate);
+    monthYear.style.fontSize = '1.125rem';
+    monthYear.style.fontWeight = '600';
+    monthYear.style.minWidth = '140px';
+    monthYear.style.textAlign = 'center';
+    navControls.appendChild(monthYear);
+
+    const nextBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    nextBtn.innerHTML = DOM.getIconSVG('chevronRight');
+    nextBtn.onclick = () => this.navigateMonth(1);
+    navControls.appendChild(nextBtn);
+
+    const todayBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    todayBtn.textContent = 'Today';
+    todayBtn.onclick = () => this.goToToday();
+    navControls.appendChild(todayBtn);
+
+    leftSection.appendChild(navControls);
+
+    // Right section: View toggle
+    const rightSection = DOM.create('div', '');
+    rightSection.style.display = 'flex';
+    rightSection.style.gap = '0.5rem';
+
     const currentView = AppState.timelineView || 'month';
-    
+
     const monthBtn = DOM.create('button', `btn btn-sm ${currentView === 'month' ? 'btn-primary' : 'btn-secondary'}`);
     monthBtn.textContent = 'Month';
     monthBtn.onclick = () => this.setView('month');
-    viewControls.appendChild(monthBtn);
-    
+    rightSection.appendChild(monthBtn);
+
     const weekBtn = DOM.create('button', `btn btn-sm ${currentView === 'week' ? 'btn-primary' : 'btn-secondary'}`);
     weekBtn.textContent = 'Week';
     weekBtn.onclick = () => this.setView('week');
-    viewControls.appendChild(weekBtn);
-    
-    header.appendChild(viewControls);
+    rightSection.appendChild(weekBtn);
+
+    header.appendChild(leftSection);
+    header.appendChild(rightSection);
     container.appendChild(header);
+
+    // Filter bar
+    const filterBar = this.renderFilterBar();
+    container.appendChild(filterBar);
 
     const timelineWrapper = DOM.create('div', 'timeline-wrapper');
     timelineWrapper.style.overflowX = 'auto';
-    timelineWrapper.style.marginTop = '2rem';
+    timelineWrapper.style.marginTop = '1rem';
     timelineWrapper.setAttribute('data-view', AppState.timelineView || 'month');
-    
+
     const timeline = DOM.create('div', 'timeline-container');
     this.renderTimeline(timeline);
     timelineWrapper.appendChild(timeline);
-    
+
     container.appendChild(timelineWrapper);
 
     return container;
@@ -540,19 +580,200 @@ const TimelinePage = {
     Router.render();
   },
 
+  navigateMonth(delta) {
+    const currentDate = new Date(AppState.timelineCurrentDate);
+    currentDate.setMonth(currentDate.getMonth() + delta);
+    AppState.timelineCurrentDate = currentDate;
+    Router.render();
+  },
+
+  goToToday() {
+    AppState.timelineCurrentDate = new Date();
+    Router.render();
+  },
+
+  formatMonthYear(date) {
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  },
+
+  renderFilterBar() {
+    const filterBar = DOM.create('div', 'timeline-filter-bar');
+    filterBar.style.display = 'flex';
+    filterBar.style.flexWrap = 'wrap';
+    filterBar.style.gap = '1rem';
+    filterBar.style.marginBottom = '1rem';
+    filterBar.style.padding = '1rem';
+    filterBar.style.backgroundColor = '#f9fafb';
+    filterBar.style.borderRadius = '0.5rem';
+
+    // Status filter
+    const statusFilter = DOM.create('div', 'filter-group');
+    statusFilter.appendChild(DOM.create('label', '', 'Status:'));
+    const statusContainer = DOM.create('div', '');
+    statusContainer.style.display = 'flex';
+    statusContainer.style.flexWrap = 'wrap';
+    statusContainer.style.gap = '0.5rem';
+
+    AppState.statuses.forEach(status => {
+      const checkbox = DOM.create('input', '');
+      checkbox.type = 'checkbox';
+      checkbox.id = `status-${status.id}`;
+      checkbox.checked = AppState.timelineFilters.statuses.includes(status.name);
+      checkbox.onchange = () => this.toggleFilter('statuses', status.name);
+
+      const label = DOM.create('label', '');
+      label.htmlFor = `status-${status.id}`;
+      label.style.display = 'flex';
+      label.style.alignItems = 'center';
+      label.style.gap = '0.25rem';
+      label.style.padding = '0.25rem 0.5rem';
+      label.style.borderRadius = '0.25rem';
+      label.style.backgroundColor = status.color;
+      label.style.color = 'white';
+      label.style.fontSize = '0.75rem';
+      label.style.cursor = 'pointer';
+
+      label.appendChild(checkbox);
+      label.appendChild(DOM.create('span', '', status.name));
+      statusContainer.appendChild(label);
+    });
+
+    statusFilter.appendChild(statusContainer);
+    filterBar.appendChild(statusFilter);
+
+    // Category filter
+    const categoryFilter = DOM.create('div', 'filter-group');
+    categoryFilter.appendChild(DOM.create('label', '', 'Category:'));
+    const categoryContainer = DOM.create('div', '');
+    categoryContainer.style.display = 'flex';
+    categoryContainer.style.flexWrap = 'wrap';
+    categoryContainer.style.gap = '0.5rem';
+
+    AppState.categories.forEach(category => {
+      const checkbox = DOM.create('input', '');
+      checkbox.type = 'checkbox';
+      checkbox.id = `category-${category.id}`;
+      checkbox.checked = AppState.timelineFilters.categories.includes(category.name);
+      checkbox.onchange = () => this.toggleFilter('categories', category.name);
+
+      const label = DOM.create('label', '');
+      label.htmlFor = `category-${category.id}`;
+      label.style.display = 'flex';
+      label.style.alignItems = 'center';
+      label.style.gap = '0.25rem';
+      label.style.padding = '0.25rem 0.5rem';
+      label.style.borderRadius = '0.25rem';
+      label.style.backgroundColor = category.color;
+      label.style.color = 'white';
+      label.style.fontSize = '0.75rem';
+      label.style.cursor = 'pointer';
+
+      label.appendChild(checkbox);
+      label.appendChild(DOM.create('span', '', category.name));
+      categoryContainer.appendChild(label);
+    });
+
+    categoryFilter.appendChild(categoryContainer);
+    filterBar.appendChild(categoryFilter);
+
+    // Clear filters button
+    const clearBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    clearBtn.textContent = 'Clear Filters';
+    clearBtn.onclick = () => this.clearFilters();
+    filterBar.appendChild(clearBtn);
+
+    return filterBar;
+  },
+
+  toggleFilter(type, value) {
+    const filters = AppState.timelineFilters[type];
+    const index = filters.indexOf(value);
+    if (index > -1) {
+      filters.splice(index, 1);
+    } else {
+      filters.push(value);
+    }
+    Router.render();
+  },
+
+  clearFilters() {
+    AppState.timelineFilters = { statuses: [], categories: [], objectives: [] };
+    Router.render();
+  },
+
+  applyFilters(tasks) {
+    const filters = AppState.timelineFilters;
+    return tasks.filter(task => {
+      // Status filter
+      if (filters.statuses.length > 0 && !filters.statuses.includes(task.status)) {
+        return false;
+      }
+      // Category filter
+      if (filters.categories.length > 0 && !filters.categories.includes(task.category)) {
+        return false;
+      }
+      // Objective filter
+      if (filters.objectives.length > 0 && !filters.objectives.includes(task.objective)) {
+        return false;
+      }
+      return true;
+    });
+  },
+
+  handleDragStart(e, task) {
+    e.dataTransfer.setData('application/json', JSON.stringify(task));
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.classList.add('timeline-task-dragging');
+  },
+
+  handleDragEnd(e) {
+    e.target.classList.remove('timeline-task-dragging');
+  },
+
+  async handleDrop(e, newDate) {
+    try {
+      const task = JSON.parse(e.dataTransfer.getData('application/json'));
+      const dateStr = newDate.getFullYear() + '-' +
+        String(newDate.getMonth() + 1).padStart(2, '0') + '-' +
+        String(newDate.getDate()).padStart(2, '0');
+
+      // Update task due date
+      const updatedTask = { ...task, dueDate: dateStr };
+      await API.saveTasks([updatedTask]);
+
+      // Update local state
+      const taskIndex = AppState.tasks.findIndex(t => t.id === task.id);
+      if (taskIndex !== -1) {
+        AppState.tasks[taskIndex] = updatedTask;
+      }
+
+      Router.render();
+    } catch (error) {
+      console.error('Error updating task date:', error);
+      alert('Error updating task date. Please try again.');
+    }
+  },
+
+  isToday(date) {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  },
+
   renderTimeline(container) {
     const view = AppState.timelineView || 'month';
-    const now = new Date();
+    const currentDate = AppState.timelineCurrentDate;
     let startDate, endDate, days = [];
 
     if (view === 'week') {
-      // Get current week
-      const dayOfWeek = now.getDay();
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - dayOfWeek);
+      // Get current week for the selected month
+      const dayOfWeek = currentDate.getDay();
+      startDate = new Date(currentDate);
+      startDate.setDate(currentDate.getDate() - dayOfWeek);
       endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 6);
-      
+
       for (let i = 0; i < 7; i++) {
         const date = new Date(startDate);
         date.setDate(startDate.getDate() + i);
@@ -560,9 +781,9 @@ const TimelinePage = {
       }
     } else {
       // Get current month
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      
+      startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
       // Add days from previous month to fill first week
       const firstDay = startDate.getDay();
       for (let i = firstDay - 1; i >= 0; i--) {
@@ -570,13 +791,13 @@ const TimelinePage = {
         date.setDate(startDate.getDate() - i - 1);
         days.push(date);
       }
-      
+
       // Add all days of current month
       for (let i = 1; i <= endDate.getDate(); i++) {
-        const date = new Date(now.getFullYear(), now.getMonth(), i);
+        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), i);
         days.push(date);
       }
-      
+
       // Add days from next month to fill last week
       const lastDay = endDate.getDay();
       for (let i = 1; i <= 6 - lastDay; i++) {
@@ -609,9 +830,10 @@ const TimelinePage = {
     // Timeline body with tasks
     const body = DOM.create('div', 'timeline-body');
     
-    // Group tasks by date
+    // Apply filters and group tasks by date
+    const filteredTasks = this.applyFilters(AppState.tasks);
     const tasksByDate = {};
-    AppState.tasks.forEach(task => {
+    filteredTasks.forEach(task => {
       if (task.dueDate) {
         const taskDate = new Date(task.dueDate);
         const dateKey = this.getDateKey(taskDate);
@@ -627,35 +849,123 @@ const TimelinePage = {
       const dayColumn = DOM.create('div', 'timeline-day-column');
       const dateKey = this.getDateKey(day);
       const dayTasks = tasksByDate[dateKey] || [];
-      
+      const isCurrentMonth = day.getMonth() === AppState.timelineCurrentDate.getMonth();
+
+      // Styling for different day types
+      if (!isCurrentMonth) {
+        dayColumn.classList.add('timeline-day-other-month');
+      } else if (this.isToday(day)) {
+        dayColumn.classList.add('timeline-day-today');
+      } else if (day.getDay() === 0 || day.getDay() === 6) {
+        dayColumn.classList.add('timeline-day-weekend');
+      }
+
+      // Make day droppable for drag and drop
+      dayColumn.ondragover = (e) => {
+        e.preventDefault();
+        dayColumn.classList.add('timeline-day-drop-target');
+      };
+      dayColumn.ondragleave = (e) => {
+        dayColumn.classList.remove('timeline-day-drop-target');
+      };
+      dayColumn.ondrop = (e) => {
+        e.preventDefault();
+        dayColumn.classList.remove('timeline-day-drop-target');
+        this.handleDrop(e, day);
+      };
+
+      // Make day clickable to add task
+      dayColumn.onclick = (e) => {
+        if (e.target === dayColumn || e.target.classList.contains('timeline-day-empty')) {
+          const dateStr = day.getFullYear() + '-' +
+            String(day.getMonth() + 1).padStart(2, '0') + '-' +
+            String(day.getDate()).padStart(2, '0');
+          TaskModal.show(null, null, dateStr);
+        }
+      };
+      dayColumn.style.cursor = 'pointer';
+
+      // Add hover effect for add indicator
+      dayColumn.onmouseenter = () => {
+        if (dayTasks.length === 0) {
+          const addIndicator = dayColumn.querySelector('.add-task-indicator');
+          if (addIndicator) addIndicator.style.opacity = '1';
+        }
+      };
+      dayColumn.onmouseleave = () => {
+        const addIndicator = dayColumn.querySelector('.add-task-indicator');
+        if (addIndicator) addIndicator.style.opacity = '0';
+      };
+
       dayTasks.forEach((task, index) => {
         const taskBar = DOM.create('div', 'timeline-task-bar');
-        taskBar.style.backgroundColor = task.color || '#3b82f6';
-        taskBar.style.borderLeftColor = task.color || '#3b82f6';
-        
+        // Use status color instead of task color for better consistency
+        const statusColor = AppState.statuses.find(s => s.name === task.status)?.color || '#3b82f6';
+        taskBar.style.backgroundColor = statusColor;
+        taskBar.style.borderLeftColor = statusColor;
+
         const taskContent = DOM.create('div', 'timeline-task-content');
-        taskContent.appendChild(DOM.create('div', 'timeline-task-title', task.task));
-        taskContent.appendChild(DOM.create('div', 'timeline-task-meta', 
-          `${task.category} • ${task.status}`));
-        
+
+        // Task title (truncated if too long)
+        const title = DOM.create('div', 'timeline-task-title');
+        title.textContent = task.task.length > 25 ? task.task.substring(0, 25) + '...' : task.task;
+        title.title = task.task; // Full title on hover
+        taskContent.appendChild(title);
+
+        // Enhanced meta information
+        const meta = DOM.create('div', 'timeline-task-meta');
+        const timeInfo = task.startTime ? `${task.startTime}` : '';
+        const categoryInfo = task.category ? ` • ${task.category}` : '';
+        const objectiveInfo = task.objective ? ` • ${task.objective}` : '';
+        meta.textContent = `${task.status}${timeInfo}${categoryInfo}${objectiveInfo}`;
+        taskContent.appendChild(meta);
+
         taskBar.appendChild(taskContent);
-        taskBar.onclick = () => TaskModal.show(task);
-        taskBar.title = `${task.task} - Due: ${task.dueDate}`;
-        
+
+        // Make task draggable
+        taskBar.draggable = true;
+        taskBar.ondragstart = (e) => this.handleDragStart(e, task);
+        taskBar.ondragend = (e) => this.handleDragEnd(e);
+
+        // Click to edit
+        taskBar.onclick = (e) => {
+          if (!e.defaultPrevented) TaskModal.show(task);
+        };
+
+        // Enhanced tooltip
+        taskBar.title = `${task.task}\nStatus: ${task.status}\nDue: ${task.dueDate}${task.startTime ? '\nTime: ' + task.startTime : ''}${task.category ? '\nCategory: ' + task.category : ''}${task.objective ? '\nObjective: ' + task.objective : ''}`;
+
         // Add status indicator
         const statusIndicator = DOM.create('div', `timeline-task-status ${task.status}`);
         taskBar.appendChild(statusIndicator);
-        
+
         dayColumn.appendChild(taskBar);
       });
-      
+
       // Add empty state if no tasks
       if (dayTasks.length === 0) {
         const emptyDay = DOM.create('div', 'timeline-day-empty');
-        emptyDay.textContent = 'No tasks';
+        const addIndicator = DOM.create('div', 'add-task-indicator');
+        addIndicator.innerHTML = DOM.getIconSVG('plus');
+        addIndicator.style.opacity = '0';
+        addIndicator.style.position = 'absolute';
+        addIndicator.style.top = '0.5rem';
+        addIndicator.style.right = '0.5rem';
+        addIndicator.style.width = '20px';
+        addIndicator.style.height = '20px';
+        addIndicator.style.color = '#6b7280';
+        addIndicator.style.transition = 'opacity 0.2s';
+        emptyDay.appendChild(addIndicator);
+
+        const text = DOM.create('div', '');
+        text.textContent = 'Click to add task';
+        text.style.fontSize = '0.75rem';
+        text.style.color = '#9ca3af';
+        emptyDay.appendChild(text);
+
         dayColumn.appendChild(emptyDay);
       }
-      
+
       body.appendChild(dayColumn);
     });
     
@@ -1369,7 +1679,7 @@ const StatusModal = {
 
 // Task Modal
 const TaskModal = {
-  show(task = null) {
+  show(task = null, onSaveCallback = null, prefillDate = null) {
     const overlay = DOM.create('div', 'modal-overlay active');
     overlay.onclick = (e) => {
       if (e.target === overlay) this.hide();
@@ -1439,7 +1749,7 @@ const TaskModal = {
     const dueDateInput = DOM.create('input', 'form-input');
     dueDateInput.type = 'date';
     dueDateInput.name = 'dueDate';
-    dueDateInput.value = task?.dueDate || '';
+    dueDateInput.value = task?.dueDate || prefillDate || '';
     dueDateGroup.appendChild(dueDateInput);
     form.appendChild(dueDateGroup);
 
