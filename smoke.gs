@@ -75,6 +75,33 @@ function seedSmokeData() {
     [1006, "Plan weekend", "Personal", "2025-01-01", "10:00:00", "2025-01-02", "12:00:00", "#10b981", "overdue", "", "low"]
   ];
 
+  const extraStatuses = ["pending", "completed", "overdue", "in-progress"];
+  const extraPriorities = ["low", "medium", "high"];
+  const extraCategories = ["Work", "Personal", "Health", "Learning"];
+  const extraObjectives = ["Launch Plan", "Fitness", "Courses", ""];
+  const extraColors = ["#5470c6", "#10b981", "#ef4444", "#f59e0b", "#6366f1"];
+
+  for (let i = 0; i < 24; i += 1) {
+    const id = 1100 + i;
+    const day = String((i % 28) + 1).padStart(2, "0");
+    const startDate = `2025-01-${day}`;
+    const dueDay = String(((i + 2) % 28) + 1).padStart(2, "0");
+    const dueDate = `2025-01-${dueDay}`;
+    tasks.push([
+      id,
+      `Sample task ${i + 1}`,
+      extraCategories[i % extraCategories.length],
+      startDate,
+      "09:30:00",
+      dueDate,
+      "18:00:00",
+      extraColors[i % extraColors.length],
+      extraStatuses[i % extraStatuses.length],
+      extraObjectives[i % extraObjectives.length],
+      extraPriorities[i % extraPriorities.length]
+    ]);
+  }
+
   const financeRecords = [
     [1, "2025-01-01", "income", 3200, "Salary", "Monthly salary", true],
     [2, "2025-01-02", "expense", 120, "Groceries", "Weekly grocery run", false],
@@ -82,6 +109,21 @@ function seedSmokeData() {
     [4, "2025-01-04", "expense", 45, "Fitness", "Gym pass", true],
     [5, "2025-01-06", "expense", 85, "Learning", "Course fee", false]
   ];
+
+  const financeCategories = ["Groceries", "Transport", "Dining", "Fitness", "Learning", "Entertainment"];
+  for (let i = 0; i < 18; i += 1) {
+    const id = 10 + i;
+    const day = String((i % 28) + 1).padStart(2, "0");
+    financeRecords.push([
+      id,
+      `2025-01-${day}`,
+      i % 5 === 0 ? "income" : "expense",
+      i % 5 === 0 ? 500 + i * 10 : 30 + i * 7,
+      financeCategories[i % financeCategories.length],
+      `Sample entry ${i + 1}`,
+      i % 6 === 0
+    ]);
+  }
 
   const financeSettings = [
     ["2025-01", 1800],

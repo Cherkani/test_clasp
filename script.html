@@ -18,7 +18,8 @@ const AppState = {
   financeMonth: new Date(),
   dashboardCharts: {},
   searchQuery: '',
-  referenceTab: 'objectives'
+  referenceTab: 'objectives',
+  mobileSidebarOpen: false
 };
 
 // Google Apps Script API
@@ -241,6 +242,25 @@ const DataStore = {
   }
 };
 
+let chartLoadPromise = null;
+
+function ensureChartLibrary() {
+  if (typeof Chart !== 'undefined') {
+    return Promise.resolve(true);
+  }
+  if (chartLoadPromise) {
+    return chartLoadPromise;
+  }
+  chartLoadPromise = new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+  return chartLoadPromise;
+}
+
 function updateTaskReferences(field, oldValue, newValue) {
   let changed = false;
   AppState.tasks = AppState.tasks.map(task => {
@@ -283,7 +303,8 @@ const DOM = {
       chevronLeft: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>',
       chevronRight: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>',
       tag: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>',
-      plus: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>'
+      plus: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>',
+      menu: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>'
     };
     return icons[name] || '';
   }
@@ -347,7 +368,9 @@ const Toast = {
 const Sidebar = {
   render() {
     const sidebar = DOM.create('aside', 'sidebar');
-    if (AppState.sidebarCollapsed) sidebar.classList.add('collapsed');
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile && AppState.sidebarCollapsed) sidebar.classList.add('collapsed');
+    if (isMobile && AppState.mobileSidebarOpen) sidebar.classList.add('open');
 
     // Header
     const header = DOM.create('div', 'sidebar-header');
@@ -429,6 +452,30 @@ const Sidebar = {
     const existing = document.querySelector('.sidebar');
     if (existing) existing.replaceWith(sidebar);
     else document.body.insertBefore(sidebar, document.body.firstChild);
+
+    const existingToggle = document.querySelector('.mobile-menu-toggle');
+    if (existingToggle) existingToggle.remove();
+    const existingOverlay = document.querySelector('.mobile-menu-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    if (isMobile) {
+      const toggle = DOM.create('button', 'mobile-menu-toggle');
+      toggle.innerHTML = DOM.getIconSVG('menu');
+      toggle.onclick = () => {
+        AppState.mobileSidebarOpen = !AppState.mobileSidebarOpen;
+        this.render();
+      };
+      document.body.appendChild(toggle);
+
+      if (AppState.mobileSidebarOpen) {
+        const overlay = DOM.create('div', 'mobile-menu-overlay');
+        overlay.onclick = () => {
+          AppState.mobileSidebarOpen = false;
+          this.render();
+        };
+        document.body.appendChild(overlay);
+      }
+    }
   },
 
   async sync() {
@@ -459,6 +506,9 @@ const Router = {
       AppState.currentPage = 'reference';
     } else {
       AppState.currentPage = page;
+    }
+    if (window.innerWidth <= 768) {
+      AppState.mobileSidebarOpen = false;
     }
     Sidebar.render();
     this.render();
@@ -983,8 +1033,9 @@ const Dashboard = {
   },
 
   drawCharts() {
-    requestAnimationFrame(() => {
-      if (typeof Chart === 'undefined') return;
+    requestAnimationFrame(async () => {
+      const ready = await ensureChartLibrary();
+      if (!ready) return;
       this.destroyCharts();
       this.drawFinanceCategoryChart();
       this.drawFinanceTrendChart();
@@ -2189,9 +2240,9 @@ const FinancePage = {
   },
 
   formatCurrency(value) {
-    const formatter = new Intl.NumberFormat('en-US', {
+    const formatter = new Intl.NumberFormat('fr-MA', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'MAD'
     });
     return formatter.format(Number(value) || 0);
   },
