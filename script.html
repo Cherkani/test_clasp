@@ -10,7 +10,13 @@ const AppState = {
   sidebarCollapsed: false,
   timelineView: 'month',
   timelineCurrentDate: new Date(),
-  timelineFilters: { statuses: [], categories: [], objectives: [] }
+  timelineCollapsedDates: {},
+  timelineFilters: { statuses: [], categories: [], objectives: [] },
+  financeRecords: [],
+  financeSettings: {},
+  financeMonth: new Date(),
+  dashboardCharts: {},
+  searchQuery: ''
 };
 
 // Google Apps Script API
@@ -151,6 +157,48 @@ const API = {
         .withFailureHandler(reject)
         .deleteStatus(statusId);
     });
+  },
+
+  async getFinanceRecords() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching finance records:', error);
+          resolve([]);
+        })
+        .getFinanceRecords();
+    });
+  },
+
+  async saveFinanceRecords(records) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .saveFinanceRecords(records);
+    });
+  },
+
+  async getFinanceSettings() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching finance settings:', error);
+          resolve({});
+        })
+        .getFinanceSettings();
+    });
+  },
+
+  async saveFinanceSettings(settings) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .saveFinanceSettings(settings);
+    });
   }
 };
 
@@ -176,6 +224,7 @@ const DOM = {
       calendar: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>',
       timeline: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
       target: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>',
+      finance: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M5 7V5a2 2 0 012-2h10a2 2 0 012 2v2m0 0v12a2 2 0 01-2 2H7a2 2 0 01-2-2V7m5 4h4"></path></svg>',
       sync: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
       check: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
       loading: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="animate-spin"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
@@ -186,6 +235,60 @@ const DOM = {
       plus: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>'
     };
     return icons[name] || '';
+  }
+};
+
+const TaskFilters = {
+  applySearch(tasks) {
+    const query = AppState.searchQuery.trim().toLowerCase();
+    if (!query) return tasks;
+    return tasks.filter(task => {
+      const haystack = [
+        task.task,
+        task.category,
+        task.status,
+        task.objective,
+        task.priority
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+};
+
+const Toast = {
+  container: null,
+
+  init() {
+    if (this.container) return;
+    this.container = DOM.create('div', 'toast-container');
+    document.body.appendChild(this.container);
+  },
+
+  show(message, type = 'info') {
+    if (!this.container) this.init();
+    const toast = DOM.create('div', `toast toast-${type}`);
+    toast.textContent = message;
+    this.container.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      toast.classList.add('show');
+    });
+
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  },
+
+  success(message) {
+    this.show(message, 'success');
+  },
+
+  error(message) {
+    this.show(message, 'error');
   }
 };
 
@@ -201,7 +304,7 @@ const Sidebar = {
     logo.innerHTML = '<span style="font-size: 1.5rem;">T</span>';
     if (!AppState.sidebarCollapsed) {
       const logoText = DOM.create('div', '');
-      logoText.innerHTML = '<p style="font-weight: bold; margin: 0;">Task Pro</p><p style="font-size: 0.75rem; color: #6b7280; margin: 0;">Manage your tasks</p>';
+      logoText.innerHTML = '<p style="font-weight: bold; margin: 0;">FlowTrack</p><p style="font-size: 0.75rem; color: #6b7280; margin: 0;">Track work & money</p>';
       logo.appendChild(logoText);
     }
     header.appendChild(logo);
@@ -216,6 +319,20 @@ const Sidebar = {
     header.appendChild(toggleBtn);
     sidebar.appendChild(header);
 
+    if (!AppState.sidebarCollapsed) {
+      const searchSection = DOM.create('div', 'sidebar-search');
+      const searchInput = DOM.create('input', 'search-input');
+      searchInput.type = 'search';
+      searchInput.placeholder = 'Search tasks...';
+      searchInput.value = AppState.searchQuery;
+      searchInput.oninput = (event) => {
+        AppState.searchQuery = event.target.value;
+        Router.render();
+      };
+      searchSection.appendChild(searchInput);
+      sidebar.appendChild(searchSection);
+    }
+
     // Navigation
     const nav = DOM.create('nav', 'sidebar-nav');
     const navList = DOM.create('ul', 'nav-list');
@@ -225,6 +342,7 @@ const Sidebar = {
       { id: 'tasks', label: 'Tasks', icon: 'tasks' },
       { id: 'calendar', label: 'Calendar', icon: 'calendar' },
       { id: 'timeline', label: 'Timeline', icon: 'timeline' },
+      { id: 'finance', label: 'Finance', icon: 'finance' },
       { id: 'objectives', label: 'Objectives', icon: 'target' },
       { id: 'categories', label: 'Categories', icon: 'tag' },
       { id: 'statuses', label: 'Statuses', icon: 'check' }
@@ -246,7 +364,7 @@ const Sidebar = {
 
     // Sync Section
     const syncSection = DOM.create('div', 'sync-section');
-    const syncBtn = DOM.create('button', `sync-button ${AppState.isSyncing ? 'syncing' : ''}`);
+    const syncBtn = DOM.create('button', `sync-button sync-button-compact ${AppState.isSyncing ? 'syncing' : ''}`);
     syncBtn.onclick = () => this.sync();
     
     if (AppState.isSyncing) {
@@ -273,10 +391,14 @@ const Sidebar = {
       AppState.objectives = await API.getObjectives();
       AppState.categories = await API.getCategories();
       AppState.statuses = await API.getStatuses();
+      AppState.financeRecords = await API.getFinanceRecords();
+      AppState.financeSettings = await API.getFinanceSettings();
       this.render();
       Router.render();
+      Toast.success('Sync complete');
     } catch (error) {
       console.error('Sync error:', error);
+      Toast.error('Sync failed. Try again.');
     } finally {
       AppState.isSyncing = false;
       this.render();
@@ -308,6 +430,9 @@ const Router = {
         break;
       case 'timeline':
         pageContent = TimelinePage.render();
+        break;
+      case 'finance':
+        pageContent = FinancePage.render();
         break;
       case 'objectives':
         pageContent = ObjectivesPage.render();
@@ -342,47 +467,609 @@ const Router = {
 const Dashboard = {
   render() {
     const container = DOM.create('div', '');
-    
+
     const header = DOM.create('div', 'page-header');
     header.appendChild(DOM.create('h1', 'page-title', 'Dashboard'));
-    header.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks'));
+    header.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks & finances'));
     container.appendChild(header);
 
+    const layout = DOM.create('div', 'dashboard-layout');
+    const mainColumn = DOM.create('div', 'dashboard-main');
+    const sideColumn = DOM.create('aside', 'dashboard-side');
+
+    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
     const stats = DOM.create('div', 'card');
     stats.innerHTML = `
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${AppState.tasks.length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${filteredTasks.length}</div>
           <div style="color: #6b7280;">Total Tasks</div>
         </div>
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${AppState.tasks.filter(t => t.status === 'completed').length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${filteredTasks.filter(t => t.status === 'completed').length}</div>
           <div style="color: #6b7280;">Completed</div>
         </div>
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #ef4444;">${AppState.tasks.filter(t => t.status === 'overdue').length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #ef4444;">${filteredTasks.filter(t => t.status === 'overdue').length}</div>
           <div style="color: #6b7280;">Overdue</div>
         </div>
         <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${AppState.tasks.filter(t => t.status === 'pending').length}</div>
+          <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${filteredTasks.filter(t => t.status === 'pending').length}</div>
           <div style="color: #6b7280;">Pending</div>
         </div>
       </div>
     `;
-    container.appendChild(stats);
+    mainColumn.appendChild(stats);
 
     const recentTasks = DOM.create('div', 'card');
     recentTasks.appendChild(DOM.create('h2', '', 'Recent Tasks'));
     const taskList = DOM.create('div', 'task-list');
-    
-    AppState.tasks.slice(0, 5).forEach(task => {
+
+    filteredTasks.slice(0, 5).forEach(task => {
       taskList.appendChild(this.renderTask(task));
     });
-    
+
     recentTasks.appendChild(taskList);
-    container.appendChild(recentTasks);
+    mainColumn.appendChild(recentTasks);
+
+    mainColumn.appendChild(this.renderFinanceCharts());
+    mainColumn.appendChild(this.renderWorkCharts());
+
+    sideColumn.appendChild(this.renderFinanceSummary());
+    sideColumn.appendChild(this.renderFinanceRecent());
+    sideColumn.appendChild(this.renderFinanceInsights());
+    sideColumn.appendChild(this.renderWorkInsights());
+
+    layout.appendChild(mainColumn);
+    layout.appendChild(sideColumn);
+    container.appendChild(layout);
+
+    this.drawCharts();
 
     return container;
+  },
+
+  renderFinanceSummary() {
+    const card = DOM.create('div', 'card dashboard-finance');
+    const monthControl = this.renderFinanceMonthControl();
+    const monthKey = FinancePage.getMonthKey(AppState.financeMonth);
+    const records = FinancePage.getMonthlyRecords();
+    const totals = FinancePage.getTotals(records);
+    const budget = FinancePage.getMonthlyBudget(monthKey);
+    const remaining = budget > 0 ? budget - totals.expenses : null;
+    const exceeded = remaining !== null && remaining < 0;
+
+    card.appendChild(DOM.create('h2', '', 'Finance Snapshot'));
+    card.appendChild(monthControl);
+
+    const summary = DOM.create('div', 'dashboard-finance-summary');
+    summary.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Income</div>
+        <div class="dashboard-finance-value income">${FinancePage.formatCurrency(totals.income)}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Expenses</div>
+        <div class="dashboard-finance-value expense">${FinancePage.formatCurrency(totals.expenses)}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Net</div>
+        <div class="dashboard-finance-value">${FinancePage.formatCurrency(totals.net)}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Budget</div>
+        <div class="dashboard-finance-value ${exceeded ? 'expense' : 'income'}">
+          ${budget > 0 ? FinancePage.formatCurrency(remaining) : 'Not set'}
+        </div>
+        <div class="dashboard-finance-sub">${budget > 0 ? (exceeded ? 'Over budget' : 'Remaining') : 'Set budget in Finance'}</div>
+      </div>
+    `;
+    card.appendChild(summary);
+
+    const progress = DOM.create('div', 'dashboard-finance-progress');
+    if (budget > 0) {
+      const percent = Math.min(100, Math.round((totals.expenses / budget) * 100));
+      progress.innerHTML = `
+        <div class="dashboard-finance-progress-bar">
+          <span style="width: ${percent}%;" class="${exceeded ? 'danger' : 'good'}"></span>
+        </div>
+        <div class="dashboard-finance-progress-text">${percent}% of budget used</div>
+      `;
+    } else {
+      progress.innerHTML = '<div class="dashboard-finance-progress-text">Set a monthly budget to track progress.</div>';
+    }
+    card.appendChild(progress);
+
+    return card;
+  },
+
+  renderFinanceMonthControl() {
+    const wrapper = DOM.create('div', 'dashboard-finance-month');
+    const label = DOM.create('label', 'dashboard-finance-label', 'Month');
+    const monthInput = DOM.create('input', 'form-input');
+    monthInput.type = 'month';
+    monthInput.value = FinancePage.getMonthKey(AppState.financeMonth);
+    monthInput.onchange = (event) => {
+      AppState.financeMonth = new Date(`${event.target.value}-01`);
+      Router.render();
+    };
+
+    label.appendChild(monthInput);
+    wrapper.appendChild(label);
+    return wrapper;
+  },
+
+  renderFinanceRecent() {
+    const card = DOM.create('div', 'card dashboard-finance');
+    card.appendChild(DOM.create('h2', '', 'Recent Transactions'));
+
+    const records = FinancePage.getMonthlyRecords().slice(-5).reverse();
+    if (records.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No transactions yet.';
+      card.appendChild(empty);
+      return card;
+    }
+
+    const list = DOM.create('div', 'dashboard-finance-list');
+    records.forEach(record => {
+      const row = DOM.create('div', 'dashboard-finance-item');
+      const title = record.category || record.note || 'Uncategorized';
+      row.innerHTML = `
+        <div>
+          <div class="dashboard-finance-item-title">${title}</div>
+          <div class="dashboard-finance-item-date">${record.date}</div>
+        </div>
+        <div class="dashboard-finance-item-amount ${record.type}">
+          ${record.type === 'expense' ? '-' : '+'}${FinancePage.formatCurrency(record.amount)}
+        </div>
+      `;
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+    return card;
+  },
+
+  renderFinanceCharts() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', '', 'Finance Charts'));
+
+    const grid = DOM.create('div', 'dashboard-chart-grid');
+
+    const categoryCard = DOM.create('div', 'dashboard-chart-card');
+    categoryCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Spending by Category'));
+    const categoryCanvas = DOM.create('canvas', '');
+    categoryCanvas.id = 'financeCategoryChart';
+    categoryCard.appendChild(categoryCanvas);
+    grid.appendChild(categoryCard);
+
+    const trendCard = DOM.create('div', 'dashboard-chart-card');
+    trendCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Income vs Expense Trend'));
+    const trendCanvas = DOM.create('canvas', '');
+    trendCanvas.id = 'financeTrendChart';
+    trendCard.appendChild(trendCanvas);
+    grid.appendChild(trendCard);
+
+    card.appendChild(grid);
+    return card;
+  },
+
+  renderWorkCharts() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', '', 'Work Charts'));
+
+    const grid = DOM.create('div', 'dashboard-chart-grid');
+
+    const statusCard = DOM.create('div', 'dashboard-chart-card');
+    statusCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Task Status Split'));
+    const statusCanvas = DOM.create('canvas', '');
+    statusCanvas.id = 'taskStatusChart';
+    statusCard.appendChild(statusCanvas);
+    grid.appendChild(statusCard);
+
+    const productivityCard = DOM.create('div', 'dashboard-chart-card');
+    productivityCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Productivity Trend'));
+    const productivityCanvas = DOM.create('canvas', '');
+    productivityCanvas.id = 'productivityTrendChart';
+    productivityCard.appendChild(productivityCanvas);
+    grid.appendChild(productivityCard);
+
+    card.appendChild(grid);
+    return card;
+  },
+
+  renderFinanceInsights() {
+    const card = DOM.create('div', 'card dashboard-finance');
+    card.appendChild(DOM.create('h2', '', 'Finance Insights'));
+
+    const currentMonth = AppState.financeMonth;
+    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    const currentRecords = FinancePage.getMonthlyRecordsFor(currentMonth);
+    const prevRecords = FinancePage.getMonthlyRecordsFor(prevMonth);
+    const currentTotals = FinancePage.getTotals(currentRecords);
+    const prevTotals = FinancePage.getTotals(prevRecords);
+    const budget = FinancePage.getMonthlyBudget(FinancePage.getMonthKey(currentMonth));
+
+    const budgetScore = budget > 0 ? Math.max(0, Math.round(((budget - currentTotals.expenses) / budget) * 100)) : null;
+    const savingsRate = currentTotals.income > 0
+      ? Math.round((currentTotals.net / currentTotals.income) * 100)
+      : null;
+
+    const trendIncome = this.formatTrend(currentTotals.income, prevTotals.income);
+    const trendExpense = this.formatTrend(currentTotals.expenses, prevTotals.expenses);
+
+    const summary = DOM.create('div', 'dashboard-insights-grid');
+    summary.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Budget Score</div>
+        <div class="dashboard-finance-value ${budgetScore !== null && budgetScore < 0 ? 'expense' : 'income'}">
+          ${budgetScore !== null ? `${budgetScore}%` : 'N/A'}
+        </div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Savings Rate</div>
+        <div class="dashboard-finance-value">${savingsRate !== null ? `${savingsRate}%` : 'N/A'}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Income Trend</div>
+        <div class="dashboard-finance-value">${trendIncome}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Expense Trend</div>
+        <div class="dashboard-finance-value">${trendExpense}</div>
+      </div>
+    `;
+    card.appendChild(summary);
+
+    const categoryList = this.renderFinanceCategoryBreakdown(currentRecords);
+    card.appendChild(categoryList);
+
+    return card;
+  },
+
+  renderFinanceCategoryBreakdown(records) {
+    const wrapper = DOM.create('div', 'dashboard-insights-list');
+    const title = DOM.create('div', 'dashboard-finance-label', 'Top Spending Categories');
+    wrapper.appendChild(title);
+
+    const expenses = records.filter(record => record.type === 'expense');
+    if (expenses.length === 0) {
+      wrapper.appendChild(DOM.create('div', 'dashboard-insights-empty', 'No expenses yet.'));
+      return wrapper;
+    }
+
+    const totals = {};
+    expenses.forEach(record => {
+      const key = record.category || 'Uncategorized';
+      totals[key] = (totals[key] || 0) + (Number(record.amount) || 0);
+    });
+
+    Object.entries(totals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .forEach(([category, amount]) => {
+        const row = DOM.create('div', 'dashboard-insights-row');
+        row.innerHTML = `<span>${category}</span><span>${FinancePage.formatCurrency(amount)}</span>`;
+        wrapper.appendChild(row);
+      });
+
+    return wrapper;
+  },
+
+  renderWorkInsights() {
+    const card = DOM.create('div', 'card dashboard-finance');
+    card.appendChild(DOM.create('h2', '', 'Work Insights'));
+
+    const currentMonth = new Date();
+    const tasksThisMonth = this.getTasksForMonth(currentMonth);
+    const objectiveDueThisMonth = this.getObjectivesDueInMonth(currentMonth);
+    const completionRate = this.getCompletionRate(tasksThisMonth);
+    const overdueCount = tasksThisMonth.filter(task => task.status === 'overdue').length;
+    const productivityScore = this.getProductivityScore(tasksThisMonth, overdueCount);
+
+    const summary = DOM.create('div', 'dashboard-insights-grid');
+    summary.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Completion Rate</div>
+        <div class="dashboard-finance-value">${completionRate}%</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Overdue Tasks</div>
+        <div class="dashboard-finance-value expense">${overdueCount}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Productivity Score</div>
+        <div class="dashboard-finance-value">${productivityScore}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Objectives Due</div>
+        <div class="dashboard-finance-value">${objectiveDueThisMonth.length}</div>
+      </div>
+    `;
+    card.appendChild(summary);
+
+    card.appendChild(this.renderObjectiveProgress(objectiveDueThisMonth));
+    card.appendChild(this.renderUpcomingObjectives());
+
+    return card;
+  },
+
+  renderObjectiveProgress(objectives) {
+    const wrapper = DOM.create('div', 'dashboard-insights-list');
+    wrapper.appendChild(DOM.create('div', 'dashboard-finance-label', 'Objectives This Month'));
+
+    if (objectives.length === 0) {
+      wrapper.appendChild(DOM.create('div', 'dashboard-insights-empty', 'No objectives due this month.'));
+      return wrapper;
+    }
+
+    objectives.slice(0, 3).forEach(objective => {
+      const { completed, total } = this.getObjectiveCompletion(objective.name);
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const row = DOM.create('div', 'dashboard-insights-row');
+      row.innerHTML = `<span>${objective.name}</span><span>${percent}%</span>`;
+      wrapper.appendChild(row);
+    });
+
+    return wrapper;
+  },
+
+  renderUpcomingObjectives() {
+    const wrapper = DOM.create('div', 'dashboard-insights-list');
+    wrapper.appendChild(DOM.create('div', 'dashboard-finance-label', 'Upcoming Objective Deadlines'));
+
+    const upcoming = this.getObjectivesDueSoon(30);
+    if (upcoming.length === 0) {
+      wrapper.appendChild(DOM.create('div', 'dashboard-insights-empty', 'No upcoming deadlines.'));
+      return wrapper;
+    }
+
+    upcoming.slice(0, 3).forEach(objective => {
+      const row = DOM.create('div', 'dashboard-insights-row');
+      row.innerHTML = `<span>${objective.name}</span><span>${objective.dueDate}</span>`;
+      wrapper.appendChild(row);
+    });
+    return wrapper;
+  },
+
+  getTasksForMonth(date) {
+    const { start, end } = this.getMonthRange(date);
+    return AppState.tasks.filter(task => {
+      if (!task.dueDate) return false;
+      const due = this.parseDate(task.dueDate);
+      return due && due >= start && due <= end;
+    });
+  },
+
+  getObjectivesDueInMonth(date) {
+    const { start, end } = this.getMonthRange(date);
+    return AppState.objectives.filter(objective => {
+      if (!objective.dueDate) return false;
+      const due = this.parseDate(objective.dueDate);
+      return due && due >= start && due <= end;
+    });
+  },
+
+  getObjectivesDueSoon(days) {
+    const now = new Date();
+    const end = new Date(now);
+    end.setDate(now.getDate() + days);
+    return AppState.objectives
+      .filter(objective => objective.dueDate)
+      .filter(objective => {
+        const due = this.parseDate(objective.dueDate);
+        return due && due >= now && due <= end;
+      })
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  },
+
+  getObjectiveCompletion(objectiveName) {
+    const tasks = AppState.tasks.filter(task => task.objective === objectiveName);
+    const completed = tasks.filter(task => task.status === 'completed').length;
+    return { completed, total: tasks.length };
+  },
+
+  getCompletionRate(tasks) {
+    if (tasks.length === 0) return 0;
+    const completed = tasks.filter(task => task.status === 'completed').length;
+    return Math.round((completed / tasks.length) * 100);
+  },
+
+  getProductivityScore(tasks, overdueCount) {
+    if (tasks.length === 0) return 0;
+    const weightMap = { high: 3, medium: 2, low: 1 };
+    const totals = tasks.reduce((acc, task) => {
+      const weight = weightMap[task.priority] || 2;
+      acc.total += weight;
+      if (task.status === 'completed') acc.completed += weight;
+      return acc;
+    }, { total: 0, completed: 0 });
+
+    const baseScore = totals.total > 0 ? Math.round((totals.completed / totals.total) * 100) : 0;
+    const penalty = overdueCount * 5;
+    return Math.max(0, baseScore - penalty);
+  },
+
+  getMonthRange(date) {
+    const start = new Date(date.getFullYear(), date.getMonth(), 1);
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+    return { start, end };
+  },
+
+  parseDate(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  },
+
+  formatTrend(current, previous) {
+    if (previous === 0) return current === 0 ? '0%' : 'New';
+    const delta = current - previous;
+    const percent = Math.round((delta / previous) * 100);
+    const sign = percent > 0 ? '+' : '';
+    return `${sign}${percent}%`;
+  },
+
+  drawCharts() {
+    requestAnimationFrame(() => {
+      if (typeof Chart === 'undefined') return;
+      this.destroyCharts();
+      this.drawFinanceCategoryChart();
+      this.drawFinanceTrendChart();
+      this.drawTaskStatusChart();
+      this.drawProductivityTrendChart();
+    });
+  },
+
+  destroyCharts() {
+    Object.values(AppState.dashboardCharts).forEach(chart => {
+      if (chart) chart.destroy();
+    });
+    AppState.dashboardCharts = {};
+  },
+
+  drawFinanceCategoryChart() {
+    const canvas = document.getElementById('financeCategoryChart');
+    if (!canvas) return;
+    const records = FinancePage.getMonthlyRecordsFor(AppState.financeMonth);
+    const expenses = records.filter(record => record.type === 'expense');
+    const totals = {};
+    expenses.forEach(record => {
+      const key = record.category || 'Uncategorized';
+      totals[key] = (totals[key] || 0) + (Number(record.amount) || 0);
+    });
+
+    const labels = Object.keys(totals);
+    const data = Object.values(totals);
+    if (labels.length === 0) {
+      labels.push('No Data');
+      data.push(1);
+    }
+
+    AppState.dashboardCharts.financeCategory = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: ['#f97316', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899']
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom' }
+        }
+      }
+    });
+  },
+
+  drawFinanceTrendChart() {
+    const canvas = document.getElementById('financeTrendChart');
+    if (!canvas) return;
+    const months = this.getLastMonths(6);
+    const income = [];
+    const expenses = [];
+
+    months.forEach(month => {
+      const records = FinancePage.getMonthlyRecordsFor(month.date);
+      const totals = FinancePage.getTotals(records);
+      income.push(totals.income);
+      expenses.push(totals.expenses);
+    });
+
+    AppState.dashboardCharts.financeTrend = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: months.map(month => month.label),
+        datasets: [
+          {
+            label: 'Income',
+            data: income,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+            tension: 0.3
+          },
+          {
+            label: 'Expenses',
+            data: expenses,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+            tension: 0.3
+          }
+        ]
+      },
+      options: {
+        plugins: { legend: { position: 'bottom' } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  },
+
+  drawTaskStatusChart() {
+    const canvas = document.getElementById('taskStatusChart');
+    if (!canvas) return;
+    const statuses = ['completed', 'pending', 'overdue', 'in-progress'];
+    const counts = statuses.map(status => AppState.tasks.filter(task => task.status === status).length);
+    if (counts.every(count => count === 0)) {
+      counts[0] = 1;
+    }
+
+    AppState.dashboardCharts.taskStatus = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: statuses.map(status => status.replace('-', ' ')),
+        datasets: [{
+          data: counts,
+          backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#f59e0b']
+        }]
+      },
+      options: {
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  },
+
+  drawProductivityTrendChart() {
+    const canvas = document.getElementById('productivityTrendChart');
+    if (!canvas) return;
+    const months = this.getLastMonths(6);
+    const scores = months.map(month => {
+      const tasks = this.getTasksForMonth(month.date);
+      const overdue = tasks.filter(task => task.status === 'overdue').length;
+      return this.getProductivityScore(tasks, overdue);
+    });
+
+    AppState.dashboardCharts.productivityTrend = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: months.map(month => month.label),
+        datasets: [{
+          label: 'Productivity Score',
+          data: scores,
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.2)',
+          tension: 0.3
+        }]
+      },
+      options: {
+        plugins: { legend: { position: 'bottom' } },
+        scales: { y: { beginAtZero: true, max: 100 } }
+      }
+    });
+  },
+
+  getLastMonths(count) {
+    const months = [];
+    const start = new Date();
+    for (let i = count - 1; i >= 0; i -= 1) {
+      const date = new Date(start.getFullYear(), start.getMonth() - i, 1);
+      months.push({
+        date,
+        label: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+      });
+    }
+    return months;
   },
 
   renderTask(task) {
@@ -391,6 +1078,9 @@ const Dashboard = {
     
     const header = DOM.create('div', 'task-header');
     header.appendChild(DOM.create('div', 'task-title', task.task));
+    if (task.priority) {
+      header.appendChild(DOM.create('span', `task-priority ${task.priority}`, task.priority));
+    }
     header.appendChild(DOM.create('span', `task-status ${task.status}`, task.status));
     item.appendChild(header);
     
@@ -437,11 +1127,21 @@ const TasksPage = {
     container.appendChild(header);
 
     const taskList = DOM.create('div', 'task-list');
-    AppState.tasks.forEach(task => {
-      const item = Dashboard.renderTask(task);
-      item.onclick = () => TaskModal.show(task);
-      taskList.appendChild(item);
-    });
+    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
+    if (filteredTasks.length === 0) {
+      const emptyState = DOM.create('div', 'empty-state');
+      emptyState.style.textAlign = 'center';
+      emptyState.style.padding = '3rem';
+      emptyState.style.color = '#6b7280';
+      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No tasks found</p><p>Try a different search or clear the search box</p>';
+      taskList.appendChild(emptyState);
+    } else {
+      filteredTasks.forEach(task => {
+        const item = Dashboard.renderTask(task);
+        item.onclick = () => TaskModal.show(task);
+        taskList.appendChild(item);
+      });
+    }
     
     container.appendChild(taskList);
 
@@ -471,11 +1171,14 @@ const CalendarPage = {
       calendar.appendChild(dayHeader);
     });
 
+    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
+
     // Add calendar days (simplified - you can add full calendar logic)
     for (let i = 1; i <= 31; i++) {
       const day = DOM.create('div', 'calendar-day');
       day.appendChild(DOM.create('div', 'calendar-day-number', i));
-      const tasks = AppState.tasks.filter(t => {
+      const tasks = filteredTasks.filter(t => {
+        if (!t.dueDate) return false;
         const dueDate = new Date(t.dueDate);
         return dueDate.getDate() === i;
       });
@@ -513,11 +1216,11 @@ const TimelinePage = {
 
     const prevBtn = DOM.create('button', 'btn btn-secondary btn-sm');
     prevBtn.innerHTML = DOM.getIconSVG('chevronLeft');
-    prevBtn.onclick = () => this.navigateMonth(-1);
+    prevBtn.onclick = () => this.navigateTimeline(-1);
     navControls.appendChild(prevBtn);
 
     const monthYear = DOM.create('div', 'timeline-month-year');
-    monthYear.textContent = this.formatMonthYear(AppState.timelineCurrentDate);
+    monthYear.textContent = this.formatViewLabel(AppState.timelineCurrentDate);
     monthYear.style.fontSize = '1.125rem';
     monthYear.style.fontWeight = '600';
     monthYear.style.minWidth = '140px';
@@ -526,7 +1229,7 @@ const TimelinePage = {
 
     const nextBtn = DOM.create('button', 'btn btn-secondary btn-sm');
     nextBtn.innerHTML = DOM.getIconSVG('chevronRight');
-    nextBtn.onclick = () => this.navigateMonth(1);
+    nextBtn.onclick = () => this.navigateTimeline(1);
     navControls.appendChild(nextBtn);
 
     const todayBtn = DOM.create('button', 'btn btn-secondary btn-sm');
@@ -552,6 +1255,11 @@ const TimelinePage = {
     weekBtn.textContent = 'Week';
     weekBtn.onclick = () => this.setView('week');
     rightSection.appendChild(weekBtn);
+
+    const dayBtn = DOM.create('button', `btn btn-sm ${currentView === 'day' ? 'btn-primary' : 'btn-secondary'}`);
+    dayBtn.textContent = 'Day';
+    dayBtn.onclick = () => this.setView('day');
+    rightSection.appendChild(dayBtn);
 
     header.appendChild(leftSection);
     header.appendChild(rightSection);
@@ -580,9 +1288,16 @@ const TimelinePage = {
     Router.render();
   },
 
-  navigateMonth(delta) {
+  navigateTimeline(delta) {
     const currentDate = new Date(AppState.timelineCurrentDate);
-    currentDate.setMonth(currentDate.getMonth() + delta);
+    const view = AppState.timelineView || 'month';
+    if (view === 'day') {
+      currentDate.setDate(currentDate.getDate() + delta);
+    } else if (view === 'week') {
+      currentDate.setDate(currentDate.getDate() + (delta * 7));
+    } else {
+      currentDate.setMonth(currentDate.getMonth() + delta);
+    }
     AppState.timelineCurrentDate = currentDate;
     Router.render();
   },
@@ -594,6 +1309,28 @@ const TimelinePage = {
 
   formatMonthYear(date) {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  },
+
+  formatViewLabel(date) {
+    const view = AppState.timelineView || 'month';
+    if (view === 'day') {
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+    if (view === 'week') {
+      const start = new Date(date);
+      start.setDate(date.getDate() - date.getDay());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const startLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const endLabel = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return `${startLabel} - ${endLabel}`;
+    }
+    return this.formatMonthYear(date);
   },
 
   renderFilterBar() {
@@ -703,7 +1440,7 @@ const TimelinePage = {
 
   applyFilters(tasks) {
     const filters = AppState.timelineFilters;
-    return tasks.filter(task => {
+    const filtered = tasks.filter(task => {
       // Status filter
       if (filters.statuses.length > 0 && !filters.statuses.includes(task.status)) {
         return false;
@@ -718,6 +1455,7 @@ const TimelinePage = {
       }
       return true;
     });
+    return TaskFilters.applySearch(filtered);
   },
 
   handleDragStart(e, task) {
@@ -750,7 +1488,7 @@ const TimelinePage = {
       Router.render();
     } catch (error) {
       console.error('Error updating task date:', error);
-      alert('Error updating task date. Please try again.');
+      Toast.error('Error updating task date. Please try again.');
     }
   },
 
@@ -807,26 +1545,6 @@ const TimelinePage = {
       }
     }
 
-    // Timeline header with dates
-    const header = DOM.create('div', 'timeline-header');
-    days.forEach(day => {
-      const dayHeader = DOM.create('div', 'timeline-day-header');
-      const isToday = this.isToday(day);
-      if (isToday) dayHeader.classList.add('today');
-      
-      dayHeader.appendChild(DOM.create('div', 'timeline-day-name', 
-        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getDay()]));
-      dayHeader.appendChild(DOM.create('div', 'timeline-day-number', day.getDate()));
-      
-      if (isToday) {
-        dayHeader.style.backgroundColor = '#dbeafe';
-        dayHeader.style.borderColor = '#3b82f6';
-      }
-      
-      header.appendChild(dayHeader);
-    });
-    container.appendChild(header);
-
     // Timeline body with tasks
     const body = DOM.create('div', 'timeline-body');
     
@@ -850,6 +1568,7 @@ const TimelinePage = {
       const dateKey = this.getDateKey(day);
       const dayTasks = tasksByDate[dateKey] || [];
       const isCurrentMonth = day.getMonth() === AppState.timelineCurrentDate.getMonth();
+      const isCollapsed = !!AppState.timelineCollapsedDates[dateKey];
 
       // Styling for different day types
       if (!isCurrentMonth) {
@@ -859,6 +1578,25 @@ const TimelinePage = {
       } else if (day.getDay() === 0 || day.getDay() === 6) {
         dayColumn.classList.add('timeline-day-weekend');
       }
+
+      const dayHeader = DOM.create('div', 'timeline-day-column-header');
+      const headerInfo = DOM.create('div', 'timeline-day-header-info');
+      headerInfo.appendChild(DOM.create('div', 'timeline-day-name',
+        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getDay()]));
+      headerInfo.appendChild(DOM.create('div', 'timeline-day-number', day.getDate()));
+      dayHeader.appendChild(headerInfo);
+
+      const collapseButton = DOM.create('button', 'timeline-day-toggle');
+      collapseButton.textContent = isCollapsed ? 'Show' : 'Hide';
+      collapseButton.onclick = (e) => {
+        e.stopPropagation();
+        const nextCollapsed = !dayColumn.classList.contains('collapsed');
+        dayColumn.classList.toggle('collapsed', nextCollapsed);
+        AppState.timelineCollapsedDates[dateKey] = nextCollapsed;
+        collapseButton.textContent = nextCollapsed ? 'Show' : 'Hide';
+      };
+      dayHeader.appendChild(collapseButton);
+      dayColumn.appendChild(dayHeader);
 
       // Make day droppable for drag and drop
       dayColumn.ondragover = (e) => {
@@ -897,79 +1635,168 @@ const TimelinePage = {
         if (addIndicator) addIndicator.style.opacity = '0';
       };
 
-      dayTasks.forEach((task, index) => {
-        const taskBar = DOM.create('div', 'timeline-task-bar');
-        // Use status color instead of task color for better consistency
-        const statusColor = AppState.statuses.find(s => s.name === task.status)?.color || '#3b82f6';
-        taskBar.style.backgroundColor = statusColor;
-        taskBar.style.borderLeftColor = statusColor;
-
-        const taskContent = DOM.create('div', 'timeline-task-content');
-
-        // Task title (truncated if too long)
-        const title = DOM.create('div', 'timeline-task-title');
-        title.textContent = task.task.length > 25 ? task.task.substring(0, 25) + '...' : task.task;
-        title.title = task.task; // Full title on hover
-        taskContent.appendChild(title);
-
-        // Enhanced meta information
-        const meta = DOM.create('div', 'timeline-task-meta');
-        const timeInfo = task.startTime ? `${task.startTime}` : '';
-        const categoryInfo = task.category ? ` • ${task.category}` : '';
-        const objectiveInfo = task.objective ? ` • ${task.objective}` : '';
-        meta.textContent = `${task.status}${timeInfo}${categoryInfo}${objectiveInfo}`;
-        taskContent.appendChild(meta);
-
-        taskBar.appendChild(taskContent);
-
-        // Make task draggable
-        taskBar.draggable = true;
-        taskBar.ondragstart = (e) => this.handleDragStart(e, task);
-        taskBar.ondragend = (e) => this.handleDragEnd(e);
-
-        // Click to edit
-        taskBar.onclick = (e) => {
-          if (!e.defaultPrevented) TaskModal.show(task);
-        };
-
-        // Enhanced tooltip
-        taskBar.title = `${task.task}\nStatus: ${task.status}\nDue: ${task.dueDate}${task.startTime ? '\nTime: ' + task.startTime : ''}${task.category ? '\nCategory: ' + task.category : ''}${task.objective ? '\nObjective: ' + task.objective : ''}`;
-
-        // Add status indicator
-        const statusIndicator = DOM.create('div', `timeline-task-status ${task.status}`);
-        taskBar.appendChild(statusIndicator);
-
-        dayColumn.appendChild(taskBar);
-      });
-
-      // Add empty state if no tasks
-      if (dayTasks.length === 0) {
-        const emptyDay = DOM.create('div', 'timeline-day-empty');
-        const addIndicator = DOM.create('div', 'add-task-indicator');
-        addIndicator.innerHTML = DOM.getIconSVG('plus');
-        addIndicator.style.opacity = '0';
-        addIndicator.style.position = 'absolute';
-        addIndicator.style.top = '0.5rem';
-        addIndicator.style.right = '0.5rem';
-        addIndicator.style.width = '20px';
-        addIndicator.style.height = '20px';
-        addIndicator.style.color = '#6b7280';
-        addIndicator.style.transition = 'opacity 0.2s';
-        emptyDay.appendChild(addIndicator);
-
-        const text = DOM.create('div', '');
-        text.textContent = 'Click to add task';
-        text.style.fontSize = '0.75rem';
-        text.style.color = '#9ca3af';
-        emptyDay.appendChild(text);
-
-        dayColumn.appendChild(emptyDay);
+      if (isCollapsed) {
+        dayColumn.classList.add('collapsed');
       }
+
+      const tasksContainer = DOM.create('div', 'timeline-day-tasks');
+      const collapsedSummary = DOM.create('div', 'timeline-day-collapsed-summary', `${dayTasks.length} tasks hidden`);
+      dayColumn.appendChild(collapsedSummary);
+
+      if (view === 'day') {
+        this.renderDaySchedule(tasksContainer, dayTasks);
+      } else {
+        dayTasks.forEach(task => {
+          tasksContainer.appendChild(this.renderTaskCard(task));
+        });
+
+        // Add empty state if no tasks
+        if (dayTasks.length === 0) {
+          const emptyDay = DOM.create('div', 'timeline-day-empty');
+          const addIndicator = DOM.create('div', 'add-task-indicator');
+          addIndicator.innerHTML = DOM.getIconSVG('plus');
+          addIndicator.style.opacity = '0';
+          addIndicator.style.position = 'absolute';
+          addIndicator.style.top = '0.5rem';
+          addIndicator.style.right = '0.5rem';
+          addIndicator.style.width = '20px';
+          addIndicator.style.height = '20px';
+          addIndicator.style.color = '#6b7280';
+          addIndicator.style.transition = 'opacity 0.2s';
+          emptyDay.appendChild(addIndicator);
+
+          const text = DOM.create('div', '');
+          text.textContent = 'Click to add task';
+          text.style.fontSize = '0.75rem';
+          text.style.color = '#9ca3af';
+          emptyDay.appendChild(text);
+
+          tasksContainer.appendChild(emptyDay);
+        }
+      }
+
+      dayColumn.appendChild(tasksContainer);
 
       body.appendChild(dayColumn);
     });
     
     container.appendChild(body);
+  },
+
+  renderTaskCard(task) {
+    const taskBar = DOM.create('div', 'timeline-task-bar');
+    const statusColor = AppState.statuses.find(s => s.name === task.status)?.color || '#3b82f6';
+    taskBar.style.backgroundColor = statusColor;
+    taskBar.style.borderLeftColor = statusColor;
+
+    const taskContent = DOM.create('div', 'timeline-task-content');
+
+    const title = DOM.create('div', 'timeline-task-title');
+    title.textContent = task.task.length > 25 ? task.task.substring(0, 25) + '...' : task.task;
+    title.title = task.task;
+    taskContent.appendChild(title);
+
+    const meta = DOM.create('div', 'timeline-task-meta');
+    const timeInfo = task.startTime ? `${task.startTime}` : '';
+    const categoryInfo = task.category ? ` • ${task.category}` : '';
+    const objectiveInfo = task.objective ? ` • ${task.objective}` : '';
+    const priorityInfo = task.priority ? ` • ${task.priority}` : '';
+    meta.textContent = `${task.status}${timeInfo}${categoryInfo}${objectiveInfo}${priorityInfo}`;
+    taskContent.appendChild(meta);
+
+    taskBar.appendChild(taskContent);
+
+    taskBar.draggable = true;
+    taskBar.ondragstart = (e) => this.handleDragStart(e, task);
+    taskBar.ondragend = (e) => this.handleDragEnd(e);
+
+    taskBar.onclick = (e) => {
+      if (!e.defaultPrevented) TaskModal.show(task);
+    };
+
+    taskBar.title = `${task.task}\nStatus: ${task.status}\nDue: ${task.dueDate}${task.startTime ? '\nTime: ' + task.startTime : ''}${task.category ? '\nCategory: ' + task.category : ''}${task.objective ? '\nObjective: ' + task.objective : ''}${task.priority ? '\nPriority: ' + task.priority : ''}`;
+
+    const statusIndicator = DOM.create('div', `timeline-task-status ${task.status}`);
+    taskBar.appendChild(statusIndicator);
+
+    return taskBar;
+  },
+
+  renderDaySchedule(container, dayTasks) {
+    const allDayTasks = [];
+    const timedTasks = [];
+    const tasksByHour = {};
+
+    dayTasks.forEach(task => {
+      const minutes = this.getTaskStartMinutes(task);
+      if (minutes === null) {
+        allDayTasks.push(task);
+      } else {
+        timedTasks.push({ task, minutes });
+      }
+    });
+
+    timedTasks.sort((a, b) => a.minutes - b.minutes);
+    timedTasks.forEach(({ task, minutes }) => {
+      const hour = Math.floor(minutes / 60);
+      if (!tasksByHour[hour]) tasksByHour[hour] = [];
+      tasksByHour[hour].push(task);
+    });
+
+    if (allDayTasks.length > 0) {
+      const allDaySection = DOM.create('div', 'timeline-day-all-day');
+      const allDayLabel = DOM.create('div', 'timeline-day-all-day-label', 'All Day');
+      allDaySection.appendChild(allDayLabel);
+      allDayTasks.forEach(task => allDaySection.appendChild(this.renderTaskCard(task)));
+      container.appendChild(allDaySection);
+    }
+
+    const hoursContainer = DOM.create('div', 'timeline-day-hours');
+    for (let hour = 0; hour < 24; hour += 1) {
+      const hourRow = DOM.create('div', 'timeline-hour-row');
+      const hourLabel = DOM.create('div', 'timeline-hour-label', `${String(hour).padStart(2, '0')}:00`);
+      const hourTasks = DOM.create('div', 'timeline-hour-tasks');
+
+      (tasksByHour[hour] || []).forEach(task => {
+        hourTasks.appendChild(this.renderTaskCard(task));
+      });
+
+      if (!tasksByHour[hour] || tasksByHour[hour].length === 0) {
+        hourTasks.appendChild(DOM.create('div', 'timeline-hour-empty', ''));
+      }
+
+      hourRow.appendChild(hourLabel);
+      hourRow.appendChild(hourTasks);
+      hoursContainer.appendChild(hourRow);
+    }
+
+    if (dayTasks.length === 0) {
+      const emptyDay = DOM.create('div', 'timeline-day-empty');
+      const text = DOM.create('div', '');
+      text.textContent = 'No tasks for this day';
+      text.style.fontSize = '0.875rem';
+      text.style.color = '#9ca3af';
+      emptyDay.appendChild(text);
+      container.appendChild(emptyDay);
+    }
+
+    container.appendChild(hoursContainer);
+  },
+
+  getTaskStartMinutes(task) {
+    if (!task.startTime) return null;
+    const match = task.startTime.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    if (!match) return null;
+    let hour = parseInt(match[1], 10);
+    const minutes = parseInt(match[2] || '0', 10);
+    const meridian = match[3];
+    if (meridian) {
+      const upper = meridian.toUpperCase();
+      if (upper === 'PM' && hour < 12) hour += 12;
+      if (upper === 'AM' && hour === 12) hour = 0;
+    }
+    if (hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return null;
+    return hour * 60 + minutes;
   },
 
   getDateKey(date) {
@@ -981,6 +1808,331 @@ const TimelinePage = {
     return date.getDate() === today.getDate() &&
            date.getMonth() === today.getMonth() &&
            date.getFullYear() === today.getFullYear();
+  }
+};
+
+// Finance Page
+const FinancePage = {
+  render() {
+    const container = DOM.create('div', '');
+
+    const header = DOM.create('div', 'page-header');
+    header.appendChild(DOM.create('h1', 'page-title', 'Finance'));
+    header.appendChild(DOM.create('p', 'page-subtitle', 'Track income, expenses, and budgets'));
+    container.appendChild(header);
+
+    const controls = DOM.create('div', 'finance-controls');
+    const monthLabel = DOM.create('label', 'finance-label', 'Month');
+    const monthInput = DOM.create('input', 'form-input');
+    monthInput.type = 'month';
+    monthInput.value = this.getMonthKey(AppState.financeMonth);
+    monthInput.onchange = (event) => {
+      AppState.financeMonth = new Date(`${event.target.value}-01`);
+      Router.render();
+    };
+    monthLabel.appendChild(monthInput);
+
+    const budgetLabel = DOM.create('label', 'finance-label', 'Monthly Budget');
+    const budgetInput = DOM.create('input', 'form-input');
+    budgetInput.type = 'number';
+    budgetInput.min = '0';
+    budgetInput.step = '0.01';
+    budgetInput.value = this.getMonthlyBudget(this.getMonthKey(AppState.financeMonth));
+
+    const budgetButton = DOM.create('button', 'btn btn-secondary btn-sm');
+    budgetButton.textContent = 'Save Budget';
+    budgetButton.onclick = async () => {
+      const value = parseFloat(budgetInput.value || '0');
+      const monthKey = this.getMonthKey(AppState.financeMonth);
+      AppState.financeSettings[monthKey] = Number.isFinite(value) ? value : 0;
+      await API.saveFinanceSettings(AppState.financeSettings);
+      Toast.success('Budget saved');
+      Router.render();
+    };
+
+    budgetLabel.appendChild(budgetInput);
+    budgetLabel.appendChild(budgetButton);
+
+    controls.appendChild(monthLabel);
+    controls.appendChild(budgetLabel);
+    container.appendChild(controls);
+
+    const monthRecords = this.getMonthlyRecords();
+    container.appendChild(this.renderSummary(monthRecords));
+    container.appendChild(this.renderAddForm());
+    container.appendChild(this.renderDailyBreakdown(monthRecords));
+    container.appendChild(this.renderRecurringList());
+
+    return container;
+  },
+
+  renderSummary(records) {
+    const totals = this.getTotals(records);
+    const budget = this.getMonthlyBudget(this.getMonthKey(AppState.financeMonth));
+    const remaining = budget > 0 ? budget - totals.expenses : null;
+    const exceeded = remaining !== null && remaining < 0;
+
+    const summary = DOM.create('div', 'finance-summary');
+    summary.innerHTML = `
+      <div class="finance-summary-card">
+        <div class="finance-summary-label">Income</div>
+        <div class="finance-summary-value income">${this.formatCurrency(totals.income)}</div>
+      </div>
+      <div class="finance-summary-card">
+        <div class="finance-summary-label">Expenses</div>
+        <div class="finance-summary-value expense">${this.formatCurrency(totals.expenses)}</div>
+      </div>
+      <div class="finance-summary-card">
+        <div class="finance-summary-label">Net</div>
+        <div class="finance-summary-value">${this.formatCurrency(totals.net)}</div>
+      </div>
+      <div class="finance-summary-card">
+        <div class="finance-summary-label">Budget</div>
+        <div class="finance-summary-value ${exceeded ? 'expense' : 'income'}">
+          ${budget > 0 ? this.formatCurrency(remaining) : 'Not set'}
+        </div>
+        <div class="finance-summary-sub">
+          ${budget > 0 ? (exceeded ? 'Over budget' : 'Remaining') : 'Set a monthly budget'}
+        </div>
+      </div>
+    `;
+    return summary;
+  },
+
+  renderAddForm() {
+    const card = DOM.create('div', 'finance-card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Add Transaction'));
+
+    const form = DOM.create('form', 'finance-form');
+
+    const dateInput = DOM.create('input', 'form-input');
+    dateInput.type = 'date';
+    dateInput.required = true;
+    dateInput.value = this.formatDateInput(new Date());
+
+    const typeSelect = DOM.create('select', 'form-input');
+    ['expense', 'income'].forEach(type => {
+      const option = document.createElement('option');
+      option.value = type;
+      option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+      typeSelect.appendChild(option);
+    });
+
+    const amountInput = DOM.create('input', 'form-input');
+    amountInput.type = 'number';
+    amountInput.min = '0';
+    amountInput.step = '0.01';
+    amountInput.placeholder = 'Amount';
+    amountInput.required = true;
+
+    const categoryInput = DOM.create('input', 'form-input');
+    categoryInput.type = 'text';
+    categoryInput.placeholder = 'Category';
+
+    const noteInput = DOM.create('input', 'form-input');
+    noteInput.type = 'text';
+    noteInput.placeholder = 'Note';
+
+    const recurringWrapper = DOM.create('label', 'finance-checkbox');
+    const recurringInput = DOM.create('input', '');
+    recurringInput.type = 'checkbox';
+    recurringWrapper.appendChild(recurringInput);
+    recurringWrapper.appendChild(DOM.create('span', '', 'Repeat monthly'));
+
+    const submitBtn = DOM.create('button', 'btn btn-primary');
+    submitBtn.type = 'submit';
+    submitBtn.textContent = 'Add Transaction';
+
+    form.appendChild(dateInput);
+    form.appendChild(typeSelect);
+    form.appendChild(amountInput);
+    form.appendChild(categoryInput);
+    form.appendChild(noteInput);
+    form.appendChild(recurringWrapper);
+    form.appendChild(submitBtn);
+
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const record = {
+        id: this.getNextFinanceId(),
+        date: dateInput.value,
+        type: typeSelect.value,
+        amount: parseFloat(amountInput.value || '0'),
+        category: categoryInput.value,
+        note: noteInput.value,
+        recurringMonthly: recurringInput.checked
+      };
+
+      AppState.financeRecords.push(record);
+      await API.saveFinanceRecords(AppState.financeRecords);
+      Toast.success('Transaction saved');
+      Router.render();
+    };
+
+    card.appendChild(form);
+    return card;
+  },
+
+  renderDailyBreakdown(records) {
+    const card = DOM.create('div', 'finance-card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Daily Breakdown'));
+
+    if (records.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No transactions for this month yet.';
+      card.appendChild(empty);
+      return card;
+    }
+
+    const grouped = {};
+    records.forEach(record => {
+      if (!grouped[record.date]) grouped[record.date] = [];
+      grouped[record.date].push(record);
+    });
+
+    const dates = Object.keys(grouped).sort();
+    const list = DOM.create('div', 'finance-daily-list');
+    dates.forEach(date => {
+      const dayRecords = grouped[date];
+      const totals = this.getTotals(dayRecords);
+      const dayCard = DOM.create('div', 'finance-day');
+      const dayHeader = DOM.create('div', 'finance-day-header');
+      dayHeader.appendChild(DOM.create('div', 'finance-day-title', date));
+      dayHeader.appendChild(DOM.create('div', 'finance-day-total',
+        `${this.formatCurrency(totals.expenses)} spent • ${this.formatCurrency(totals.income)} earned`));
+      dayCard.appendChild(dayHeader);
+
+      const items = DOM.create('div', 'finance-day-items');
+      dayRecords.forEach(record => {
+        items.appendChild(this.renderRecordRow(record));
+      });
+      dayCard.appendChild(items);
+      list.appendChild(dayCard);
+    });
+
+    card.appendChild(list);
+    return card;
+  },
+
+  renderRecurringList() {
+    const card = DOM.create('div', 'finance-card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Recurring Monthly Items'));
+
+    const recurring = AppState.financeRecords.filter(record => record.recurringMonthly);
+    if (recurring.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No recurring items yet.';
+      card.appendChild(empty);
+      return card;
+    }
+
+    const list = DOM.create('div', 'finance-recurring-list');
+    recurring.forEach(record => {
+      list.appendChild(this.renderRecordRow(record));
+    });
+    card.appendChild(list);
+    return card;
+  },
+
+  renderRecordRow(record) {
+    const row = DOM.create('div', 'finance-record');
+    const details = DOM.create('div', 'finance-record-details');
+    const title = record.category || record.note || 'Uncategorized';
+    details.appendChild(DOM.create('div', 'finance-record-title', title));
+    const meta = record.note && record.category ? `${record.category} • ${record.note}` : (record.note || record.category || '');
+    if (meta) details.appendChild(DOM.create('div', 'finance-record-meta', meta));
+    if (record.recurringMonthly) {
+      details.appendChild(DOM.create('span', 'finance-record-tag', 'Recurring'));
+    }
+
+    const amount = DOM.create('div', `finance-record-amount ${record.type}`,
+      `${record.type === 'expense' ? '-' : '+'}${this.formatCurrency(record.amount)}`);
+
+    const deleteBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = async (event) => {
+      event.stopPropagation();
+      if (!confirm('Delete this transaction?')) return;
+      const targetId = record.recurrenceSourceId || record.id;
+      AppState.financeRecords = AppState.financeRecords.filter(item => item.id !== targetId);
+      await API.saveFinanceRecords(AppState.financeRecords);
+      Toast.success('Transaction deleted');
+      Router.render();
+    };
+
+    row.appendChild(details);
+    row.appendChild(amount);
+    row.appendChild(deleteBtn);
+    return row;
+  },
+
+  getMonthlyRecords() {
+    return this.getMonthlyRecordsFor(AppState.financeMonth);
+  },
+
+  getMonthlyRecordsFor(date) {
+    const monthKey = this.getMonthKey(date);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const records = [];
+
+    AppState.financeRecords.forEach(record => {
+      if (!record.date) return;
+      const recordDate = new Date(record.date);
+      if (record.recurringMonthly) {
+        const day = Math.min(recordDate.getDate(), daysInMonth);
+        const instanceDate = new Date(year, month, day);
+        records.push({
+          ...record,
+          date: this.formatDateInput(instanceDate),
+          id: `recurring-${record.id}-${monthKey}`,
+          recurrenceSourceId: record.id
+        });
+        return;
+      }
+      if (recordDate.getFullYear() === year && recordDate.getMonth() === month) {
+        records.push(record);
+      }
+    });
+
+    return records.sort((a, b) => a.date.localeCompare(b.date));
+  },
+
+  getTotals(records) {
+    return records.reduce((acc, record) => {
+      const amount = Number(record.amount) || 0;
+      if (record.type === 'income') acc.income += amount;
+      else acc.expenses += amount;
+      acc.net = acc.income - acc.expenses;
+      return acc;
+    }, { income: 0, expenses: 0, net: 0 });
+  },
+
+  getMonthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  },
+
+  formatDateInput(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  },
+
+  formatCurrency(value) {
+    const formatter = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    });
+    return formatter.format(Number(value) || 0);
+  },
+
+  getMonthlyBudget(monthKey) {
+    return AppState.financeSettings[monthKey] || 0;
+  },
+
+  getNextFinanceId() {
+    const ids = AppState.financeRecords.map(record => Number(record.id)).filter(Number.isFinite);
+    const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+    return maxId + 1;
   }
 };
 
@@ -1043,6 +2195,13 @@ const ObjectivesPage = {
       categoryBadge.style.display = 'inline-block';
       titleSection.appendChild(categoryBadge);
     }
+    if (objective.dueDate) {
+      const dueBadge = DOM.create('span', 'task-objective');
+      dueBadge.textContent = `📅 Due ${objective.dueDate}`;
+      dueBadge.style.marginTop = '0.5rem';
+      dueBadge.style.display = 'inline-block';
+      titleSection.appendChild(dueBadge);
+    }
     header.appendChild(titleSection);
     
     const actions = DOM.create('div', 'objective-actions');
@@ -1099,9 +2258,10 @@ const ObjectivesPage = {
         }
       });
       Router.render();
+      Toast.success('Objective deleted');
     } catch (error) {
       console.error('Error deleting objective:', error);
-      alert('Error deleting objective. Please try again.');
+      Toast.error('Error deleting objective. Please try again.');
     }
   }
 };
@@ -1185,6 +2345,16 @@ const ObjectiveModal = {
     categoryGroup.appendChild(newCategoryBtn);
     form.appendChild(categoryGroup);
 
+    // Due date
+    const dueGroup = DOM.create('div', 'form-group');
+    dueGroup.appendChild(DOM.create('label', 'form-label', 'Objective Due Date'));
+    const dueInput = DOM.create('input', 'form-input');
+    dueInput.type = 'date';
+    dueInput.name = 'dueDate';
+    dueInput.value = objective?.dueDate || '';
+    dueGroup.appendChild(dueInput);
+    form.appendChild(dueGroup);
+
     // Color
     const colorGroup = DOM.create('div', 'form-group');
     colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
@@ -1229,7 +2399,8 @@ const ObjectiveModal = {
       name: formData.get('name'),
       description: formData.get('description'),
       color: formData.get('color'),
-      category: formData.get('category') || ''
+      category: formData.get('category') || '',
+      dueDate: formData.get('dueDate') || ''
     };
 
     try {
@@ -1247,9 +2418,10 @@ const ObjectiveModal = {
       this.hide();
       Router.render();
       if (callback) callback(objectiveData);
+      Toast.success('Objective saved');
     } catch (error) {
       console.error('Error saving objective:', error);
-      alert('Error saving objective. Please try again.');
+      Toast.error('Error saving objective. Please try again.');
     }
   }
 };
@@ -1354,9 +2526,10 @@ const CategoriesPage = {
         }
       });
       Router.render();
+      Toast.success('Category deleted');
     } catch (error) {
       console.error('Error deleting category:', error);
-      alert('Error deleting category. Please try again.');
+      Toast.error('Error deleting category. Please try again.');
     }
   }
 };
@@ -1453,9 +2626,10 @@ const CategoryModal = {
       this.hide();
       Router.render();
       if (callback) callback(categoryData);
+      Toast.success('Category saved');
     } catch (error) {
       console.error('Error saving category:', error);
-      alert('Error saving category. Please try again.');
+      Toast.error('Error saving category. Please try again.');
     }
   }
 };
@@ -1571,9 +2745,10 @@ const StatusesPage = {
       await API.deleteStatus(status.id);
       AppState.statuses = AppState.statuses.filter(s => s.id !== status.id);
       Router.render();
+      Toast.success('Status deleted');
     } catch (error) {
       console.error('Error deleting status:', error);
-      alert('Error deleting status. Please try again.');
+      Toast.error('Error deleting status. Please try again.');
     }
   }
 };
@@ -1670,9 +2845,10 @@ const StatusModal = {
       this.hide();
       Router.render();
       if (callback) callback(statusData);
+      Toast.success('Status saved');
     } catch (error) {
       console.error('Error saving status:', error);
-      alert('Error saving status. Please try again.');
+      Toast.error('Error saving status. Please try again.');
     }
   }
 };
@@ -1782,6 +2958,26 @@ const TaskModal = {
     statusGroup.appendChild(newStatusBtn);
     form.appendChild(statusGroup);
 
+    // Priority
+    const priorityGroup = DOM.create('div', 'form-group');
+    priorityGroup.appendChild(DOM.create('label', 'form-label', 'Priority'));
+    const prioritySelect = DOM.create('select', 'form-select');
+    prioritySelect.name = 'priority';
+    const priorities = [
+      { value: 'high', label: 'High' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'low', label: 'Low' }
+    ];
+    priorities.forEach(priority => {
+      const option = DOM.create('option', '');
+      option.value = priority.value;
+      option.textContent = priority.label;
+      if ((task?.priority || 'medium') === priority.value) option.selected = true;
+      prioritySelect.appendChild(option);
+    });
+    priorityGroup.appendChild(prioritySelect);
+    form.appendChild(priorityGroup);
+
     // Objective
     const objectiveGroup = DOM.create('div', 'form-group');
     objectiveGroup.appendChild(DOM.create('label', 'form-label', 'Objective'));
@@ -1864,7 +3060,8 @@ const TaskModal = {
       dueDate: formData.get('dueDate'),
       color: formData.get('color'),
       status: formData.get('status') || 'pending',
-      objective: formData.get('objective') || ''
+      objective: formData.get('objective') || '',
+      priority: formData.get('priority') || 'medium'
     };
 
     if (task) {
@@ -1879,9 +3076,10 @@ const TaskModal = {
       this.hide();
       Router.render();
       Sidebar.render();
+      Toast.success(task ? 'Task updated' : 'Task created');
     } catch (error) {
       console.error('Error saving task:', error);
-      alert('Error saving task. Please try again.');
+      Toast.error('Error saving task. Please try again.');
     }
   }
 };
@@ -1895,11 +3093,14 @@ async function init() {
   }
   
   try {
+    Toast.init();
     // Load tasks, objectives, categories, and statuses
     AppState.tasks = await API.getTasks();
     AppState.objectives = await API.getObjectives();
     AppState.categories = await API.getCategories();
     AppState.statuses = await API.getStatuses();
+    AppState.financeRecords = await API.getFinanceRecords();
+    AppState.financeSettings = await API.getFinanceSettings();
     
     // Render sidebar and initial page
     Sidebar.render();

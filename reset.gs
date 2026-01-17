@@ -7,7 +7,7 @@
  * - Categories
  * - Statuses
  * 
- * Run this function to reset your entire Task Pro structure.
+ * Run this function to reset your entire FlowTrack structure.
  */
 function resetAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -50,28 +50,30 @@ function resetAllSheets() {
   
   // Create Objectives sheet
   const objectivesSheet = ss.insertSheet('Objectives');
-  objectivesSheet.getRange(1, 1, 1, 5).setValues([[
+  objectivesSheet.getRange(1, 1, 1, 6).setValues([[
     'id', 
     'name', 
     'description', 
     'color', 
-    'category'
+    'category',
+    'dueDate'
   ]]);
-  objectivesSheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  objectivesSheet.getRange(1, 1, 1, 6).setFontWeight('bold');
   objectivesSheet.setColumnWidth(1, 50);  // id
   objectivesSheet.setColumnWidth(2, 150); // name
   objectivesSheet.setColumnWidth(3, 250); // description
   objectivesSheet.setColumnWidth(4, 80);  // color
   objectivesSheet.setColumnWidth(5, 100); // category
+  objectivesSheet.setColumnWidth(6, 120); // dueDate
   
   // Add sample objectives
   const sampleObjectives = [
-    [1, 'Work', 'Work-related objectives', '#3b82f6', ''],
-    [2, 'Personal', 'Personal development goals', '#10b981', ''],
-    [3, 'Health', 'Health and fitness goals', '#ef4444', '']
+    [1, 'Work', 'Work-related objectives', '#3b82f6', '', ''],
+    [2, 'Personal', 'Personal development goals', '#10b981', '', ''],
+    [3, 'Health', 'Health and fitness goals', '#ef4444', '', '']
   ];
   if (sampleObjectives.length > 0) {
-    objectivesSheet.getRange(2, 1, sampleObjectives.length, 5).setValues(sampleObjectives);
+    objectivesSheet.getRange(2, 1, sampleObjectives.length, 6).setValues(sampleObjectives);
   }
   
   // Create Categories sheet
@@ -151,10 +153,10 @@ function ensureSheetsExist() {
   let objectivesSheet = ss.getSheetByName('Objectives');
   if (!objectivesSheet) {
     objectivesSheet = ss.insertSheet('Objectives');
-    objectivesSheet.getRange(1, 1, 1, 5).setValues([[
-      'id', 'name', 'description', 'color', 'category'
+    objectivesSheet.getRange(1, 1, 1, 6).setValues([[
+      'id', 'name', 'description', 'color', 'category', 'dueDate'
     ]]);
-    objectivesSheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+    objectivesSheet.getRange(1, 1, 1, 6).setFontWeight('bold');
   }
   
   // Ensure Categories sheet exists

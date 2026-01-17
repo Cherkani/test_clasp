@@ -50,7 +50,8 @@ function getDatags() {
       dueDate: "2025-11-24",
       dueTime: "19:00:00",
       color: "#5470c6",
-      status: "completed"
+      status: "completed",
+      priority: "medium"
     },
     {
       id: 2,
@@ -61,7 +62,8 @@ function getDatags() {
       dueDate: "2025-11-29",
       dueTime: "13:00:00",
       color: "#73c0de",
-      status: "completed"
+      status: "completed",
+      priority: "high"
     },
     {
       id: 3,
@@ -72,7 +74,8 @@ function getDatags() {
       dueDate: "2025-11-02",
       dueTime: "12:00:00",
       color: "#91cc75",
-      status: "pending"
+      status: "pending",
+      priority: "low"
     }
   ];
 
@@ -104,7 +107,8 @@ function getDatags() {
       dueTime: formatDateTime(row[6], "time"),
       color: row[7],
       status: newStatus,
-      objective: row[9] || '' // Add objective from column 10 (index 9)
+      objective: row[9] || '', // Add objective from column 10 (index 9)
+      priority: row[10] || 'medium'
     };
   });
 }
@@ -135,6 +139,7 @@ function addDatags(taskbase) {
       item.color,
       item.status,
       item.objective || '', // Add objective column
+      item.priority || 'medium'
     ]);
 
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
@@ -153,29 +158,39 @@ function getObjectives() {
   if (!sheet) {
     // Create Objectives sheet if it doesn't exist
     sheet = ss.insertSheet("Objectives");
-    sheet.getRange(1, 1, 1, 5).setValues([["id", "name", "description", "color", "category"]]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 6).setValues([["id", "name", "description", "color", "category", "dueDate"]]);
+    sheet.getRange(1, 1, 1, 6).setFontWeight("bold");
     
     // Add sample objectives
     const sampleObjectives = [
-      [1, "Work", "Work-related objectives", "#3b82f6"],
-      [2, "Personal", "Personal development goals", "#10b981"],
-      [3, "Health", "Health and fitness goals", "#ef4444"]
+      [1, "Work", "Work-related objectives", "#3b82f6", "", ""],
+      [2, "Personal", "Personal development goals", "#10b981", "", ""],
+      [3, "Health", "Health and fitness goals", "#ef4444", "", ""]
     ];
     if (sampleObjectives.length > 0) {
-      sheet.getRange(2, 1, sampleObjectives.length, 4).setValues(sampleObjectives);
+      sheet.getRange(2, 1, sampleObjectives.length, 6).setValues(sampleObjectives);
     }
   }
 
   const values = sheet.getDataRange().getValues();
   if (values.length <= 1) return [];
 
+  const tz = Session.getScriptTimeZone();
+  const formatDate = (value) => {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd");
+    }
+    return String(value);
+  };
+
   return values.slice(1).map(row => ({
     id: row[0],
     name: row[1],
     description: row[2] || '',
     color: row[3] || '#3b82f6',
-    category: row[4] || '' // Add category field
+    category: row[4] || '',
+    dueDate: formatDate(row[5])
   }));
 }
 
@@ -185,8 +200,8 @@ function addObjective(objective) {
   
   if (!sheet) {
     sheet = ss.insertSheet("Objectives");
-    sheet.getRange(1, 1, 1, 5).setValues([["id", "name", "description", "color", "category"]]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 6).setValues([["id", "name", "description", "color", "category", "dueDate"]]);
+    sheet.getRange(1, 1, 1, 6).setFontWeight("bold");
   }
 
   // Calculate new ID
@@ -204,7 +219,8 @@ function addObjective(objective) {
     objective.name,
     objective.description || '',
     objective.color || '#3b82f6',
-    objective.category || ''
+    objective.category || '',
+    objective.dueDate || ''
   ]);
 
   return newId;
@@ -219,11 +235,12 @@ function updateObjective(objective) {
   const rowIndex = values.findIndex(row => row[0] === objective.id);
   
   if (rowIndex > 0) {
-    sheet.getRange(rowIndex + 1, 2, 1, 4).setValues([[
+    sheet.getRange(rowIndex + 1, 2, 1, 5).setValues([[
       objective.name,
       objective.description || '',
       objective.color || '#3b82f6',
-      objective.category || ''
+      objective.category || '',
+      objective.dueDate || ''
     ]]);
     return true;
   }
@@ -433,4 +450,128 @@ function deleteObjective(objectiveId) {
     return true;
   }
   return false;
+}
+
+// Finance Functions
+function getFinanceRecords() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Finance");
+
+  if (!sheet) {
+    sheet = ss.insertSheet("Finance");
+    sheet.getRange(1, 1, 1, 7).setValues([[
+      "id",
+      "date",
+      "type",
+      "amount",
+      "category",
+      "note",
+      "recurringMonthly"
+    ]]);
+    sheet.getRange(1, 1, 1, 7).setFontWeight("bold");
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  const tz = Session.getScriptTimeZone();
+  const formatDate = (value) => {
+    if (!value) return "";
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd");
+    }
+    return String(value);
+  };
+
+  return values.slice(1)
+    .filter(row => row.join('') !== '')
+    .map(row => ({
+      id: row[0],
+      date: formatDate(row[1]),
+      type: row[2] || "expense",
+      amount: Number(row[3]) || 0,
+      category: row[4] || "",
+      note: row[5] || "",
+      recurringMonthly: row[6] === true || row[6] === "TRUE"
+    }));
+}
+
+function saveFinanceRecords(records) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Finance");
+
+  if (!sheet) {
+    sheet = ss.insertSheet("Finance");
+    sheet.getRange(1, 1, 1, 7).setValues([[
+      "id",
+      "date",
+      "type",
+      "amount",
+      "category",
+      "note",
+      "recurringMonthly"
+    ]]);
+    sheet.getRange(1, 1, 1, 7).setFontWeight("bold");
+  }
+
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+  }
+
+  if (records && records.length > 0) {
+    const rows = records.map(record => [
+      record.id,
+      record.date,
+      record.type,
+      record.amount,
+      record.category || "",
+      record.note || "",
+      record.recurringMonthly ? true : false
+    ]);
+    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
+      .sort({ column: 2, ascending: true });
+  }
+}
+
+function getFinanceSettings() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("FinanceSettings");
+
+  if (!sheet) {
+    sheet = ss.insertSheet("FinanceSettings");
+    sheet.getRange(1, 1, 1, 2).setValues([["monthKey", "budget"]]);
+    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return {};
+
+  return values.slice(1)
+    .filter(row => row[0])
+    .reduce((acc, row) => {
+      acc[row[0]] = Number(row[1]) || 0;
+      return acc;
+    }, {});
+}
+
+function saveFinanceSettings(settings) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("FinanceSettings");
+
+  if (!sheet) {
+    sheet = ss.insertSheet("FinanceSettings");
+    sheet.getRange(1, 1, 1, 2).setValues([["monthKey", "budget"]]);
+    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+  }
+
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+  }
+
+  const entries = Object.entries(settings || {});
+  if (entries.length > 0) {
+    const rows = entries.map(([monthKey, budget]) => [monthKey, budget]);
+    sheet.getRange(2, 1, rows.length, 2).setValues(rows);
+  }
 }
