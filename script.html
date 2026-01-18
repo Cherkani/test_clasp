@@ -1,3579 +1,654 @@
 <script>
-// App State
 const AppState = {
   currentPage: 'dashboard',
-  tasks: [],
-  objectives: [],
-  categories: [],
-  statuses: [],
-  isSyncing: false,
-  sidebarCollapsed: false,
-  timelineView: 'month',
-  timelineCurrentDate: new Date(),
-  timelineCollapsedDates: {},
-  timelineFilters: { statuses: [], categories: [], objectives: [] },
-  financeRecords: [],
-  financeSettings: {},
-  stats: null,
-  financeMonth: new Date(),
-  dashboardCharts: {},
-  searchQuery: '',
-  referenceTab: 'objectives',
-  mobileSidebarOpen: false
+  syncStatus: 'synced',
+  clients: [],
+  providers: [],
+  products: [],
+  documents: [],
+  documentItems: [],
+  inventory: [],
+  documentTypes: [],
+  taxRate: 0,
+  documentDraft: null,
+  documentItemsDraft: []
 };
 
-// Google Apps Script API
 const API = {
-  async getTasks() {
+  getAppData() {
     return new Promise((resolve) => {
       google.script.run
         .withSuccessHandler(resolve)
-        .withFailureHandler((error) => {
-          console.error('Error fetching tasks:', error);
-          resolve([]);
-        })
-        .getDatags();
-    });
-  },
-
-  async saveTasks(tasks) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .addDatags(tasks);
-    });
-  },
-
-  async getObjectives() {
-    return new Promise((resolve) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler((error) => {
-          console.error('Error fetching objectives:', error);
-          resolve([]);
-        })
-        .getObjectives();
-    });
-  },
-
-  async addObjective(objective) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .addObjective(objective);
-    });
-  },
-
-  async updateObjective(objective) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .updateObjective(objective);
-    });
-  },
-
-  async deleteObjective(objectiveId) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .deleteObjective(objectiveId);
-    });
-  },
-
-  async getCategories() {
-    return new Promise((resolve) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler((error) => {
-          console.error('Error fetching categories:', error);
-          resolve([]);
-        })
-        .getCategories();
-    });
-  },
-
-  async addCategory(category) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .addCategory(category);
-    });
-  },
-
-  async updateCategory(category) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .updateCategory(category);
-    });
-  },
-
-  async deleteCategory(categoryId) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .deleteCategory(categoryId);
-    });
-  },
-
-  async getStatuses() {
-    return new Promise((resolve) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler((error) => {
-          console.error('Error fetching statuses:', error);
-          resolve([]);
-        })
-        .getStatuses();
-    });
-  },
-
-  async addStatus(status) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .addStatus(status);
-    });
-  },
-
-  async updateStatus(status) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .updateStatus(status);
-    });
-  },
-
-  async deleteStatus(statusId) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .deleteStatus(statusId);
-    });
-  },
-
-  async getFinanceRecords() {
-    return new Promise((resolve) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler((error) => {
-          console.error('Error fetching finance records:', error);
-          resolve([]);
-        })
-        .getFinanceRecords();
-    });
-  },
-
-  async saveFinanceRecords(records) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .saveFinanceRecords(records);
-    });
-  },
-
-  async getFinanceSettings() {
-    return new Promise((resolve) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler((error) => {
-          console.error('Error fetching finance settings:', error);
-          resolve({});
-        })
-        .getFinanceSettings();
-    });
-  },
-
-  async saveFinanceSettings(settings) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .saveFinanceSettings(settings);
-    });
-  },
-
-  async getAppData() {
-    return new Promise((resolve) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler((error) => {
-          console.error('Error fetching app data:', error);
-          resolve({
-            tasks: [],
-            objectives: [],
-            categories: [],
-            statuses: [],
-            financeRecords: [],
-            financeSettings: {},
-            stats: null
-          });
-        })
+        .withFailureHandler(() => resolve(null))
         .getAppData();
+    });
+  },
+  saveClient(client) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveClient(client);
+    });
+  },
+  saveProvider(provider) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveProvider(provider);
+    });
+  },
+  saveProduct(product) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveProduct(product);
+    });
+  },
+  saveDocument(payload) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveDocument(payload);
+    });
+  },
+  deleteClient(id) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteClient(id);
+    });
+  },
+  deleteProvider(id) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteProvider(id);
+    });
+  },
+  deleteProduct(id) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteProduct(id);
+    });
+  },
+  deleteDocument(id) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteDocument(id);
     });
   }
 };
 
 const DataStore = {
   apply(data) {
-    AppState.tasks = data.tasks || [];
-    AppState.objectives = data.objectives || [];
-    AppState.categories = data.categories || [];
-    AppState.statuses = data.statuses || [];
-    AppState.financeRecords = data.financeRecords || [];
-    AppState.financeSettings = data.financeSettings || {};
-    AppState.stats = data.stats || null;
+    if (!data) return;
+    AppState.clients = data.clients || [];
+    AppState.providers = data.providers || [];
+    AppState.products = data.products || [];
+    AppState.documents = data.documents || [];
+    AppState.documentItems = data.documentItems || [];
+    AppState.inventory = data.inventory || [];
+    AppState.documentTypes = data.documentTypes || [];
+    AppState.taxRate = Number(data.taxRate) || 0;
+    setSyncStatus('synced');
   },
-
   async refresh() {
     const data = await API.getAppData();
     this.apply(data);
   }
 };
 
-let chartLoadPromise = null;
-
-function ensureChartLibrary() {
-  if (typeof Chart !== 'undefined') {
-    return Promise.resolve(true);
-  }
-  if (chartLoadPromise) {
-    return chartLoadPromise;
-  }
-  chartLoadPromise = new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
-  return chartLoadPromise;
+function setSyncStatus(status) {
+  AppState.syncStatus = status;
+  Sidebar.render();
 }
 
-function updateTaskReferences(field, oldValue, newValue) {
-  let changed = false;
-  AppState.tasks = AppState.tasks.map(task => {
-    if (task[field] === oldValue) {
-      changed = true;
-      return { ...task, [field]: newValue };
-    }
-    return task;
-  });
-  return changed;
+async function runWithSyncStatus(task) {
+  setSyncStatus('saving');
+  try {
+    const result = await task();
+    setSyncStatus('synced');
+    return result;
+  } catch (error) {
+    setSyncStatus('error');
+    throw error;
+  }
 }
 
-const DateUtils = {
-  parseDate(value) {
-    if (!value) return null;
+function attachSyncWatcher(form) {
+  form.addEventListener('input', () => setSyncStatus('unsynced'));
+  form.addEventListener('change', () => setSyncStatus('unsynced'));
+}
+
+const Format = {
+  currency(value) {
+    return new Intl.NumberFormat('fr-MA', {
+      style: 'currency',
+      currency: 'MAD'
+    }).format(Number(value) || 0);
+  },
+  date(value) {
+    if (!value) return '';
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    date.setHours(0, 0, 0, 0);
-    return date;
-  },
-
-  formatDate(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  },
-
-  addDays(date, days) {
-    const next = new Date(date);
-    next.setDate(next.getDate() + days);
-    return next;
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toISOString().slice(0, 10);
   }
 };
 
-function getTaskRange(task) {
-  const start = DateUtils.parseDate(task.startDate || task.endDate);
-  const end = DateUtils.parseDate(task.endDate || task.startDate);
-  if (!start && !end) return { start: null, end: null };
-  if (start && !end) return { start, end: new Date(start) };
-  if (!start && end) return { start: new Date(end), end };
-  if (end < start) return { start: end, end: start };
-  return { start, end };
-}
-
-function getTaskDurationDays(task) {
-  const { start, end } = getTaskRange(task);
-  if (!start || !end) return 0;
-  return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-}
-
-function getTaskOccurrences(tasks, rangeStart, rangeEnd) {
-  const occurrences = [];
-  tasks.forEach(task => {
-    const range = getTaskRange(task);
-    if (!range.start || !range.end) return;
-    const repeatType = task.repeatType || 'none';
-    const repeatUntil = DateUtils.parseDate(task.repeatUntil) || range.end;
-    const durationDays = Math.max(0, Math.round((range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24)));
-
-    const addOccurrence = (startDate) => {
-      const endDate = DateUtils.addDays(startDate, durationDays);
-      if (endDate < rangeStart || startDate > rangeEnd) return;
-      occurrences.push({
-        ...task,
-        occurrenceStart: DateUtils.formatDate(startDate),
-        occurrenceEnd: DateUtils.formatDate(endDate),
-        isRecurringInstance: repeatType !== 'none'
-      });
-    };
-
-    if (repeatType === 'daily' || repeatType === 'monthly') {
-      let cursor = new Date(range.start);
-      const dayOfMonth = range.start.getDate();
-      while (cursor <= rangeEnd && cursor <= repeatUntil) {
-        addOccurrence(cursor);
-        if (repeatType === 'daily') {
-          cursor = DateUtils.addDays(cursor, 1);
-        } else {
-          cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, dayOfMonth);
-        }
-      }
-    } else {
-      addOccurrence(range.start);
-    }
-  });
-  return occurrences;
-}
-
-function getObjectiveColor(name) {
-  if (!name) return '';
-  return AppState.objectives.find(objective => objective.name === name)?.color || '';
-}
-
-// DOM Utilities
 const DOM = {
-  create(tag, className = '', content = '') {
+  create(tag, className = '', text = '') {
     const el = document.createElement(tag);
     if (className) el.className = className;
-    if (content) el.textContent = content;
+    if (text) el.textContent = text;
     return el;
-  },
-
-  createIcon(name) {
-    const icon = this.create('span', 'nav-item-icon');
-    icon.innerHTML = this.getIconSVG(name);
-    return icon;
-  },
-
-  getIconSVG(name) {
-    const icons = {
-      home: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>',
-      tasks: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>',
-      calendar: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>',
-      timeline: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
-      target: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>',
-      finance: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M5 7V5a2 2 0 012-2h10a2 2 0 012 2v2m0 0v12a2 2 0 01-2 2H7a2 2 0 01-2-2V7m5 4h4"></path></svg>',
-      sync: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
-      check: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
-      loading: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="animate-spin"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
-      close: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
-      chevronLeft: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>',
-      chevronRight: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>',
-      tag: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>',
-      plus: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>',
-      menu: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>'
-    };
-    return icons[name] || '';
   }
 };
 
-const TaskFilters = {
-  applySearch(tasks) {
-    const query = AppState.searchQuery.trim().toLowerCase();
-    if (!query) return tasks;
-    return tasks.filter(task => {
-      const haystack = [
-        task.task,
-        task.category,
-        task.status,
-        task.objective,
-        task.priority
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(query);
-    });
-  }
-};
-
-const Toast = {
-  container: null,
-
-  init() {
-    if (this.container) return;
-    this.container = DOM.create('div', 'toast-container');
-    document.body.appendChild(this.container);
-  },
-
-  show(message, type = 'info') {
-    if (!this.container) this.init();
-    const toast = DOM.create('div', `toast toast-${type}`);
-    toast.textContent = message;
-    this.container.appendChild(toast);
-
-    requestAnimationFrame(() => {
-      toast.classList.add('show');
-    });
-
-    setTimeout(() => {
-      toast.classList.remove('show');
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
-  },
-
-  success(message) {
-    this.show(message, 'success');
-  },
-
-  error(message) {
-    this.show(message, 'error');
-  }
-};
-
-// Sidebar Component
 const Sidebar = {
   render() {
     const sidebar = DOM.create('aside', 'sidebar');
-    const isMobile = window.innerWidth <= 768;
-    if (!isMobile && AppState.sidebarCollapsed) sidebar.classList.add('collapsed');
-    if (isMobile && AppState.mobileSidebarOpen) sidebar.classList.add('open');
+    const brand = DOM.create('div', 'sidebar-brand');
+    brand.textContent = 'Sales Desk';
+    sidebar.appendChild(brand);
 
-    // Header
-    const header = DOM.create('div', 'sidebar-header');
-    const logo = DOM.create('div', 'sidebar-logo');
-    logo.innerHTML = '<span style="font-size: 1.5rem;">T</span>';
-    if (!AppState.sidebarCollapsed) {
-      const logoText = DOM.create('div', '');
-      logoText.innerHTML = '<p style="font-weight: bold; margin: 0;">FlowTrack</p><p style="font-size: 0.75rem; color: #6b7280; margin: 0;">Track work & money</p>';
-      logo.appendChild(logoText);
-    }
-    header.appendChild(logo);
-
-    // Toggle button
-    const toggleBtn = DOM.create('button', 'sidebar-toggle');
-    toggleBtn.innerHTML = AppState.sidebarCollapsed ? DOM.getIconSVG('chevronRight') : DOM.getIconSVG('chevronLeft');
-    toggleBtn.onclick = () => {
-      AppState.sidebarCollapsed = !AppState.sidebarCollapsed;
-      this.render();
-    };
-    header.appendChild(toggleBtn);
-    sidebar.appendChild(header);
-
-    if (!AppState.sidebarCollapsed) {
-      const searchSection = DOM.create('div', 'sidebar-search');
-      const searchInput = DOM.create('input', 'search-input');
-      searchInput.type = 'search';
-      searchInput.placeholder = 'Search tasks...';
-      searchInput.value = AppState.searchQuery;
-      searchInput.oninput = (event) => {
-        AppState.searchQuery = event.target.value;
-        Router.render();
-      };
-      searchSection.appendChild(searchInput);
-      sidebar.appendChild(searchSection);
-    }
-
-    // Navigation
     const nav = DOM.create('nav', 'sidebar-nav');
-    const navList = DOM.create('ul', 'nav-list');
-    
-    const navItems = [
-      { id: 'dashboard', label: 'Dashboard', icon: 'home' },
-      { id: 'tasks', label: 'Tasks', icon: 'tasks' },
-      { id: 'timeline', label: 'Timeline', icon: 'timeline' },
-      { id: 'finance', label: 'Finance', icon: 'finance' },
-      { id: 'reference', label: 'Reference', icon: 'tag' }
+    const pages = [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'clients', label: 'Clients' },
+      { id: 'documents', label: 'Documents' },
+      { id: 'products', label: 'Products' },
+      { id: 'providers', label: 'Providers' },
+      { id: 'inventory', label: 'Inventory' }
     ];
-
-    navItems.forEach(item => {
-      const li = DOM.create('li', 'nav-item');
-      if (AppState.currentPage === item.id) li.classList.add('active');
-      li.onclick = () => Router.navigate(item.id);
-      
-      li.appendChild(DOM.createIcon(item.icon));
-      const text = DOM.create('span', 'nav-item-text', item.label);
-      li.appendChild(text);
-      navList.appendChild(li);
+    pages.forEach(page => {
+      const item = DOM.create('button', `sidebar-link ${AppState.currentPage === page.id ? 'active' : ''}`);
+      item.textContent = page.label;
+      item.onclick = () => Router.navigate(page.id);
+      nav.appendChild(item);
     });
-
-    nav.appendChild(navList);
     sidebar.appendChild(nav);
 
-    // Sync Section
-    const syncSection = DOM.create('div', 'sync-section');
-    const syncBtn = DOM.create('button', `sync-button sync-button-compact ${AppState.isSyncing ? 'syncing' : ''}`);
-    syncBtn.onclick = () => this.sync();
-    
-    if (AppState.isSyncing) {
-      syncBtn.innerHTML = DOM.getIconSVG('loading') + (AppState.sidebarCollapsed ? '' : ' Syncing...');
-    } else {
-      syncBtn.innerHTML = DOM.getIconSVG('check') + (AppState.sidebarCollapsed ? '' : ' Synced');
-    }
-    
-    syncSection.appendChild(syncBtn);
-    sidebar.appendChild(syncSection);
+    const syncIndicator = DOM.create('button', `sync-status ${AppState.syncStatus}`);
+    const syncLabels = {
+      synced: 'Synced with Sheety',
+      saving: 'Saving to Sheety...',
+      unsynced: 'Unsynced changes',
+      error: 'Sync failed'
+    };
+    syncIndicator.type = 'button';
+    syncIndicator.disabled = true;
+    syncIndicator.textContent = syncLabels[AppState.syncStatus] || 'Sync status';
+    sidebar.appendChild(syncIndicator);
 
-    // Replace existing sidebar
+    const root = document.getElementById('root');
     const existing = document.querySelector('.sidebar');
     if (existing) existing.replaceWith(sidebar);
-    else document.body.insertBefore(sidebar, document.body.firstChild);
-
-    const existingToggle = document.querySelector('.mobile-menu-toggle');
-    if (existingToggle) existingToggle.remove();
-    const existingOverlay = document.querySelector('.mobile-menu-overlay');
-    if (existingOverlay) existingOverlay.remove();
-
-    if (isMobile) {
-      const toggle = DOM.create('button', 'mobile-menu-toggle');
-      toggle.innerHTML = DOM.getIconSVG('menu');
-      toggle.onclick = () => {
-        AppState.mobileSidebarOpen = !AppState.mobileSidebarOpen;
-        this.render();
-      };
-      document.body.appendChild(toggle);
-
-      if (AppState.mobileSidebarOpen) {
-        const overlay = DOM.create('div', 'mobile-menu-overlay');
-        overlay.onclick = () => {
-          AppState.mobileSidebarOpen = false;
-          this.render();
-        };
-        document.body.appendChild(overlay);
-      }
-    }
-  },
-
-  async sync() {
-    AppState.isSyncing = true;
-    this.render();
-    
-    try {
-      await DataStore.refresh();
-      this.render();
-      Router.render();
-      Toast.success('Sync complete');
-    } catch (error) {
-      console.error('Sync error:', error);
-      Toast.error('Sync failed. Try again.');
-    } finally {
-      AppState.isSyncing = false;
-      this.render();
-    }
+    else root.appendChild(sidebar);
   }
 };
 
-// Router
 const Router = {
   navigate(page) {
-    const referenceTabs = ['objectives', 'categories', 'statuses'];
-    if (referenceTabs.includes(page)) {
-      AppState.referenceTab = page;
-      AppState.currentPage = 'reference';
-    } else {
-      AppState.currentPage = page;
-    }
-    if (window.innerWidth <= 768) {
-      AppState.mobileSidebarOpen = false;
-    }
-    Sidebar.render();
+    AppState.currentPage = page;
     this.render();
   },
-
   render() {
-    const content = document.querySelector('.main-content .content-wrapper') || DOM.create('div', 'content-wrapper');
-    
-    let pageContent;
+    Sidebar.render();
+    const root = document.getElementById('root');
+    let main = document.querySelector('.main');
+    if (!main) {
+      main = DOM.create('main', 'main');
+      root.appendChild(main);
+    }
+    main.innerHTML = '';
+    let content;
     switch (AppState.currentPage) {
-      case 'dashboard':
-        pageContent = Dashboard.render();
+      case 'clients':
+        content = ClientsPage.render();
         break;
-      case 'tasks':
-        pageContent = TasksPage.render();
+      case 'documents':
+        content = DocumentsPage.render();
         break;
-      case 'calendar':
-        pageContent = CalendarPage.render();
+      case 'products':
+        content = ProductsPage.render();
         break;
-      case 'timeline':
-        pageContent = TimelinePage.render();
+      case 'providers':
+        content = ProvidersPage.render();
         break;
-      case 'finance':
-        pageContent = FinancePage.render();
-        break;
-      case 'reference':
-        pageContent = ReferencePage.render();
-        break;
-      case 'objectives':
-        AppState.referenceTab = 'objectives';
-        pageContent = ReferencePage.render();
-        break;
-      case 'categories':
-        AppState.referenceTab = 'categories';
-        pageContent = ReferencePage.render();
-        break;
-      case 'statuses':
-        AppState.referenceTab = 'statuses';
-        pageContent = ReferencePage.render();
+      case 'inventory':
+        content = InventoryPage.render();
         break;
       default:
-        pageContent = Dashboard.render();
+        content = Dashboard.render();
     }
-
-    content.innerHTML = '';
-    content.appendChild(pageContent);
-
-    const mainContent = document.querySelector('.main-content');
-    if (!mainContent) {
-      const main = DOM.create('main', 'main-content');
-      main.appendChild(content);
-      document.body.appendChild(main);
-    } else {
-      const existing = mainContent.querySelector('.content-wrapper');
-      if (existing) existing.replaceWith(content);
-      else mainContent.appendChild(content);
-    }
+    main.appendChild(content);
   }
 };
 
-// Dashboard Page
 const Dashboard = {
   render() {
-    const container = DOM.create('div', '');
+    const container = DOM.create('div', 'page');
+    container.appendChild(DOM.create('h1', 'page-title', 'Dashboard'));
 
-    const header = DOM.create('div', 'page-header');
-    header.appendChild(DOM.create('h1', 'page-title', 'Dashboard'));
-    header.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks & finances'));
-    container.appendChild(header);
+    const cards = DOM.create('div', 'card-grid');
+    cards.appendChild(this.card('Clients', AppState.clients.length));
+    cards.appendChild(this.card('Documents', AppState.documents.length));
+    cards.appendChild(this.card('Products', AppState.products.length));
+    cards.appendChild(this.card('Stock Items', AppState.inventory.length));
+    container.appendChild(cards);
 
-    const layout = DOM.create('div', 'dashboard-layout');
-    const mainColumn = DOM.create('div', 'dashboard-main');
-    const sideColumn = DOM.create('aside', 'dashboard-side');
-
-    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
-    const calendarMonth = new Date();
-    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-    const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
-    const occurrences = getTaskOccurrences(filteredTasks, monthStart, monthEnd);
-    const tasksByDate = {};
-    occurrences.forEach(task => {
-      const start = DateUtils.parseDate(task.occurrenceStart || task.startDate);
-      const end = DateUtils.parseDate(task.occurrenceEnd || task.endDate || task.startDate);
-      if (!start || !end) return;
-      let cursor = new Date(start);
-      while (cursor <= end) {
-        if (cursor.getMonth() === calendarMonth.getMonth() && cursor.getFullYear() === calendarMonth.getFullYear()) {
-          const key = DateUtils.formatDate(cursor);
-          if (!tasksByDate[key]) tasksByDate[key] = 0;
-          tasksByDate[key] += 1;
-        }
-        cursor = DateUtils.addDays(cursor, 1);
-      }
-    });
-    const fallbackStats = {
-      total: AppState.tasks.length,
-      completed: AppState.tasks.filter(t => t.status === 'completed').length,
-      overdue: AppState.tasks.filter(t => t.status === 'overdue').length,
-      pending: AppState.tasks.filter(t => t.status === 'pending').length
-    };
-    const baseStats = AppState.stats?.tasks || fallbackStats;
-    const statsData = AppState.searchQuery.trim()
-      ? {
-          total: filteredTasks.length,
-          completed: filteredTasks.filter(t => t.status === 'completed').length,
-          overdue: filteredTasks.filter(t => t.status === 'overdue').length,
-          pending: filteredTasks.filter(t => t.status === 'pending').length
-        }
-      : baseStats;
-    const stats = DOM.create('div', 'card');
-    stats.innerHTML = `
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-        <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${statsData.total}</div>
-          <div style="color: #6b7280;">Total Tasks</div>
-        </div>
-        <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${statsData.completed}</div>
-          <div style="color: #6b7280;">Completed</div>
-        </div>
-        <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #ef4444;">${statsData.overdue}</div>
-          <div style="color: #6b7280;">Overdue</div>
-        </div>
-        <div>
-          <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${statsData.pending}</div>
-          <div style="color: #6b7280;">Pending</div>
-        </div>
-      </div>
-    `;
-    mainColumn.appendChild(stats);
-
-    const recentTasks = DOM.create('div', 'card');
-    recentTasks.appendChild(DOM.create('h2', '', 'Recent Tasks'));
-    const taskList = DOM.create('div', 'task-list');
-
-    filteredTasks.slice(0, 5).forEach(task => {
-      taskList.appendChild(this.renderTask(task));
-    });
-
-    recentTasks.appendChild(taskList);
-    mainColumn.appendChild(recentTasks);
-
-    mainColumn.appendChild(this.renderFinanceCharts());
-    mainColumn.appendChild(this.renderWorkCharts());
-
-    sideColumn.appendChild(this.renderFinanceSummary());
-    sideColumn.appendChild(this.renderFinanceRecent());
-    sideColumn.appendChild(this.renderFinanceInsights());
-    sideColumn.appendChild(this.renderWorkInsights());
-
-    layout.appendChild(mainColumn);
-    layout.appendChild(sideColumn);
-    container.appendChild(layout);
-
-    this.drawCharts();
+    const totals = AppState.documents.reduce((acc, doc) => acc + (Number(doc.total) || 0), 0);
+    const totalCard = DOM.create('div', 'card');
+    totalCard.innerHTML = `<div class="card-label">Total Sales</div><div class="card-value">${Format.currency(totals)}</div>`;
+    container.appendChild(totalCard);
 
     return container;
   },
-
-  renderFinanceSummary() {
-    const card = DOM.create('div', 'card dashboard-finance');
-    const monthControl = this.renderFinanceMonthControl();
-    const monthKey = FinancePage.getMonthKey(AppState.financeMonth);
-    const records = FinancePage.getMonthlyRecords();
-    const totals = FinancePage.getTotals(records);
-    const budget = FinancePage.getMonthlyBudget(monthKey);
-    const remaining = budget > 0 ? budget - totals.expenses : null;
-    const exceeded = remaining !== null && remaining < 0;
-
-    card.appendChild(DOM.create('h2', '', 'Finance Snapshot'));
-    card.appendChild(monthControl);
-
-    const summary = DOM.create('div', 'dashboard-finance-summary');
-    summary.innerHTML = `
-      <div>
-        <div class="dashboard-finance-label">Income</div>
-        <div class="dashboard-finance-value income">${FinancePage.formatCurrency(totals.income)}</div>
-      </div>
-      <div>
-        <div class="dashboard-finance-label">Expenses</div>
-        <div class="dashboard-finance-value expense">${FinancePage.formatCurrency(totals.expenses)}</div>
-      </div>
-      <div>
-        <div class="dashboard-finance-label">Net</div>
-        <div class="dashboard-finance-value">${FinancePage.formatCurrency(totals.net)}</div>
-      </div>
-      <div>
-        <div class="dashboard-finance-label">Budget</div>
-        <div class="dashboard-finance-value ${exceeded ? 'expense' : 'income'}">
-          ${budget > 0 ? FinancePage.formatCurrency(remaining) : 'Not set'}
-        </div>
-        <div class="dashboard-finance-sub">${budget > 0 ? (exceeded ? 'Over budget' : 'Remaining') : 'Set budget in Finance'}</div>
-      </div>
-    `;
-    card.appendChild(summary);
-
-    const progress = DOM.create('div', 'dashboard-finance-progress');
-    if (budget > 0) {
-      const percent = Math.min(100, Math.round((totals.expenses / budget) * 100));
-      progress.innerHTML = `
-        <div class="dashboard-finance-progress-bar">
-          <span style="width: ${percent}%;" class="${exceeded ? 'danger' : 'good'}"></span>
-        </div>
-        <div class="dashboard-finance-progress-text">${percent}% of budget used</div>
-      `;
-    } else {
-      progress.innerHTML = '<div class="dashboard-finance-progress-text">Set a monthly budget to track progress.</div>';
-    }
-    card.appendChild(progress);
-
-    return card;
-  },
-
-  renderFinanceMonthControl() {
-    const wrapper = DOM.create('div', 'dashboard-finance-month');
-    const label = DOM.create('label', 'dashboard-finance-label', 'Month');
-    const monthInput = DOM.create('input', 'form-input');
-    monthInput.type = 'month';
-    monthInput.value = FinancePage.getMonthKey(AppState.financeMonth);
-    monthInput.onchange = (event) => {
-      AppState.financeMonth = new Date(`${event.target.value}-01`);
-      Router.render();
-    };
-
-    label.appendChild(monthInput);
-    wrapper.appendChild(label);
-    return wrapper;
-  },
-
-  renderFinanceRecent() {
-    const card = DOM.create('div', 'card dashboard-finance');
-    card.appendChild(DOM.create('h2', '', 'Recent Transactions'));
-
-    const records = FinancePage.getMonthlyRecords().slice(-5).reverse();
-    if (records.length === 0) {
-      const empty = DOM.create('div', 'empty-state');
-      empty.textContent = 'No transactions yet.';
-      card.appendChild(empty);
-      return card;
-    }
-
-    const list = DOM.create('div', 'dashboard-finance-list');
-    records.forEach(record => {
-      const row = DOM.create('div', 'dashboard-finance-item');
-      const title = record.category || record.note || 'Uncategorized';
-      row.innerHTML = `
-        <div>
-          <div class="dashboard-finance-item-title">${title}</div>
-          <div class="dashboard-finance-item-date">${record.date}</div>
-        </div>
-        <div class="dashboard-finance-item-amount ${record.type}">
-          ${record.type === 'expense' ? '-' : '+'}${FinancePage.formatCurrency(record.amount)}
-        </div>
-      `;
-      list.appendChild(row);
-    });
-    card.appendChild(list);
-    return card;
-  },
-
-  renderFinanceCharts() {
+  card(label, value) {
     const card = DOM.create('div', 'card');
-    card.appendChild(DOM.create('h2', '', 'Finance Charts'));
-
-    const grid = DOM.create('div', 'dashboard-chart-grid');
-
-    const categoryCard = DOM.create('div', 'dashboard-chart-card');
-    categoryCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Spending by Category'));
-    const categoryCanvas = DOM.create('canvas', '');
-    categoryCanvas.id = 'financeCategoryChart';
-    categoryCard.appendChild(categoryCanvas);
-    grid.appendChild(categoryCard);
-
-    const trendCard = DOM.create('div', 'dashboard-chart-card');
-    trendCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Income vs Expense Trend'));
-    const trendCanvas = DOM.create('canvas', '');
-    trendCanvas.id = 'financeTrendChart';
-    trendCard.appendChild(trendCanvas);
-    grid.appendChild(trendCard);
-
-    card.appendChild(grid);
+    card.innerHTML = `<div class="card-label">${label}</div><div class="card-value">${value}</div>`;
     return card;
+  }
+};
+
+const ClientsPage = {
+  render() {
+    const container = DOM.create('div', 'page');
+    container.appendChild(DOM.create('h1', 'page-title', 'Clients'));
+    container.appendChild(this.renderForm());
+    container.appendChild(this.renderTable());
+    return container;
   },
-
-  renderWorkCharts() {
-    const card = DOM.create('div', 'card');
-    card.appendChild(DOM.create('h2', '', 'Work Charts'));
-
-    const grid = DOM.create('div', 'dashboard-chart-grid');
-
-    const statusCard = DOM.create('div', 'dashboard-chart-card');
-    statusCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Task Status Split'));
-    const statusCanvas = DOM.create('canvas', '');
-    statusCanvas.id = 'taskStatusChart';
-    statusCard.appendChild(statusCanvas);
-    grid.appendChild(statusCard);
-
-    const productivityCard = DOM.create('div', 'dashboard-chart-card');
-    productivityCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Productivity Trend'));
-    const productivityCanvas = DOM.create('canvas', '');
-    productivityCanvas.id = 'productivityTrendChart';
-    productivityCard.appendChild(productivityCanvas);
-    grid.appendChild(productivityCard);
-
-    card.appendChild(grid);
-    return card;
-  },
-
-  renderFinanceInsights() {
-    const card = DOM.create('div', 'card dashboard-finance');
-    card.appendChild(DOM.create('h2', '', 'Finance Insights'));
-
-    const currentMonth = AppState.financeMonth;
-    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
-    const currentRecords = FinancePage.getMonthlyRecordsFor(currentMonth);
-    const prevRecords = FinancePage.getMonthlyRecordsFor(prevMonth);
-    const currentTotals = FinancePage.getTotals(currentRecords);
-    const prevTotals = FinancePage.getTotals(prevRecords);
-    const budget = FinancePage.getMonthlyBudget(FinancePage.getMonthKey(currentMonth));
-
-    const budgetScore = budget > 0 ? Math.max(0, Math.round(((budget - currentTotals.expenses) / budget) * 100)) : null;
-    const savingsRate = currentTotals.income > 0
-      ? Math.round((currentTotals.net / currentTotals.income) * 100)
-      : null;
-
-    const trendIncome = this.formatTrend(currentTotals.income, prevTotals.income);
-    const trendExpense = this.formatTrend(currentTotals.expenses, prevTotals.expenses);
-
-    const summary = DOM.create('div', 'dashboard-insights-grid');
-    summary.innerHTML = `
-      <div>
-        <div class="dashboard-finance-label">Budget Score</div>
-        <div class="dashboard-finance-value ${budgetScore !== null && budgetScore < 0 ? 'expense' : 'income'}">
-          ${budgetScore !== null ? `${budgetScore}%` : 'N/A'}
-        </div>
+  renderForm(client = {}) {
+    const form = DOM.create('form', 'form-card');
+    form.innerHTML = `
+      <div class="form-row">
+        <label>Client Name<input name="name" value="${client.name || ''}" required></label>
+        <label>Phone<input name="phone" value="${client.phone || ''}"></label>
+        <label>Email<input name="email" value="${client.email || ''}"></label>
       </div>
-      <div>
-        <div class="dashboard-finance-label">Savings Rate</div>
-        <div class="dashboard-finance-value">${savingsRate !== null ? `${savingsRate}%` : 'N/A'}</div>
+      <div class="form-row">
+        <label>Address<input name="address" value="${client.address || ''}"></label>
+        <label>City<input name="city" value="${client.city || ''}"></label>
+        <label>Notes<input name="notes" value="${client.notes || ''}"></label>
       </div>
-      <div>
-        <div class="dashboard-finance-label">Income Trend</div>
-        <div class="dashboard-finance-value">${trendIncome}</div>
-      </div>
-      <div>
-        <div class="dashboard-finance-label">Expense Trend</div>
-        <div class="dashboard-finance-value">${trendExpense}</div>
-      </div>
+      <button class="btn" type="submit">Save Client</button>
     `;
-    card.appendChild(summary);
-
-    const categoryList = this.renderFinanceCategoryBreakdown(currentRecords);
-    card.appendChild(categoryList);
-
-    return card;
-  },
-
-  renderFinanceCategoryBreakdown(records) {
-    const wrapper = DOM.create('div', 'dashboard-insights-list');
-    const title = DOM.create('div', 'dashboard-finance-label', 'Top Spending Categories');
-    wrapper.appendChild(title);
-
-    const expenses = records.filter(record => record.type === 'expense');
-    if (expenses.length === 0) {
-      wrapper.appendChild(DOM.create('div', 'dashboard-insights-empty', 'No expenses yet.'));
-      return wrapper;
-    }
-
-    const totals = {};
-    expenses.forEach(record => {
-      const key = record.category || 'Uncategorized';
-      totals[key] = (totals[key] || 0) + (Number(record.amount) || 0);
-    });
-
-    Object.entries(totals)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .forEach(([category, amount]) => {
-        const row = DOM.create('div', 'dashboard-insights-row');
-        row.innerHTML = `<span>${category}</span><span>${FinancePage.formatCurrency(amount)}</span>`;
-        wrapper.appendChild(row);
-      });
-
-    return wrapper;
-  },
-
-  renderWorkInsights() {
-    const card = DOM.create('div', 'card dashboard-finance');
-    card.appendChild(DOM.create('h2', '', 'Work Insights'));
-
-    const currentMonth = new Date();
-    const tasksThisMonth = this.getTasksForMonth(currentMonth);
-    const objectiveDueThisMonth = this.getObjectivesDueInMonth(currentMonth);
-    const completionRate = this.getCompletionRate(tasksThisMonth);
-    const overdueCount = tasksThisMonth.filter(task => task.status === 'overdue').length;
-    const productivityScore = this.getProductivityScore(tasksThisMonth, overdueCount);
-
-    const summary = DOM.create('div', 'dashboard-insights-grid');
-    summary.innerHTML = `
-      <div>
-        <div class="dashboard-finance-label">Completion Rate</div>
-        <div class="dashboard-finance-value">${completionRate}%</div>
-      </div>
-      <div>
-        <div class="dashboard-finance-label">Overdue Tasks</div>
-        <div class="dashboard-finance-value expense">${overdueCount}</div>
-      </div>
-      <div>
-        <div class="dashboard-finance-label">Productivity Score</div>
-        <div class="dashboard-finance-value">${productivityScore}</div>
-      </div>
-      <div>
-        <div class="dashboard-finance-label">Objectives Due</div>
-        <div class="dashboard-finance-value">${objectiveDueThisMonth.length}</div>
-      </div>
-    `;
-    card.appendChild(summary);
-
-    card.appendChild(this.renderObjectiveProgress(objectiveDueThisMonth));
-    card.appendChild(this.renderUpcomingObjectives());
-
-    return card;
-  },
-
-  renderObjectiveProgress(objectives) {
-    const wrapper = DOM.create('div', 'dashboard-insights-list');
-    wrapper.appendChild(DOM.create('div', 'dashboard-finance-label', 'Objectives This Month'));
-
-    if (objectives.length === 0) {
-      wrapper.appendChild(DOM.create('div', 'dashboard-insights-empty', 'No objectives due this month.'));
-      return wrapper;
-    }
-
-    objectives.slice(0, 3).forEach(objective => {
-      const { completed, total } = this.getObjectiveCompletion(objective.name);
-      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const row = DOM.create('div', 'dashboard-insights-row');
-      row.innerHTML = `<span>${objective.name}</span><span>${percent}%</span>`;
-      wrapper.appendChild(row);
-    });
-
-    return wrapper;
-  },
-
-  renderUpcomingObjectives() {
-    const wrapper = DOM.create('div', 'dashboard-insights-list');
-    wrapper.appendChild(DOM.create('div', 'dashboard-finance-label', 'Upcoming Objective Deadlines'));
-
-    const upcoming = this.getObjectivesDueSoon(30);
-    if (upcoming.length === 0) {
-      wrapper.appendChild(DOM.create('div', 'dashboard-insights-empty', 'No upcoming deadlines.'));
-      return wrapper;
-    }
-
-    upcoming.slice(0, 3).forEach(objective => {
-      const row = DOM.create('div', 'dashboard-insights-row');
-      row.innerHTML = `<span>${objective.name}</span><span>${objective.dueDate}</span>`;
-      wrapper.appendChild(row);
-    });
-    return wrapper;
-  },
-
-  getTasksForMonth(date) {
-    const { start, end } = this.getMonthRange(date);
-    return AppState.tasks.filter(task => {
-      const range = getTaskRange(task);
-      if (!range.start || !range.end) return false;
-      return range.start <= end && range.end >= start;
-    });
-  },
-
-  getObjectivesDueInMonth(date) {
-    const { start, end } = this.getMonthRange(date);
-    return AppState.objectives.filter(objective => {
-      if (!objective.dueDate) return false;
-      const due = this.parseDate(objective.dueDate);
-      return due && due >= start && due <= end;
-    });
-  },
-
-  getObjectivesDueSoon(days) {
-    const now = new Date();
-    const end = new Date(now);
-    end.setDate(now.getDate() + days);
-    return AppState.objectives
-      .filter(objective => objective.dueDate)
-      .filter(objective => {
-        const due = this.parseDate(objective.dueDate);
-        return due && due >= now && due <= end;
-      })
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  },
-
-  getObjectiveCompletion(objectiveName) {
-    const tasks = AppState.tasks.filter(task => task.objective === objectiveName);
-    const completed = tasks.filter(task => task.status === 'completed').length;
-    return { completed, total: tasks.length };
-  },
-
-  getCompletionRate(tasks) {
-    if (tasks.length === 0) return 0;
-    const completed = tasks.filter(task => task.status === 'completed').length;
-    return Math.round((completed / tasks.length) * 100);
-  },
-
-  getProductivityScore(tasks, overdueCount) {
-    if (tasks.length === 0) return 0;
-    const weightMap = { high: 3, medium: 2, low: 1 };
-    const totals = tasks.reduce((acc, task) => {
-      const weight = weightMap[task.priority] || 2;
-      acc.total += weight;
-      if (task.status === 'completed') acc.completed += weight;
-      return acc;
-    }, { total: 0, completed: 0 });
-
-    const baseScore = totals.total > 0 ? Math.round((totals.completed / totals.total) * 100) : 0;
-    const penalty = overdueCount * 5;
-    return Math.max(0, baseScore - penalty);
-  },
-
-  getMonthRange(date) {
-    const start = new Date(date.getFullYear(), date.getMonth(), 1);
-    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
-    return { start, end };
-  },
-
-  parseDate(value) {
-    return DateUtils.parseDate(value);
-  },
-
-  formatTrend(current, previous) {
-    if (previous === 0) return current === 0 ? '0%' : 'New';
-    const delta = current - previous;
-    const percent = Math.round((delta / previous) * 100);
-    const sign = percent > 0 ? '+' : '';
-    return `${sign}${percent}%`;
-  },
-
-  drawCharts() {
-    requestAnimationFrame(async () => {
-      const ready = await ensureChartLibrary();
-      if (!ready) return;
-      this.destroyCharts();
-      this.drawFinanceCategoryChart();
-      this.drawFinanceTrendChart();
-      this.drawTaskStatusChart();
-      this.drawProductivityTrendChart();
-    });
-  },
-
-  destroyCharts() {
-    Object.values(AppState.dashboardCharts).forEach(chart => {
-      if (chart) chart.destroy();
-    });
-    AppState.dashboardCharts = {};
-  },
-
-  drawFinanceCategoryChart() {
-    const canvas = document.getElementById('financeCategoryChart');
-    if (!canvas) return;
-    const records = FinancePage.getMonthlyRecordsFor(AppState.financeMonth);
-    const expenses = records.filter(record => record.type === 'expense');
-    const totals = {};
-    expenses.forEach(record => {
-      const key = record.category || 'Uncategorized';
-      totals[key] = (totals[key] || 0) + (Number(record.amount) || 0);
-    });
-
-    const labels = Object.keys(totals);
-    const data = Object.values(totals);
-    if (labels.length === 0) {
-      labels.push('No Data');
-      data.push(1);
-    }
-
-    AppState.dashboardCharts.financeCategory = new Chart(canvas, {
-      type: 'doughnut',
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: ['#f97316', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899']
-        }]
-      },
-      options: {
-        plugins: {
-          legend: { position: 'bottom' }
-        }
-      }
-    });
-  },
-
-  drawFinanceTrendChart() {
-    const canvas = document.getElementById('financeTrendChart');
-    if (!canvas) return;
-    const months = this.getLastMonths(6);
-    const income = [];
-    const expenses = [];
-
-    months.forEach(month => {
-      const records = FinancePage.getMonthlyRecordsFor(month.date);
-      const totals = FinancePage.getTotals(records);
-      income.push(totals.income);
-      expenses.push(totals.expenses);
-    });
-
-    AppState.dashboardCharts.financeTrend = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: months.map(month => month.label),
-        datasets: [
-          {
-            label: 'Income',
-            data: income,
-            borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-            tension: 0.3
-          },
-          {
-            label: 'Expenses',
-            data: expenses,
-            borderColor: '#ef4444',
-            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-            tension: 0.3
-          }
-        ]
-      },
-      options: {
-        plugins: { legend: { position: 'bottom' } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  },
-
-  drawTaskStatusChart() {
-    const canvas = document.getElementById('taskStatusChart');
-    if (!canvas) return;
-    const statuses = ['completed', 'pending', 'overdue', 'in-progress'];
-    const counts = statuses.map(status => AppState.tasks.filter(task => task.status === status).length);
-    if (counts.every(count => count === 0)) {
-      counts[0] = 1;
-    }
-
-    AppState.dashboardCharts.taskStatus = new Chart(canvas, {
-      type: 'doughnut',
-      data: {
-        labels: statuses.map(status => status.replace('-', ' ')),
-        datasets: [{
-          data: counts,
-          backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#f59e0b']
-        }]
-      },
-      options: {
-        plugins: { legend: { position: 'bottom' } }
-      }
-    });
-  },
-
-  drawProductivityTrendChart() {
-    const canvas = document.getElementById('productivityTrendChart');
-    if (!canvas) return;
-    const months = this.getLastMonths(6);
-    const scores = months.map(month => {
-      const tasks = this.getTasksForMonth(month.date);
-      const overdue = tasks.filter(task => task.status === 'overdue').length;
-      return this.getProductivityScore(tasks, overdue);
-    });
-
-    AppState.dashboardCharts.productivityTrend = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: months.map(month => month.label),
-        datasets: [{
-          label: 'Productivity Score',
-          data: scores,
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.2)',
-          tension: 0.3
-        }]
-      },
-      options: {
-        plugins: { legend: { position: 'bottom' } },
-        scales: { y: { beginAtZero: true, max: 100 } }
-      }
-    });
-  },
-
-  getLastMonths(count) {
-    const months = [];
-    const start = new Date();
-    for (let i = count - 1; i >= 0; i -= 1) {
-      const date = new Date(start.getFullYear(), start.getMonth() - i, 1);
-      months.push({
-        date,
-        label: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-      });
-    }
-    return months;
-  },
-
-  renderTask(task) {
-    const item = DOM.create('div', 'task-item');
-    const objectiveColor = getObjectiveColor(task.objective);
-    item.style.borderLeftColor = objectiveColor || task.color || '#3b82f6';
-    
-    const header = DOM.create('div', 'task-header');
-    header.appendChild(DOM.create('div', 'task-title', task.task));
-    if (task.priority) {
-      header.appendChild(DOM.create('span', `task-priority ${task.priority}`, task.priority));
-    }
-    header.appendChild(DOM.create('span', `task-status ${task.status}`, task.status));
-    item.appendChild(header);
-    
-    item.appendChild(DOM.create('span', 'task-category', task.category));
-    
-    if (task.objective) {
-      const objectiveBadge = DOM.create('span', 'task-objective');
-      objectiveBadge.textContent = `🎯 ${task.objective}`;
-      objectiveBadge.style.marginLeft = '0.5rem';
-      objectiveBadge.style.fontSize = '0.75rem';
-      objectiveBadge.style.color = '#3b82f6';
-      item.appendChild(objectiveBadge);
-    }
-    
-    const meta = DOM.create('div', 'task-meta');
-    if (task.startDate) meta.appendChild(DOM.create('span', '', `Start: ${task.startDate}`));
-    if (task.endDate) meta.appendChild(DOM.create('span', '', `End: ${task.endDate}`));
-    if (task.startTime || task.endTime) {
-      const range = [task.startTime, task.endTime].filter(Boolean).join(' - ');
-      meta.appendChild(DOM.create('span', '', `Time: ${range}`));
-    }
-    item.appendChild(meta);
-
-    return item;
-  }
-};
-
-// Tasks Page
-const TasksPage = {
-  render() {
-    const container = DOM.create('div', '');
-    
-    const header = DOM.create('div', 'page-header');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    
-    const titleSection = DOM.create('div', '');
-    titleSection.appendChild(DOM.create('h1', 'page-title', 'Tasks'));
-    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your tasks'));
-    header.appendChild(titleSection);
-    
-    const addBtn = DOM.create('button', 'btn btn-primary');
-    addBtn.textContent = '+ Add Task';
-    addBtn.onclick = () => TaskModal.show();
-    header.appendChild(addBtn);
-    
-    container.appendChild(header);
-
-    const taskList = DOM.create('div', 'task-list');
-    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
-    if (filteredTasks.length === 0) {
-      const emptyState = DOM.create('div', 'empty-state');
-      emptyState.style.textAlign = 'center';
-      emptyState.style.padding = '3rem';
-      emptyState.style.color = '#6b7280';
-      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No tasks found</p><p>Try a different search or clear the search box</p>';
-      taskList.appendChild(emptyState);
-    } else {
-      filteredTasks.forEach(task => {
-        const item = Dashboard.renderTask(task);
-        item.onclick = () => TaskModal.show(task);
-        taskList.appendChild(item);
-      });
-    }
-    
-    container.appendChild(taskList);
-
-    return container;
-  }
-};
-
-// Calendar Page
-const CalendarPage = {
-  render() {
-    const container = DOM.create('div', '');
-    
-    const header = DOM.create('div', 'page-header');
-    header.appendChild(DOM.create('h1', 'page-title', 'Calendar'));
-    header.appendChild(DOM.create('p', 'page-subtitle', 'View your tasks on the calendar'));
-    container.appendChild(header);
-
-    const calendar = DOM.create('div', 'calendar');
-    
-    // Simple calendar grid (you can enhance this)
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    days.forEach(day => {
-      const dayHeader = DOM.create('div', 'calendar-day');
-      dayHeader.style.textAlign = 'center';
-      dayHeader.style.fontWeight = 'bold';
-      dayHeader.textContent = day;
-      calendar.appendChild(dayHeader);
-    });
-
-    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
-
-    // Add calendar days (simplified - you can add full calendar logic)
-    for (let i = 1; i <= 31; i++) {
-      const day = DOM.create('div', 'calendar-day');
-      day.appendChild(DOM.create('div', 'calendar-day-number', i));
-      const dateKey = DateUtils.formatDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), i));
-      const count = tasksByDate[dateKey] || 0;
-      if (count > 0) {
-        day.appendChild(DOM.create('div', 'calendar-day-tasks', `${count} tasks`));
-      }
-      calendar.appendChild(day);
-    }
-
-    container.appendChild(calendar);
-    return container;
-  }
-};
-
-// Timeline Page
-const TimelinePage = {
-  render() {
-    const container = DOM.create('div', '');
-
-    const header = DOM.create('div', 'page-header');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-
-    // Left section: Title and navigation
-    const leftSection = DOM.create('div', '');
-    leftSection.style.display = 'flex';
-    leftSection.style.alignItems = 'center';
-    leftSection.style.gap = '1rem';
-
-    const navControls = DOM.create('div', 'timeline-nav');
-    navControls.style.display = 'flex';
-    navControls.style.alignItems = 'center';
-    navControls.style.gap = '0.5rem';
-
-    const prevBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    prevBtn.innerHTML = DOM.getIconSVG('chevronLeft');
-    prevBtn.onclick = () => this.navigateTimeline(-1);
-    navControls.appendChild(prevBtn);
-
-    const monthYear = DOM.create('div', 'timeline-month-year');
-    monthYear.textContent = this.formatViewLabel(AppState.timelineCurrentDate);
-    monthYear.style.fontSize = '1.125rem';
-    monthYear.style.fontWeight = '600';
-    monthYear.style.minWidth = '140px';
-    monthYear.style.textAlign = 'center';
-    navControls.appendChild(monthYear);
-
-    const nextBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    nextBtn.innerHTML = DOM.getIconSVG('chevronRight');
-    nextBtn.onclick = () => this.navigateTimeline(1);
-    navControls.appendChild(nextBtn);
-
-    const todayBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    todayBtn.textContent = 'Today';
-    todayBtn.onclick = () => this.goToToday();
-    navControls.appendChild(todayBtn);
-
-    leftSection.appendChild(navControls);
-
-    // Right section: View toggle
-    const rightSection = DOM.create('div', '');
-    rightSection.style.display = 'flex';
-    rightSection.style.gap = '0.5rem';
-
-    const currentView = AppState.timelineView || 'month';
-
-    const monthBtn = DOM.create('button', `btn btn-sm ${currentView === 'month' ? 'btn-primary' : 'btn-secondary'}`);
-    monthBtn.textContent = 'Month';
-    monthBtn.onclick = () => this.setView('month');
-    rightSection.appendChild(monthBtn);
-
-    const weekBtn = DOM.create('button', `btn btn-sm ${currentView === 'week' ? 'btn-primary' : 'btn-secondary'}`);
-    weekBtn.textContent = 'Week';
-    weekBtn.onclick = () => this.setView('week');
-    rightSection.appendChild(weekBtn);
-
-    const dayBtn = DOM.create('button', `btn btn-sm ${currentView === 'day' ? 'btn-primary' : 'btn-secondary'}`);
-    dayBtn.textContent = 'Day';
-    dayBtn.onclick = () => this.setView('day');
-    rightSection.appendChild(dayBtn);
-
-    header.appendChild(leftSection);
-    header.appendChild(rightSection);
-    container.appendChild(header);
-
-    // Filter bar
-    const filterBar = this.renderFilterBar();
-    container.appendChild(filterBar);
-
-    const timelineWrapper = DOM.create('div', 'timeline-wrapper');
-    timelineWrapper.style.overflowX = 'auto';
-    timelineWrapper.style.marginTop = '1rem';
-    timelineWrapper.setAttribute('data-view', AppState.timelineView || 'month');
-
-    const timeline = DOM.create('div', 'timeline-container');
-    this.renderTimeline(timeline);
-    timelineWrapper.appendChild(timeline);
-
-    container.appendChild(timelineWrapper);
-
-    return container;
-  },
-
-  setView(view) {
-    AppState.timelineView = view;
-    Router.render();
-  },
-
-  navigateTimeline(delta) {
-    const currentDate = new Date(AppState.timelineCurrentDate);
-    const view = AppState.timelineView || 'month';
-    if (view === 'day') {
-      currentDate.setDate(currentDate.getDate() + delta);
-    } else if (view === 'week') {
-      currentDate.setDate(currentDate.getDate() + (delta * 7));
-    } else {
-      currentDate.setMonth(currentDate.getMonth() + delta);
-    }
-    AppState.timelineCurrentDate = currentDate;
-    Router.render();
-  },
-
-  goToToday() {
-    AppState.timelineCurrentDate = new Date();
-    Router.render();
-  },
-
-  formatMonthYear(date) {
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-  },
-
-  formatViewLabel(date) {
-    const view = AppState.timelineView || 'month';
-    if (view === 'day') {
-      return date.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    }
-    if (view === 'week') {
-      const start = new Date(date);
-      start.setDate(date.getDate() - date.getDay());
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      const startLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const endLabel = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      return `${startLabel} - ${endLabel}`;
-    }
-    return this.formatMonthYear(date);
-  },
-
-  renderFilterBar() {
-    const filterBar = DOM.create('div', 'timeline-filter-bar');
-    filterBar.style.display = 'flex';
-    filterBar.style.flexWrap = 'wrap';
-    filterBar.style.gap = '1rem';
-    filterBar.style.marginBottom = '1rem';
-    filterBar.style.padding = '1rem';
-    filterBar.style.backgroundColor = '#f9fafb';
-    filterBar.style.borderRadius = '0.5rem';
-
-    // Status filter
-    const statusFilter = DOM.create('div', 'filter-group');
-    statusFilter.appendChild(DOM.create('label', '', 'Status:'));
-    const statusContainer = DOM.create('div', '');
-    statusContainer.style.display = 'flex';
-    statusContainer.style.flexWrap = 'wrap';
-    statusContainer.style.gap = '0.5rem';
-
-    AppState.statuses.forEach(status => {
-      const checkbox = DOM.create('input', '');
-      checkbox.type = 'checkbox';
-      checkbox.id = `status-${status.id}`;
-      checkbox.checked = AppState.timelineFilters.statuses.includes(status.name);
-      checkbox.onchange = () => this.toggleFilter('statuses', status.name);
-
-      const label = DOM.create('label', '');
-      label.htmlFor = `status-${status.id}`;
-      label.style.display = 'flex';
-      label.style.alignItems = 'center';
-      label.style.gap = '0.25rem';
-      label.style.padding = '0.25rem 0.5rem';
-      label.style.borderRadius = '0.25rem';
-      label.style.backgroundColor = status.color;
-      label.style.color = 'white';
-      label.style.fontSize = '0.75rem';
-      label.style.cursor = 'pointer';
-
-      label.appendChild(checkbox);
-      label.appendChild(DOM.create('span', '', status.name));
-      statusContainer.appendChild(label);
-    });
-
-    statusFilter.appendChild(statusContainer);
-    filterBar.appendChild(statusFilter);
-
-    // Category filter
-    const categoryFilter = DOM.create('div', 'filter-group');
-    categoryFilter.appendChild(DOM.create('label', '', 'Category:'));
-    const categoryContainer = DOM.create('div', '');
-    categoryContainer.style.display = 'flex';
-    categoryContainer.style.flexWrap = 'wrap';
-    categoryContainer.style.gap = '0.5rem';
-
-    AppState.categories.forEach(category => {
-      const checkbox = DOM.create('input', '');
-      checkbox.type = 'checkbox';
-      checkbox.id = `category-${category.id}`;
-      checkbox.checked = AppState.timelineFilters.categories.includes(category.name);
-      checkbox.onchange = () => this.toggleFilter('categories', category.name);
-
-      const label = DOM.create('label', '');
-      label.htmlFor = `category-${category.id}`;
-      label.style.display = 'flex';
-      label.style.alignItems = 'center';
-      label.style.gap = '0.25rem';
-      label.style.padding = '0.25rem 0.5rem';
-      label.style.borderRadius = '0.25rem';
-      label.style.backgroundColor = category.color;
-      label.style.color = 'white';
-      label.style.fontSize = '0.75rem';
-      label.style.cursor = 'pointer';
-
-      label.appendChild(checkbox);
-      label.appendChild(DOM.create('span', '', category.name));
-      categoryContainer.appendChild(label);
-    });
-
-    categoryFilter.appendChild(categoryContainer);
-    filterBar.appendChild(categoryFilter);
-
-    // Clear filters button
-    const clearBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    clearBtn.textContent = 'Clear Filters';
-    clearBtn.onclick = () => this.clearFilters();
-    filterBar.appendChild(clearBtn);
-
-    return filterBar;
-  },
-
-  toggleFilter(type, value) {
-    const filters = AppState.timelineFilters[type];
-    const index = filters.indexOf(value);
-    if (index > -1) {
-      filters.splice(index, 1);
-    } else {
-      filters.push(value);
-    }
-    Router.render();
-  },
-
-  clearFilters() {
-    AppState.timelineFilters = { statuses: [], categories: [], objectives: [] };
-    Router.render();
-  },
-
-  applyFilters(tasks) {
-    const filters = AppState.timelineFilters;
-    const filtered = tasks.filter(task => {
-      // Status filter
-      if (filters.statuses.length > 0 && !filters.statuses.includes(task.status)) {
-        return false;
-      }
-      // Category filter
-      if (filters.categories.length > 0 && !filters.categories.includes(task.category)) {
-        return false;
-      }
-      // Objective filter
-      if (filters.objectives.length > 0 && !filters.objectives.includes(task.objective)) {
-        return false;
-      }
-      return true;
-    });
-    return TaskFilters.applySearch(filtered);
-  },
-
-  handleDragStart(e, task) {
-    e.dataTransfer.setData('application/json', JSON.stringify(task));
-    e.dataTransfer.effectAllowed = 'move';
-    e.target.classList.add('timeline-task-dragging');
-  },
-
-  handleDragEnd(e) {
-    e.target.classList.remove('timeline-task-dragging');
-  },
-
-  async handleDrop(e, newDate) {
-    try {
-      const task = JSON.parse(e.dataTransfer.getData('application/json'));
-      if (task.repeatType && task.repeatType !== 'none') {
-        Toast.error('Edit recurring tasks in the task form.');
-        return;
-      }
-      const dateStr = newDate.getFullYear() + '-' +
-        String(newDate.getMonth() + 1).padStart(2, '0') + '-' +
-        String(newDate.getDate()).padStart(2, '0');
-
-      const durationDays = getTaskDurationDays(task);
-      const endDate = DateUtils.formatDate(DateUtils.addDays(newDate, durationDays));
-      const updatedTask = { ...task, startDate: dateStr, endDate };
-
-      const taskIndex = AppState.tasks.findIndex(t => t.id === task.id);
-      if (taskIndex !== -1) {
-        AppState.tasks[taskIndex] = updatedTask;
-      }
-
-      await API.saveTasks(AppState.tasks);
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+      if (client.id) payload.id = client.id;
+      await runWithSyncStatus(() => API.saveClient(payload));
       await DataStore.refresh();
-
       Router.render();
-    } catch (error) {
-      console.error('Error updating task date:', error);
-      Toast.error('Error updating task date. Please try again.');
-    }
-  },
-
-  async updateTaskData(taskId, updates) {
-    const taskIndex = AppState.tasks.findIndex(t => t.id === taskId);
-    if (taskIndex === -1) return;
-    const updatedTask = { ...AppState.tasks[taskIndex], ...updates };
-    AppState.tasks[taskIndex] = updatedTask;
-    await API.saveTasks(AppState.tasks);
-    await DataStore.refresh();
-    Router.render();
-  },
-
-  isToday(date) {
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
-  },
-
-  renderTimeline(container) {
-    const view = AppState.timelineView || 'month';
-    const currentDate = AppState.timelineCurrentDate;
-    let startDate, endDate, days = [];
-
-    if (view === 'day') {
-      startDate = DateUtils.parseDate(currentDate);
-      endDate = DateUtils.parseDate(currentDate);
-      days = [new Date(startDate)];
-    } else if (view === 'week') {
-      // Get current week for the selected month
-      const dayOfWeek = currentDate.getDay();
-      startDate = new Date(currentDate);
-      startDate.setDate(currentDate.getDate() - dayOfWeek);
-      startDate = DateUtils.parseDate(startDate);
-      endDate = DateUtils.addDays(startDate, 6);
-
-      for (let i = 0; i < 7; i++) {
-        const date = new Date(startDate);
-        date.setDate(startDate.getDate() + i);
-        days.push(date);
-      }
-    } else {
-      // Get current month
-      startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      startDate = DateUtils.parseDate(startDate);
-      endDate = DateUtils.parseDate(endDate);
-
-      // Add days from previous month to fill first week
-      const firstDay = startDate.getDay();
-      for (let i = firstDay - 1; i >= 0; i--) {
-        const date = new Date(startDate);
-        date.setDate(startDate.getDate() - i - 1);
-        days.push(date);
-      }
-
-      // Add all days of current month
-      for (let i = 1; i <= endDate.getDate(); i++) {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), i);
-        days.push(date);
-      }
-
-      // Add days from next month to fill last week
-      const lastDay = endDate.getDay();
-      for (let i = 1; i <= 6 - lastDay; i++) {
-        const date = new Date(endDate);
-        date.setDate(endDate.getDate() + i);
-        days.push(date);
-      }
-    }
-
-    // Timeline body with tasks
-    const body = DOM.create('div', 'timeline-body');
-
-    // Apply filters and group tasks by date
-    const filteredTasks = this.applyFilters(AppState.tasks);
-    const rangeStart = days[0];
-    const rangeEnd = days[days.length - 1];
-    const occurrences = getTaskOccurrences(filteredTasks, rangeStart, rangeEnd);
-    const tasksByDate = {};
-    occurrences.forEach(task => {
-      const start = DateUtils.parseDate(task.occurrenceStart || task.startDate);
-      const end = DateUtils.parseDate(task.occurrenceEnd || task.endDate || task.startDate);
-      if (!start || !end) return;
-      let cursor = new Date(start);
-      while (cursor <= end) {
-        const dateKey = this.getDateKey(cursor);
-        if (!tasksByDate[dateKey]) {
-          tasksByDate[dateKey] = [];
-        }
-        tasksByDate[dateKey].push(task);
-        cursor = DateUtils.addDays(cursor, 1);
-      }
-    });
-
-    // Create timeline rows for each day
-    days.forEach(day => {
-      const dayColumn = DOM.create('div', 'timeline-day-column');
-      const dateKey = this.getDateKey(day);
-      const dayTasks = tasksByDate[dateKey] || [];
-      const isCurrentMonth = day.getMonth() === AppState.timelineCurrentDate.getMonth();
-      const isCollapsed = !!AppState.timelineCollapsedDates[dateKey];
-
-      // Styling for different day types
-      if (!isCurrentMonth) {
-        dayColumn.classList.add('timeline-day-other-month');
-      } else if (this.isToday(day)) {
-        dayColumn.classList.add('timeline-day-today');
-      } else if (day.getDay() === 0 || day.getDay() === 6) {
-        dayColumn.classList.add('timeline-day-weekend');
-      }
-
-      const dayHeader = DOM.create('div', 'timeline-day-column-header');
-      const headerInfo = DOM.create('div', 'timeline-day-header-info');
-      headerInfo.appendChild(DOM.create('div', 'timeline-day-name',
-        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getDay()]));
-      headerInfo.appendChild(DOM.create('div', 'timeline-day-number', day.getDate()));
-      dayHeader.appendChild(headerInfo);
-
-      const dateStr = DateUtils.formatDate(day);
-      const addBtn = DOM.create('button', 'timeline-day-add');
-      addBtn.innerHTML = DOM.getIconSVG('plus');
-      addBtn.onclick = (e) => {
-        e.stopPropagation();
-        TaskModal.show(null, null, dateStr);
-      };
-      dayHeader.appendChild(addBtn);
-
-      const collapseButton = DOM.create('button', 'timeline-day-toggle');
-      collapseButton.textContent = isCollapsed ? 'Show' : 'Hide';
-      collapseButton.onclick = (e) => {
-        e.stopPropagation();
-        const nextCollapsed = !dayColumn.classList.contains('collapsed');
-        dayColumn.classList.toggle('collapsed', nextCollapsed);
-        AppState.timelineCollapsedDates[dateKey] = nextCollapsed;
-        collapseButton.textContent = nextCollapsed ? 'Show' : 'Hide';
-      };
-      dayHeader.appendChild(collapseButton);
-      dayColumn.appendChild(dayHeader);
-
-      // Make day droppable for drag and drop
-      dayColumn.ondragover = (e) => {
-        e.preventDefault();
-        dayColumn.classList.add('timeline-day-drop-target');
-      };
-      dayColumn.ondragleave = (e) => {
-        dayColumn.classList.remove('timeline-day-drop-target');
-      };
-      dayColumn.ondrop = (e) => {
-        e.preventDefault();
-        dayColumn.classList.remove('timeline-day-drop-target');
-        this.handleDrop(e, day);
-      };
-
-      // Make day clickable to add task
-      dayColumn.onclick = (e) => {
-        if (e.target === dayColumn || e.target.classList.contains('timeline-day-empty')) {
-          TaskModal.show(null, null, dateStr);
-        }
-      };
-      dayColumn.style.cursor = 'pointer';
-
-      // Add hover effect for add indicator
-      dayColumn.onmouseenter = () => {
-        if (dayTasks.length === 0) {
-          const addIndicator = dayColumn.querySelector('.add-task-indicator');
-          if (addIndicator) addIndicator.style.opacity = '1';
-        }
-      };
-      dayColumn.onmouseleave = () => {
-        const addIndicator = dayColumn.querySelector('.add-task-indicator');
-        if (addIndicator) addIndicator.style.opacity = '0';
-      };
-
-      if (isCollapsed) {
-        dayColumn.classList.add('collapsed');
-      }
-
-      const tasksContainer = DOM.create('div', 'timeline-day-tasks');
-      const collapsedSummary = DOM.create('div', 'timeline-day-collapsed-summary', `${dayTasks.length} tasks hidden`);
-      dayColumn.appendChild(collapsedSummary);
-
-      if (view === 'day') {
-        this.renderDaySchedule(tasksContainer, dayTasks, day);
-      } else {
-        dayTasks.forEach(task => {
-          tasksContainer.appendChild(this.renderTaskCard(task));
-        });
-
-        // Add empty state if no tasks
-        if (dayTasks.length === 0) {
-          const emptyDay = DOM.create('div', 'timeline-day-empty');
-          const addIndicator = DOM.create('div', 'add-task-indicator');
-          addIndicator.innerHTML = DOM.getIconSVG('plus');
-          addIndicator.style.opacity = '0';
-          addIndicator.style.position = 'absolute';
-          addIndicator.style.top = '0.5rem';
-          addIndicator.style.right = '0.5rem';
-          addIndicator.style.width = '20px';
-          addIndicator.style.height = '20px';
-          addIndicator.style.color = '#6b7280';
-          addIndicator.style.transition = 'opacity 0.2s';
-          emptyDay.appendChild(addIndicator);
-
-          const text = DOM.create('div', '');
-          text.textContent = 'Click to add task';
-          text.style.fontSize = '0.75rem';
-          text.style.color = '#9ca3af';
-          emptyDay.appendChild(text);
-
-          tasksContainer.appendChild(emptyDay);
-        }
-      }
-
-      dayColumn.appendChild(tasksContainer);
-
-      body.appendChild(dayColumn);
-    });
-    
-    container.appendChild(body);
-  },
-
-  renderTaskCard(task) {
-    const taskBar = DOM.create('div', 'timeline-task-bar');
-    const statusColor = AppState.statuses.find(s => s.name === task.status)?.color || '#3b82f6';
-    const objectiveColor = getObjectiveColor(task.objective);
-    const accentColor = objectiveColor || statusColor;
-    taskBar.style.backgroundColor = accentColor;
-    taskBar.style.borderLeftColor = accentColor;
-
-    const taskContent = DOM.create('div', 'timeline-task-content');
-
-    const title = DOM.create('div', 'timeline-task-title');
-    title.textContent = task.task.length > 25 ? task.task.substring(0, 25) + '...' : task.task;
-    title.title = task.task;
-    taskContent.appendChild(title);
-
-    const meta = DOM.create('div', 'timeline-task-meta');
-    const rangeStart = task.occurrenceStart || task.startDate;
-    const rangeEnd = task.occurrenceEnd || task.endDate || task.startDate;
-    const rangeInfo = rangeStart && rangeEnd ? ` • ${rangeStart} → ${rangeEnd}` : '';
-    const timeInfo = task.startTime || task.endTime
-      ? ` • ${(task.startTime || '')}${task.endTime ? `-${task.endTime}` : ''}`
-      : '';
-    const categoryInfo = task.category ? ` • ${task.category}` : '';
-    const objectiveInfo = task.objective ? ` • ${task.objective}` : '';
-    const priorityInfo = task.priority ? ` • ${task.priority}` : '';
-    const repeatInfo = task.repeatType && task.repeatType !== 'none' ? ` • ${task.repeatType}` : '';
-    meta.textContent = `${task.status}${rangeInfo}${timeInfo}${categoryInfo}${objectiveInfo}${priorityInfo}${repeatInfo}`;
-    taskContent.appendChild(meta);
-
-    taskBar.appendChild(taskContent);
-
-    if (!task.repeatType || task.repeatType === 'none') {
-      taskBar.draggable = true;
-      taskBar.ondragstart = (e) => this.handleDragStart(e, task);
-      taskBar.ondragend = (e) => this.handleDragEnd(e);
-    }
-
-    taskBar.onclick = (e) => {
-      if (!e.defaultPrevented) TaskModal.show(task);
     };
-
-    const tooltipRange = rangeStart && rangeEnd ? `${rangeStart} → ${rangeEnd}` : '';
-    const repeatInfoText = task.repeatType && task.repeatType !== 'none'
-      ? `\nRepeat: ${task.repeatType}${task.repeatUntil ? ' until ' + task.repeatUntil : ''}`
-      : '';
-    const timeRangeText = task.startTime || task.endTime
-      ? `\nTime: ${task.startTime || ''}${task.endTime ? ' - ' + task.endTime : ''}`
-      : '';
-    taskBar.title = `${task.task}\nStatus: ${task.status}${tooltipRange ? '\nRange: ' + tooltipRange : ''}${timeRangeText}${repeatInfoText}${task.category ? '\nCategory: ' + task.category : ''}${task.objective ? '\nObjective: ' + task.objective : ''}${task.priority ? '\nPriority: ' + task.priority : ''}`;
-
-    const statusIndicator = DOM.create('div', `timeline-task-status ${task.status}`);
-    taskBar.appendChild(statusIndicator);
-
-    return taskBar;
+    attachSyncWatcher(form);
+    return form;
   },
+  renderTable() {
+    const table = DOM.create('div', 'table');
+    const header = DOM.create('div', 'table-row table-header');
+    ['Name', 'Phone', 'Email', 'City', 'Actions'].forEach(label => header.appendChild(DOM.create('div', '', label)));
+    table.appendChild(header);
 
-  renderDaySchedule(container, dayTasks, selectedDate) {
-    const allDayTasks = [];
-    const tasksByHour = {};
-    const selectedKey = this.getDateKey(selectedDate);
-
-    dayTasks.forEach(task => {
-      const rangeStart = DateUtils.parseDate(task.startDate || task.occurrenceStart);
-      const rangeEnd = DateUtils.parseDate(task.endDate || task.occurrenceEnd || task.startDate);
-      const startMinutes = this.getTaskStartMinutes(task);
-      const endMinutes = this.getTaskEndMinutes(task);
-
-      if (!startMinutes && !endMinutes) {
-        allDayTasks.push(task);
-        return;
-      }
-
-      let startHour = 0;
-      let endHour = 23;
-
-      if (rangeStart && this.getDateKey(rangeStart) === selectedKey && startMinutes !== null) {
-        startHour = Math.floor(startMinutes / 60);
-      }
-      if (rangeEnd && this.getDateKey(rangeEnd) === selectedKey && endMinutes !== null) {
-        endHour = Math.max(startHour, Math.ceil(endMinutes / 60));
-      }
-
-      for (let hour = startHour; hour <= endHour; hour += 1) {
-        if (!tasksByHour[hour]) tasksByHour[hour] = [];
-        tasksByHour[hour].push(task);
-      }
+    AppState.clients.forEach(client => {
+      const row = DOM.create('div', 'table-row');
+      row.appendChild(DOM.create('div', '', client.name || ''));
+      row.appendChild(DOM.create('div', '', client.phone || ''));
+      row.appendChild(DOM.create('div', '', client.email || ''));
+      row.appendChild(DOM.create('div', '', client.city || ''));
+      const actions = DOM.create('div', 'table-actions');
+      const edit = DOM.create('button', 'link-btn', 'Edit');
+      edit.onclick = () => {
+        const page = this.render();
+        page.querySelector('form').replaceWith(this.renderForm(client));
+        document.querySelector('.main').innerHTML = '';
+        document.querySelector('.main').appendChild(page);
+      };
+      const remove = DOM.create('button', 'link-btn danger', 'Delete');
+      remove.onclick = async () => {
+        await runWithSyncStatus(() => API.deleteClient(client.id));
+        await DataStore.refresh();
+        Router.render();
+      };
+      actions.appendChild(edit);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      table.appendChild(row);
     });
-
-    if (allDayTasks.length > 0) {
-      const allDaySection = DOM.create('div', 'timeline-day-all-day');
-      const allDayLabel = DOM.create('div', 'timeline-day-all-day-label', 'All Day');
-      allDaySection.appendChild(allDayLabel);
-      allDayTasks.forEach(task => allDaySection.appendChild(this.renderTaskCard(task)));
-      container.appendChild(allDaySection);
-    }
-
-    const hoursContainer = DOM.create('div', 'timeline-day-hours');
-    for (let hour = 0; hour < 24; hour += 1) {
-      const hourRow = DOM.create('div', 'timeline-hour-row');
-      const hourLabel = DOM.create('div', 'timeline-hour-label', `${String(hour).padStart(2, '0')}:00`);
-      const hourTasks = DOM.create('div', 'timeline-hour-tasks');
-
-      (tasksByHour[hour] || []).forEach(task => {
-        hourTasks.appendChild(this.renderTaskCard(task));
-      });
-
-      if (!tasksByHour[hour] || tasksByHour[hour].length === 0) {
-        hourTasks.appendChild(DOM.create('div', 'timeline-hour-empty', ''));
-      }
-
-      hourRow.appendChild(hourLabel);
-      hourRow.appendChild(hourTasks);
-      hoursContainer.appendChild(hourRow);
-    }
-
-    if (dayTasks.length === 0) {
-      const emptyDay = DOM.create('div', 'timeline-day-empty');
-      const text = DOM.create('div', '');
-      text.textContent = 'No tasks for this day';
-      text.style.fontSize = '0.875rem';
-      text.style.color = '#9ca3af';
-      emptyDay.appendChild(text);
-      container.appendChild(emptyDay);
-    }
-
-    container.appendChild(hoursContainer);
-  },
-
-  getTaskStartMinutes(task) {
-    if (!task.startTime) return null;
-    const match = task.startTime.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
-    if (!match) return null;
-    let hour = parseInt(match[1], 10);
-    const minutes = parseInt(match[2] || '0', 10);
-    const meridian = match[3];
-    if (meridian) {
-      const upper = meridian.toUpperCase();
-      if (upper === 'PM' && hour < 12) hour += 12;
-      if (upper === 'AM' && hour === 12) hour = 0;
-    }
-    if (hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return null;
-    return hour * 60 + minutes;
-  },
-
-  getTaskEndMinutes(task) {
-    if (!task.endTime) return null;
-    const match = task.endTime.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
-    if (!match) return null;
-    let hour = parseInt(match[1], 10);
-    const minutes = parseInt(match[2] || '0', 10);
-    const meridian = match[3];
-    if (meridian) {
-      const upper = meridian.toUpperCase();
-      if (upper === 'PM' && hour < 12) hour += 12;
-      if (upper === 'AM' && hour === 12) hour = 0;
-    }
-    if (hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return null;
-    return hour * 60 + minutes;
-  },
-
-  getDateKey(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  },
-
-  isToday(date) {
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
+    return table;
   }
 };
 
-// Finance Page
-const FinancePage = {
+const ProvidersPage = {
   render() {
-    const container = DOM.create('div', '');
-
-    const header = DOM.create('div', 'page-header');
-    header.appendChild(DOM.create('h1', 'page-title', 'Finance'));
-    header.appendChild(DOM.create('p', 'page-subtitle', 'Track income, expenses, and budgets'));
-    container.appendChild(header);
-
-    const controls = DOM.create('div', 'finance-controls');
-    const monthLabel = DOM.create('label', 'finance-label', 'Month');
-    const monthInput = DOM.create('input', 'form-input');
-    monthInput.type = 'month';
-    monthInput.value = this.getMonthKey(AppState.financeMonth);
-    monthInput.onchange = (event) => {
-      AppState.financeMonth = new Date(`${event.target.value}-01`);
-      Router.render();
-    };
-    monthLabel.appendChild(monthInput);
-
-    const budgetLabel = DOM.create('label', 'finance-label', 'Monthly Budget');
-    const budgetInput = DOM.create('input', 'form-input');
-    budgetInput.type = 'number';
-    budgetInput.min = '0';
-    budgetInput.step = '0.01';
-    budgetInput.value = this.getMonthlyBudget(this.getMonthKey(AppState.financeMonth));
-
-    const budgetButton = DOM.create('button', 'btn btn-secondary btn-sm');
-    budgetButton.textContent = 'Save Budget';
-    budgetButton.onclick = async () => {
-      const value = parseFloat(budgetInput.value || '0');
-      const monthKey = this.getMonthKey(AppState.financeMonth);
-      AppState.financeSettings[monthKey] = Number.isFinite(value) ? value : 0;
-      await API.saveFinanceSettings(AppState.financeSettings);
-      Toast.success('Budget saved');
-      Router.render();
-    };
-
-    budgetLabel.appendChild(budgetInput);
-    budgetLabel.appendChild(budgetButton);
-
-    controls.appendChild(monthLabel);
-    controls.appendChild(budgetLabel);
-    container.appendChild(controls);
-
-    const monthRecords = this.getMonthlyRecords();
-    container.appendChild(this.renderSummary(monthRecords));
-    container.appendChild(this.renderAddForm());
-    container.appendChild(this.renderDailyBreakdown(monthRecords));
-    container.appendChild(this.renderRecurringList());
-
+    const container = DOM.create('div', 'page');
+    container.appendChild(DOM.create('h1', 'page-title', 'Providers'));
+    container.appendChild(this.renderForm());
+    container.appendChild(this.renderTable());
     return container;
   },
-
-  renderSummary(records) {
-    const totals = this.getTotals(records);
-    const budget = this.getMonthlyBudget(this.getMonthKey(AppState.financeMonth));
-    const remaining = budget > 0 ? budget - totals.expenses : null;
-    const exceeded = remaining !== null && remaining < 0;
-
-    const summary = DOM.create('div', 'finance-summary');
-    summary.innerHTML = `
-      <div class="finance-summary-card">
-        <div class="finance-summary-label">Income</div>
-        <div class="finance-summary-value income">${this.formatCurrency(totals.income)}</div>
+  renderForm(provider = {}) {
+    const form = DOM.create('form', 'form-card');
+    form.innerHTML = `
+      <div class="form-row">
+        <label>Provider Name<input name="name" value="${provider.name || ''}" required></label>
+        <label>Phone<input name="phone" value="${provider.phone || ''}"></label>
+        <label>Email<input name="email" value="${provider.email || ''}"></label>
       </div>
-      <div class="finance-summary-card">
-        <div class="finance-summary-label">Expenses</div>
-        <div class="finance-summary-value expense">${this.formatCurrency(totals.expenses)}</div>
+      <div class="form-row">
+        <label>Address<input name="address" value="${provider.address || ''}"></label>
+        <label>City<input name="city" value="${provider.city || ''}"></label>
+        <label>Notes<input name="notes" value="${provider.notes || ''}"></label>
       </div>
-      <div class="finance-summary-card">
-        <div class="finance-summary-label">Net</div>
-        <div class="finance-summary-value">${this.formatCurrency(totals.net)}</div>
-      </div>
-      <div class="finance-summary-card">
-        <div class="finance-summary-label">Budget</div>
-        <div class="finance-summary-value ${exceeded ? 'expense' : 'income'}">
-          ${budget > 0 ? this.formatCurrency(remaining) : 'Not set'}
-        </div>
-        <div class="finance-summary-sub">
-          ${budget > 0 ? (exceeded ? 'Over budget' : 'Remaining') : 'Set a monthly budget'}
-        </div>
-      </div>
+      <button class="btn" type="submit">Save Provider</button>
     `;
-    return summary;
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+      if (provider.id) payload.id = provider.id;
+      await runWithSyncStatus(() => API.saveProvider(payload));
+      await DataStore.refresh();
+      Router.render();
+    };
+    attachSyncWatcher(form);
+    return form;
   },
-
-  renderAddForm() {
-    const card = DOM.create('div', 'finance-card');
-    card.appendChild(DOM.create('h2', 'section-title', 'Add Transaction'));
-
-    const form = DOM.create('form', 'finance-form');
-
-    const dateInput = DOM.create('input', 'form-input');
-    dateInput.type = 'date';
-    dateInput.required = true;
-    dateInput.value = this.formatDateInput(new Date());
-
-    const typeSelect = DOM.create('select', 'form-input');
-    ['expense', 'income'].forEach(type => {
-      const option = document.createElement('option');
-      option.value = type;
-      option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-      typeSelect.appendChild(option);
+  renderTable() {
+    const table = DOM.create('div', 'table');
+    const header = DOM.create('div', 'table-row table-header');
+    ['Name', 'Phone', 'Email', 'City', 'Actions'].forEach(label => header.appendChild(DOM.create('div', '', label)));
+    table.appendChild(header);
+    AppState.providers.forEach(provider => {
+      const row = DOM.create('div', 'table-row');
+      row.appendChild(DOM.create('div', '', provider.name || ''));
+      row.appendChild(DOM.create('div', '', provider.phone || ''));
+      row.appendChild(DOM.create('div', '', provider.email || ''));
+      row.appendChild(DOM.create('div', '', provider.city || ''));
+      const actions = DOM.create('div', 'table-actions');
+      const edit = DOM.create('button', 'link-btn', 'Edit');
+      edit.onclick = () => {
+        const page = this.render();
+        page.querySelector('form').replaceWith(this.renderForm(provider));
+        document.querySelector('.main').innerHTML = '';
+        document.querySelector('.main').appendChild(page);
+      };
+      const remove = DOM.create('button', 'link-btn danger', 'Delete');
+      remove.onclick = async () => {
+        await runWithSyncStatus(() => API.deleteProvider(provider.id));
+        await DataStore.refresh();
+        Router.render();
+      };
+      actions.appendChild(edit);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      table.appendChild(row);
     });
+    return table;
+  }
+};
 
-    const amountInput = DOM.create('input', 'form-input');
-    amountInput.type = 'number';
-    amountInput.min = '0';
-    amountInput.step = '0.01';
-    amountInput.placeholder = 'Amount';
-    amountInput.required = true;
+const ProductsPage = {
+  render() {
+    const container = DOM.create('div', 'page');
+    container.appendChild(DOM.create('h1', 'page-title', 'Products'));
+    container.appendChild(this.renderForm());
+    container.appendChild(this.renderTable());
+    return container;
+  },
+  renderForm(product = {}) {
+    const form = DOM.create('form', 'form-card');
+    form.innerHTML = `
+      <div class="form-row">
+        <label>SKU<input name="sku" value="${product.sku || ''}"></label>
+        <label>Product Name<input name="name" value="${product.name || ''}" required></label>
+        <label>Unit<input name="unit" value="${product.unit || ''}"></label>
+      </div>
+      <div class="form-row">
+        <label>Purchase Price<input type="number" step="0.01" name="purchasePrice" value="${product.purchasePrice || ''}"></label>
+        <label>Sale Price<input type="number" step="0.01" name="salePrice" value="${product.salePrice || ''}"></label>
+        <label>Stock<input type="number" step="1" name="stock" value="${product.stock || 0}"></label>
+      </div>
+      <div class="form-row">
+        <label>Provider
+          <select name="providerId">
+            <option value="">None</option>
+            ${AppState.providers.map(provider => `
+              <option value="${provider.id}" ${String(product.providerId) === String(provider.id) ? 'selected' : ''}>${provider.name}</option>
+            `).join('')}
+          </select>
+        </label>
+      </div>
+      <button class="btn" type="submit">Save Product</button>
+    `;
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+      if (product.id) payload.id = product.id;
+      await runWithSyncStatus(() => API.saveProduct(payload));
+      await DataStore.refresh();
+      Router.render();
+    };
+    attachSyncWatcher(form);
+    return form;
+  },
+  renderTable() {
+    const table = DOM.create('div', 'table');
+    const header = DOM.create('div', 'table-row table-header');
+    ['SKU', 'Name', 'Stock', 'Sale Price', 'Provider', 'Actions'].forEach(label => header.appendChild(DOM.create('div', '', label)));
+    table.appendChild(header);
+    AppState.products.forEach(product => {
+      const row = DOM.create('div', 'table-row');
+      row.appendChild(DOM.create('div', '', product.sku || ''));
+      row.appendChild(DOM.create('div', '', product.name || ''));
+      row.appendChild(DOM.create('div', '', product.stock ?? ''));
+      row.appendChild(DOM.create('div', '', Format.currency(product.salePrice)));
+      const provider = AppState.providers.find(item => String(item.id) === String(product.providerId));
+      row.appendChild(DOM.create('div', '', provider ? provider.name : ''));
+      const actions = DOM.create('div', 'table-actions');
+      const edit = DOM.create('button', 'link-btn', 'Edit');
+      edit.onclick = () => {
+        const page = this.render();
+        page.querySelector('form').replaceWith(this.renderForm(product));
+        document.querySelector('.main').innerHTML = '';
+        document.querySelector('.main').appendChild(page);
+      };
+      const remove = DOM.create('button', 'link-btn danger', 'Delete');
+      remove.onclick = async () => {
+        await runWithSyncStatus(() => API.deleteProduct(product.id));
+        await DataStore.refresh();
+        Router.render();
+      };
+      actions.appendChild(edit);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      table.appendChild(row);
+    });
+    return table;
+  }
+};
 
-    const categoryInput = DOM.create('input', 'form-input');
-    categoryInput.type = 'text';
-    categoryInput.placeholder = 'Category';
+const DocumentsPage = {
+  render() {
+    const container = DOM.create('div', 'page');
+    container.appendChild(DOM.create('h1', 'page-title', 'Documents'));
+    container.appendChild(this.renderForm());
+    container.appendChild(this.renderTable());
+    return container;
+  },
+  resetDraft() {
+    AppState.documentDraft = null;
+    AppState.documentItemsDraft = [];
+  },
+  renderForm(document = AppState.documentDraft || {}) {
+    const form = DOM.create('form', 'form-card');
+    form.innerHTML = `
+      <div class="form-row">
+        <label>Type
+          <select name="type">
+            ${AppState.documentTypes.map(type => `
+              <option value="${type}" ${document.type === type ? 'selected' : ''}>${type.replace('_', ' ')}</option>
+            `).join('')}
+          </select>
+        </label>
+        <label>Date<input type="date" name="date" value="${Format.date(document.date) || ''}" required></label>
+        <label>Number<input name="number" value="${document.number || ''}"></label>
+      </div>
+      <div class="form-row">
+        <label>Client
+          <select name="clientId">
+            <option value="">Select client</option>
+            ${AppState.clients.map(client => `
+              <option value="${client.id}" ${String(document.clientId) === String(client.id) ? 'selected' : ''}>${client.name}</option>
+            `).join('')}
+          </select>
+        </label>
+        <label>Provider (optional)
+          <select name="providerId">
+            <option value="">None</option>
+            ${AppState.providers.map(provider => `
+              <option value="${provider.id}" ${String(document.providerId) === String(provider.id) ? 'selected' : ''}>${provider.name}</option>
+            `).join('')}
+          </select>
+        </label>
+        <label>Status<input name="status" value="${document.status || 'open'}"></label>
+      </div>
+      <label>Notes<input name="notes" value="${document.notes || ''}"></label>
+      <div class="items-section">
+        <div class="items-header">Document Items</div>
+        <div class="items-table"></div>
+        <button class="btn secondary" type="button" id="add-item">Add Item</button>
+      </div>
+      <button class="btn" type="submit">Save Document</button>
+    `;
 
-    const noteInput = DOM.create('input', 'form-input');
-    noteInput.type = 'text';
-    noteInput.placeholder = 'Note';
+    const itemsTable = form.querySelector('.items-table');
+    const items = AppState.documentItemsDraft.length > 0
+      ? AppState.documentItemsDraft
+      : this.getItemsForDocument(document.id);
+    this.renderItems(itemsTable, items);
 
-    const recurringWrapper = DOM.create('label', 'finance-checkbox');
-    const recurringInput = DOM.create('input', '');
-    recurringInput.type = 'checkbox';
-    recurringWrapper.appendChild(recurringInput);
-    recurringWrapper.appendChild(DOM.create('span', '', 'Repeat monthly'));
-
-    const submitBtn = DOM.create('button', 'btn btn-primary');
-    submitBtn.type = 'submit';
-    submitBtn.textContent = 'Add Transaction';
-
-    form.appendChild(dateInput);
-    form.appendChild(typeSelect);
-    form.appendChild(amountInput);
-    form.appendChild(categoryInput);
-    form.appendChild(noteInput);
-    form.appendChild(recurringWrapper);
-    form.appendChild(submitBtn);
+    form.querySelector('#add-item').onclick = () => {
+      const newItem = { productId: '', description: '', quantity: 1, unitPrice: 0, discount: 0 };
+      AppState.documentItemsDraft = [...items, newItem];
+      this.renderItems(itemsTable, AppState.documentItemsDraft);
+      setSyncStatus('unsynced');
+    };
 
     form.onsubmit = async (event) => {
       event.preventDefault();
-      const record = {
-        id: this.getNextFinanceId(),
-        date: dateInput.value,
-        type: typeSelect.value,
-        amount: parseFloat(amountInput.value || '0'),
-        category: categoryInput.value,
-        note: noteInput.value,
-        recurringMonthly: recurringInput.checked
-      };
-
-      AppState.financeRecords.push(record);
-      await API.saveFinanceRecords(AppState.financeRecords);
-      Toast.success('Transaction saved');
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+      if (document.id) payload.id = document.id;
+      const itemRows = this.collectItems(itemsTable);
+      await runWithSyncStatus(() => API.saveDocument({ document: payload, items: itemRows }));
+      this.resetDraft();
+      await DataStore.refresh();
       Router.render();
     };
-
-    card.appendChild(form);
-    return card;
+    attachSyncWatcher(form);
+    return form;
   },
-
-  renderDailyBreakdown(records) {
-    const card = DOM.create('div', 'finance-card');
-    card.appendChild(DOM.create('h2', 'section-title', 'Daily Breakdown'));
-
-    if (records.length === 0) {
-      const empty = DOM.create('div', 'empty-state');
-      empty.textContent = 'No transactions for this month yet.';
-      card.appendChild(empty);
-      return card;
-    }
-
-    const grouped = {};
-    records.forEach(record => {
-      if (!grouped[record.date]) grouped[record.date] = [];
-      grouped[record.date].push(record);
-    });
-
-    const dates = Object.keys(grouped).sort();
-    const list = DOM.create('div', 'finance-daily-list');
-    dates.forEach(date => {
-      const dayRecords = grouped[date];
-      const totals = this.getTotals(dayRecords);
-      const dayCard = DOM.create('div', 'finance-day');
-      const dayHeader = DOM.create('div', 'finance-day-header');
-      dayHeader.appendChild(DOM.create('div', 'finance-day-title', date));
-      dayHeader.appendChild(DOM.create('div', 'finance-day-total',
-        `${this.formatCurrency(totals.expenses)} spent • ${this.formatCurrency(totals.income)} earned`));
-      dayCard.appendChild(dayHeader);
-
-      const items = DOM.create('div', 'finance-day-items');
-      dayRecords.forEach(record => {
-        items.appendChild(this.renderRecordRow(record));
-      });
-      dayCard.appendChild(items);
-      list.appendChild(dayCard);
-    });
-
-    card.appendChild(list);
-    return card;
-  },
-
-  renderRecurringList() {
-    const card = DOM.create('div', 'finance-card');
-    card.appendChild(DOM.create('h2', 'section-title', 'Recurring Monthly Items'));
-
-    const recurring = AppState.financeRecords.filter(record => record.recurringMonthly);
-    if (recurring.length === 0) {
-      const empty = DOM.create('div', 'empty-state');
-      empty.textContent = 'No recurring items yet.';
-      card.appendChild(empty);
-      return card;
-    }
-
-    const list = DOM.create('div', 'finance-recurring-list');
-    recurring.forEach(record => {
-      list.appendChild(this.renderRecordRow(record));
-    });
-    card.appendChild(list);
-    return card;
-  },
-
-  renderRecordRow(record) {
-    const row = DOM.create('div', 'finance-record');
-    const details = DOM.create('div', 'finance-record-details');
-    const title = record.category || record.note || 'Uncategorized';
-    details.appendChild(DOM.create('div', 'finance-record-title', title));
-    const meta = record.note && record.category ? `${record.category} • ${record.note}` : (record.note || record.category || '');
-    if (meta) details.appendChild(DOM.create('div', 'finance-record-meta', meta));
-    if (record.recurringMonthly) {
-      details.appendChild(DOM.create('span', 'finance-record-tag', 'Recurring'));
-    }
-
-    const amount = DOM.create('div', `finance-record-amount ${record.type}`,
-      `${record.type === 'expense' ? '-' : '+'}${this.formatCurrency(record.amount)}`);
-
-    const deleteBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.onclick = async (event) => {
-      event.stopPropagation();
-      if (!confirm('Delete this transaction?')) return;
-      const targetId = record.recurrenceSourceId || record.id;
-      AppState.financeRecords = AppState.financeRecords.filter(item => item.id !== targetId);
-      await API.saveFinanceRecords(AppState.financeRecords);
-      Toast.success('Transaction deleted');
-      Router.render();
-    };
-
-    row.appendChild(details);
-    row.appendChild(amount);
-    row.appendChild(deleteBtn);
-    return row;
-  },
-
-  getMonthlyRecords() {
-    return this.getMonthlyRecordsFor(AppState.financeMonth);
-  },
-
-  getMonthlyRecordsFor(date) {
-    const monthKey = this.getMonthKey(date);
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const records = [];
-
-    AppState.financeRecords.forEach(record => {
-      if (!record.date) return;
-      const recordDate = new Date(record.date);
-      if (record.recurringMonthly) {
-        const day = Math.min(recordDate.getDate(), daysInMonth);
-        const instanceDate = new Date(year, month, day);
-        records.push({
-          ...record,
-          date: this.formatDateInput(instanceDate),
-          id: `recurring-${record.id}-${monthKey}`,
-          recurrenceSourceId: record.id
-        });
-        return;
-      }
-      if (recordDate.getFullYear() === year && recordDate.getMonth() === month) {
-        records.push(record);
-      }
-    });
-
-    return records.sort((a, b) => a.date.localeCompare(b.date));
-  },
-
-  getTotals(records) {
-    return records.reduce((acc, record) => {
-      const amount = Number(record.amount) || 0;
-      if (record.type === 'income') acc.income += amount;
-      else acc.expenses += amount;
-      acc.net = acc.income - acc.expenses;
-      return acc;
-    }, { income: 0, expenses: 0, net: 0 });
-  },
-
-  getMonthKey(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-  },
-
-  formatDateInput(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  },
-
-  formatCurrency(value) {
-    const formatter = new Intl.NumberFormat('fr-MA', {
-      style: 'currency',
-      currency: 'MAD'
-    });
-    return formatter.format(Number(value) || 0);
-  },
-
-  getMonthlyBudget(monthKey) {
-    return AppState.financeSettings[monthKey] || 0;
-  },
-
-  getNextFinanceId() {
-    const ids = AppState.financeRecords.map(record => Number(record.id)).filter(Number.isFinite);
-    const maxId = ids.length > 0 ? Math.max(...ids) : 0;
-    return maxId + 1;
-  }
-};
-
-const ReferenceTabs = {
-  open(tab) {
-    AppState.referenceTab = tab;
-    AppState.currentPage = 'reference';
-    Sidebar.render();
-    Router.render();
-  }
-};
-
-const ReferencePage = {
-  render() {
-    const container = DOM.create('div', '');
-
-    const header = DOM.create('div', 'page-header');
-    header.appendChild(DOM.create('h1', 'page-title', 'Reference'));
-    header.appendChild(DOM.create('p', 'page-subtitle', 'Manage objectives, categories, and statuses'));
+  renderItems(container, items) {
+    container.innerHTML = '';
+    const header = DOM.create('div', 'items-row items-header-row');
+    ['Product', 'Description', 'Qty', 'Unit Price', 'Discount', 'Actions'].forEach(label => header.appendChild(DOM.create('div', '', label)));
     container.appendChild(header);
-
-    const tabs = DOM.create('div', 'reference-tabs');
-    const tabList = [
-      { id: 'objectives', label: 'Objectives' },
-      { id: 'categories', label: 'Categories' },
-      { id: 'statuses', label: 'Statuses' }
-    ];
-
-    tabList.forEach(tab => {
-      const tabBtn = DOM.create('button', 'reference-tab');
-      tabBtn.textContent = tab.label;
-      if (AppState.referenceTab === tab.id) tabBtn.classList.add('active');
-      tabBtn.onclick = () => {
-        AppState.referenceTab = tab.id;
+    items.forEach((item, index) => {
+      const row = DOM.create('div', 'items-row');
+      row.innerHTML = `
+        <div>
+          <select name="productId">
+            <option value="">Select</option>
+            ${AppState.products.map(product => `
+              <option value="${product.id}" ${String(item.productId) === String(product.id) ? 'selected' : ''}>${product.name}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div><input name="description" value="${item.description || ''}"></div>
+        <div><input type="number" step="1" name="quantity" value="${item.quantity || 0}"></div>
+        <div><input type="number" step="0.01" name="unitPrice" value="${item.unitPrice || 0}"></div>
+        <div><input type="number" step="0.01" name="discount" value="${item.discount || 0}"></div>
+        <div><button class="link-btn danger" type="button">Remove</button></div>
+      `;
+      row.querySelector('button').onclick = () => {
+        const updated = items.filter((_, idx) => idx !== index);
+        AppState.documentItemsDraft = updated;
+        this.renderItems(container, updated);
+        setSyncStatus('unsynced');
+      };
+      container.appendChild(row);
+    });
+    AppState.documentItemsDraft = items;
+  },
+  collectItems(container) {
+    const rows = [...container.querySelectorAll('.items-row')].slice(1);
+    return rows.map(row => {
+      const productId = row.querySelector('select[name="productId"]').value;
+      const description = row.querySelector('input[name="description"]').value;
+      const quantity = row.querySelector('input[name="quantity"]').value;
+      const unitPrice = row.querySelector('input[name="unitPrice"]').value;
+      const discount = row.querySelector('input[name="discount"]').value;
+      return { productId, description, quantity, unitPrice, discount };
+    }).filter(item => item.productId || item.description);
+  },
+  getItemsForDocument(documentId) {
+    if (!documentId) return [];
+    return AppState.documentItems.filter(item => String(item.documentId) === String(documentId));
+  },
+  renderTable() {
+    const table = DOM.create('div', 'table');
+    const header = DOM.create('div', 'table-row table-header');
+    ['Type', 'Number', 'Client', 'Date', 'Total', 'Actions'].forEach(label => header.appendChild(DOM.create('div', '', label)));
+    table.appendChild(header);
+    AppState.documents.forEach(doc => {
+      const row = DOM.create('div', 'table-row');
+      row.appendChild(DOM.create('div', '', doc.type || ''));
+      row.appendChild(DOM.create('div', '', doc.number || ''));
+      const client = AppState.clients.find(item => String(item.id) === String(doc.clientId));
+      row.appendChild(DOM.create('div', '', client ? client.name : ''));
+      row.appendChild(DOM.create('div', '', Format.date(doc.date)));
+      row.appendChild(DOM.create('div', '', Format.currency(doc.total)));
+      const actions = DOM.create('div', 'table-actions');
+      const edit = DOM.create('button', 'link-btn', 'Edit');
+      edit.onclick = () => {
+        AppState.documentDraft = doc;
+        AppState.documentItemsDraft = this.getItemsForDocument(doc.id);
         Router.render();
       };
-      tabs.appendChild(tabBtn);
+      const remove = DOM.create('button', 'link-btn danger', 'Delete');
+      remove.onclick = async () => {
+        await runWithSyncStatus(() => API.deleteDocument(doc.id));
+        await DataStore.refresh();
+        Router.render();
+      };
+      actions.appendChild(edit);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      table.appendChild(row);
     });
-
-    container.appendChild(tabs);
-
-    const content = DOM.create('div', 'reference-content');
-    if (AppState.referenceTab === 'categories') {
-      content.appendChild(CategoriesPage.render());
-    } else if (AppState.referenceTab === 'statuses') {
-      content.appendChild(StatusesPage.render());
-    } else {
-      content.appendChild(ObjectivesPage.render());
-    }
-
-    container.appendChild(content);
-    return container;
+    return table;
   }
 };
 
-// Objectives Page
-const ObjectivesPage = {
+const InventoryPage = {
   render() {
-    const container = DOM.create('div', '');
-    
-    const header = DOM.create('div', 'page-header');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    
-    const titleSection = DOM.create('div', '');
-    titleSection.appendChild(DOM.create('h1', 'page-title', 'Objectives'));
-    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your objectives and goals'));
-    header.appendChild(titleSection);
-    
-    const addBtn = DOM.create('button', 'btn btn-primary');
-    addBtn.textContent = '+ Add Objective';
-    addBtn.onclick = () => ObjectiveModal.show();
-    header.appendChild(addBtn);
-    
-    container.appendChild(header);
-
-    const objectivesList = DOM.create('div', 'objectives-list');
-    
-    if (AppState.objectives.length === 0) {
-      const emptyState = DOM.create('div', 'empty-state');
-      emptyState.style.textAlign = 'center';
-      emptyState.style.padding = '3rem';
-      emptyState.style.color = '#6b7280';
-      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No objectives yet</p><p>Create your first objective to get started</p>';
-      objectivesList.appendChild(emptyState);
-    } else {
-      AppState.objectives.forEach(objective => {
-        objectivesList.appendChild(this.renderObjective(objective));
-      });
-    }
-    
-    container.appendChild(objectivesList);
-
+    const container = DOM.create('div', 'page');
+    container.appendChild(DOM.create('h1', 'page-title', 'Inventory'));
+    const table = DOM.create('div', 'table');
+    const header = DOM.create('div', 'table-row table-header');
+    ['SKU', 'Product', 'Stock', 'Unit', 'Sale Price', 'Provider'].forEach(label => header.appendChild(DOM.create('div', '', label)));
+    table.appendChild(header);
+    AppState.inventory.forEach(item => {
+      const row = DOM.create('div', 'table-row');
+      row.appendChild(DOM.create('div', '', item.sku || ''));
+      row.appendChild(DOM.create('div', '', item.name || ''));
+      row.appendChild(DOM.create('div', '', item.stock));
+      row.appendChild(DOM.create('div', '', item.unit || ''));
+      row.appendChild(DOM.create('div', '', Format.currency(item.salePrice)));
+      const provider = AppState.providers.find(provider => String(provider.id) === String(item.providerId));
+      row.appendChild(DOM.create('div', '', provider ? provider.name : ''));
+      table.appendChild(row);
+    });
+    container.appendChild(table);
     return container;
-  },
-
-  renderObjective(objective) {
-    const card = DOM.create('div', 'objective-card');
-    card.style.borderLeftColor = objective.color || '#3b82f6';
-    
-    const header = DOM.create('div', 'objective-header');
-    const titleSection = DOM.create('div', '');
-    titleSection.appendChild(DOM.create('h3', 'objective-title', objective.name));
-    if (objective.description) {
-      titleSection.appendChild(DOM.create('p', 'objective-description', objective.description));
-    }
-    if (objective.category) {
-      const categoryBadge = DOM.create('span', 'task-category');
-      categoryBadge.textContent = `📁 ${objective.category}`;
-      categoryBadge.style.marginTop = '0.5rem';
-      categoryBadge.style.display = 'inline-block';
-      titleSection.appendChild(categoryBadge);
-    }
-    if (objective.dueDate) {
-      const dueBadge = DOM.create('span', 'task-objective');
-      dueBadge.textContent = `📅 Due ${objective.dueDate}`;
-      dueBadge.style.marginTop = '0.5rem';
-      dueBadge.style.display = 'inline-block';
-      titleSection.appendChild(dueBadge);
-    }
-    header.appendChild(titleSection);
-    
-    const actions = DOM.create('div', 'objective-actions');
-    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    editBtn.textContent = 'Edit';
-    editBtn.onclick = () => ObjectiveModal.show(objective);
-    actions.appendChild(editBtn);
-    
-    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.onclick = () => this.deleteObjective(objective);
-    actions.appendChild(deleteBtn);
-    
-    header.appendChild(actions);
-    card.appendChild(header);
-
-    // Show tasks with this objective
-    const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
-    if (tasksWithObjective.length > 0) {
-      const tasksSection = DOM.create('div', 'objective-tasks');
-      tasksSection.appendChild(DOM.create('p', 'objective-tasks-label', `Tasks: ${tasksWithObjective.length}`));
-      const taskList = DOM.create('div', 'objective-task-list');
-      tasksWithObjective.slice(0, 5).forEach(task => {
-        const taskItem = DOM.create('div', 'objective-task-item');
-        taskItem.textContent = task.task;
-        taskItem.onclick = () => {
-          Router.navigate('tasks');
-          setTimeout(() => TaskModal.show(task), 100);
-        };
-        taskList.appendChild(taskItem);
-      });
-      if (tasksWithObjective.length > 5) {
-        const more = DOM.create('div', 'objective-task-more');
-        more.textContent = `+${tasksWithObjective.length - 5} more`;
-        taskList.appendChild(more);
-      }
-      tasksSection.appendChild(taskList);
-      card.appendChild(tasksSection);
-    }
-
-    return card;
-  },
-
-  async deleteObjective(objective) {
-    if (!confirm(`Are you sure you want to delete "${objective.name}"?`)) return;
-    
-    try {
-      await API.deleteObjective(objective.id);
-      AppState.objectives = AppState.objectives.filter(o => o.id !== objective.id);
-      const tasksUpdated = updateTaskReferences('objective', objective.name, '');
-      if (tasksUpdated) {
-        await API.saveTasks(AppState.tasks);
-      }
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Objective deleted');
-    } catch (error) {
-      console.error('Error deleting objective:', error);
-      Toast.error('Error deleting objective. Please try again.');
-    }
   }
 };
 
-// Objective Modal
-const ObjectiveModal = {
-  show(objective = null, onSaveCallback = null) {
-    const overlay = DOM.create('div', 'modal-overlay active');
-    overlay.onclick = (e) => {
-      if (e.target === overlay) this.hide();
-    };
-
-    const modal = DOM.create('div', 'modal');
-    
-    const modalHeader = DOM.create('div', 'modal-header');
-    modalHeader.appendChild(DOM.create('h2', 'modal-title', objective ? 'Edit Objective' : 'New Objective'));
-    const closeBtn = DOM.create('button', 'modal-close');
-    closeBtn.innerHTML = DOM.getIconSVG('close');
-    closeBtn.onclick = () => this.hide();
-    modalHeader.appendChild(closeBtn);
-    modal.appendChild(modalHeader);
-
-    const form = DOM.create('form', '');
-    
-    // Objective name
-    const nameGroup = DOM.create('div', 'form-group');
-    nameGroup.appendChild(DOM.create('label', 'form-label', 'Objective Name'));
-    const nameInput = DOM.create('input', 'form-input');
-    nameInput.type = 'text';
-    nameInput.name = 'name';
-    nameInput.value = objective?.name || '';
-    nameInput.required = true;
-    nameInput.placeholder = 'e.g., Work, Personal, Health';
-    nameGroup.appendChild(nameInput);
-    form.appendChild(nameGroup);
-
-    // Description
-    const descGroup = DOM.create('div', 'form-group');
-    descGroup.appendChild(DOM.create('label', 'form-label', 'Description'));
-    const descInput = DOM.create('textarea', 'form-input');
-    descInput.name = 'description';
-    descInput.value = objective?.description || '';
-    descInput.rows = 3;
-    descInput.style.minHeight = '80px';
-    descInput.placeholder = 'Optional description for this objective';
-    descGroup.appendChild(descInput);
-    form.appendChild(descGroup);
-
-    // Category
-    const categoryGroup = DOM.create('div', 'form-group');
-    categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
-    const categorySelect = DOM.create('select', 'form-select');
-    categorySelect.name = 'category';
-    
-    const noneCategoryOption = DOM.create('option', '');
-    noneCategoryOption.value = '';
-    noneCategoryOption.textContent = 'None';
-    if (!objective?.category) noneCategoryOption.selected = true;
-    categorySelect.appendChild(noneCategoryOption);
-    
-    AppState.categories.forEach(cat => {
-      const option = DOM.create('option', '');
-      option.value = cat.name;
-      option.textContent = cat.name;
-      if (objective?.category === cat.name) option.selected = true;
-      categorySelect.appendChild(option);
-    });
-    
-    categoryGroup.appendChild(categorySelect);
-    
-    const newCategoryBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newCategoryBtn.type = 'button';
-    newCategoryBtn.textContent = '+ New Category';
-    newCategoryBtn.style.marginTop = '0.5rem';
-    newCategoryBtn.onclick = () => {
-      this.hide();
-      CategoryModal.show(null, (newCategory) => {
-        this.show(objective);
-      });
-    };
-    categoryGroup.appendChild(newCategoryBtn);
-    form.appendChild(categoryGroup);
-
-    // Due date
-    const dueGroup = DOM.create('div', 'form-group');
-    dueGroup.appendChild(DOM.create('label', 'form-label', 'Objective Due Date'));
-    const dueInput = DOM.create('input', 'form-input');
-    dueInput.type = 'date';
-    dueInput.name = 'dueDate';
-    dueInput.value = objective?.dueDate || '';
-    dueGroup.appendChild(dueInput);
-    form.appendChild(dueGroup);
-
-    // Color
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.name = 'color';
-    colorInput.value = objective?.color || '#3b82f6';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
-
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      this.save(objective, new FormData(form), onSaveCallback);
-    };
-
-    modal.appendChild(form);
-
-    const footer = DOM.create('div', 'modal-footer');
-    const saveBtn = DOM.create('button', 'btn btn-primary');
-    saveBtn.type = 'submit';
-    saveBtn.textContent = 'Save';
-    saveBtn.onclick = () => form.requestSubmit();
-    footer.appendChild(saveBtn);
-    
-    const cancelBtn = DOM.create('button', 'btn btn-secondary');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = () => this.hide();
-    footer.appendChild(cancelBtn);
-    
-    modal.appendChild(footer);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-  },
-
-  hide() {
-    const overlay = document.querySelector('.modal-overlay');
-    if (overlay) overlay.remove();
-  },
-
-  async save(objective, formData, callback) {
-    const objectiveData = {
-      name: formData.get('name'),
-      description: formData.get('description'),
-      color: formData.get('color'),
-      category: formData.get('category') || '',
-      dueDate: formData.get('dueDate') || ''
-    };
-    const previousName = objective?.name || '';
-
-    try {
-      if (objective) {
-        objectiveData.id = objective.id;
-        await API.updateObjective(objectiveData);
-        const index = AppState.objectives.findIndex(o => o.id === objective.id);
-        AppState.objectives[index] = objectiveData;
-        if (previousName && previousName !== objectiveData.name) {
-          const tasksUpdated = updateTaskReferences('objective', previousName, objectiveData.name);
-          if (tasksUpdated) {
-            await API.saveTasks(AppState.tasks);
-          }
-        }
-      } else {
-        const newId = await API.addObjective(objectiveData);
-        objectiveData.id = newId;
-        AppState.objectives.push(objectiveData);
-      }
-      
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      if (callback) callback(objectiveData);
-      Toast.success('Objective saved');
-    } catch (error) {
-      console.error('Error saving objective:', error);
-      Toast.error('Error saving objective. Please try again.');
-    }
-  }
-};
-
-// Categories Page
-const CategoriesPage = {
-  render() {
-    const container = DOM.create('div', '');
-    
-    const header = DOM.create('div', 'page-header');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    
-    const titleSection = DOM.create('div', '');
-    titleSection.appendChild(DOM.create('h1', 'page-title', 'Categories'));
-    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your categories'));
-    header.appendChild(titleSection);
-    
-    const addBtn = DOM.create('button', 'btn btn-primary');
-    addBtn.textContent = '+ Add Category';
-    addBtn.onclick = () => CategoryModal.show();
-    header.appendChild(addBtn);
-    
-    container.appendChild(header);
-
-    const categoriesList = DOM.create('div', 'objectives-list');
-    
-    if (AppState.categories.length === 0) {
-      const emptyState = DOM.create('div', 'empty-state');
-      emptyState.style.textAlign = 'center';
-      emptyState.style.padding = '3rem';
-      emptyState.style.color = '#6b7280';
-      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No categories yet</p><p>Create your first category to get started</p>';
-      categoriesList.appendChild(emptyState);
-    } else {
-      AppState.categories.forEach(category => {
-        categoriesList.appendChild(this.renderCategory(category));
-      });
-    }
-    
-    container.appendChild(categoriesList);
-
-    return container;
-  },
-
-  renderCategory(category) {
-    const card = DOM.create('div', 'objective-card');
-    card.style.borderLeftColor = category.color || '#3b82f6';
-    
-    const header = DOM.create('div', 'objective-header');
-    const titleSection = DOM.create('div', '');
-    titleSection.appendChild(DOM.create('h3', 'objective-title', category.name));
-    header.appendChild(titleSection);
-    
-    const actions = DOM.create('div', 'objective-actions');
-    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    editBtn.textContent = 'Edit';
-    editBtn.onclick = () => CategoryModal.show(category);
-    actions.appendChild(editBtn);
-    
-    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.onclick = () => this.deleteCategory(category);
-    actions.appendChild(deleteBtn);
-    
-    header.appendChild(actions);
-    card.appendChild(header);
-
-    // Show objectives with this category
-    const objectivesWithCategory = AppState.objectives.filter(o => o.category === category.name);
-    if (objectivesWithCategory.length > 0) {
-      const objectivesSection = DOM.create('div', 'objective-tasks');
-      objectivesSection.appendChild(DOM.create('p', 'objective-tasks-label', `Objectives: ${objectivesWithCategory.length}`));
-      const objectiveList = DOM.create('div', 'objective-task-list');
-      objectivesWithCategory.forEach(objective => {
-        const objectiveItem = DOM.create('div', 'objective-task-item');
-        objectiveItem.textContent = objective.name;
-        objectiveItem.onclick = () => {
-          ReferenceTabs.open('objectives');
-          setTimeout(() => ObjectiveModal.show(objective), 100);
-        };
-        objectiveList.appendChild(objectiveItem);
-      });
-      objectivesSection.appendChild(objectiveList);
-      card.appendChild(objectivesSection);
-    }
-
-    return card;
-  },
-
-  async deleteCategory(category) {
-    if (!confirm(`Are you sure you want to delete "${category.name}"?`)) return;
-    
-    try {
-      await API.deleteCategory(category.id);
-      AppState.categories = AppState.categories.filter(c => c.id !== category.id);
-      const objectivesToUpdate = AppState.objectives.filter(o => o.category === category.name);
-      objectivesToUpdate.forEach(objective => {
-        objective.category = '';
-      });
-      if (objectivesToUpdate.length > 0) {
-        await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
-      }
-      const tasksUpdated = updateTaskReferences('category', category.name, '');
-      if (tasksUpdated) {
-        await API.saveTasks(AppState.tasks);
-      }
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Category deleted');
-    } catch (error) {
-      console.error('Error deleting category:', error);
-      Toast.error('Error deleting category. Please try again.');
-    }
-  }
-};
-
-// Category Modal
-const CategoryModal = {
-  show(category = null, onSaveCallback = null) {
-    const overlay = DOM.create('div', 'modal-overlay active');
-    overlay.onclick = (e) => {
-      if (e.target === overlay) this.hide();
-    };
-
-    const modal = DOM.create('div', 'modal');
-    
-    const modalHeader = DOM.create('div', 'modal-header');
-    modalHeader.appendChild(DOM.create('h2', 'modal-title', category ? 'Edit Category' : 'New Category'));
-    const closeBtn = DOM.create('button', 'modal-close');
-    closeBtn.innerHTML = DOM.getIconSVG('close');
-    closeBtn.onclick = () => this.hide();
-    modalHeader.appendChild(closeBtn);
-    modal.appendChild(modalHeader);
-
-    const form = DOM.create('form', '');
-    
-    // Category name
-    const nameGroup = DOM.create('div', 'form-group');
-    nameGroup.appendChild(DOM.create('label', 'form-label', 'Category Name'));
-    const nameInput = DOM.create('input', 'form-input');
-    nameInput.type = 'text';
-    nameInput.name = 'name';
-    nameInput.value = category?.name || '';
-    nameInput.required = true;
-    nameInput.placeholder = 'e.g., Work, Personal, Health';
-    nameGroup.appendChild(nameInput);
-    form.appendChild(nameGroup);
-
-    // Color
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.name = 'color';
-    colorInput.value = category?.color || '#3b82f6';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
-
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      this.save(category, new FormData(form), onSaveCallback);
-    };
-
-    modal.appendChild(form);
-
-    const footer = DOM.create('div', 'modal-footer');
-    const saveBtn = DOM.create('button', 'btn btn-primary');
-    saveBtn.type = 'submit';
-    saveBtn.textContent = 'Save';
-    saveBtn.onclick = () => form.requestSubmit();
-    footer.appendChild(saveBtn);
-    
-    const cancelBtn = DOM.create('button', 'btn btn-secondary');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = () => this.hide();
-    footer.appendChild(cancelBtn);
-    
-    modal.appendChild(footer);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-  },
-
-  hide() {
-    const overlay = document.querySelector('.modal-overlay');
-    if (overlay) overlay.remove();
-  },
-
-  async save(category, formData, callback) {
-    const categoryData = {
-      name: formData.get('name'),
-      color: formData.get('color')
-    };
-    const previousName = category?.name || '';
-
-    try {
-      if (category) {
-        categoryData.id = category.id;
-        await API.updateCategory(categoryData);
-        const index = AppState.categories.findIndex(c => c.id === category.id);
-        AppState.categories[index] = categoryData;
-        if (previousName && previousName !== categoryData.name) {
-          const objectivesToUpdate = AppState.objectives.filter(o => o.category === previousName);
-          objectivesToUpdate.forEach(objective => {
-            objective.category = categoryData.name;
-          });
-          if (objectivesToUpdate.length > 0) {
-            await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
-          }
-          const tasksUpdated = updateTaskReferences('category', previousName, categoryData.name);
-          if (tasksUpdated) {
-            await API.saveTasks(AppState.tasks);
-          }
-        }
-      } else {
-        const newId = await API.addCategory(categoryData);
-        categoryData.id = newId;
-        AppState.categories.push(categoryData);
-      }
-      
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      if (callback) callback(categoryData);
-      Toast.success('Category saved');
-    } catch (error) {
-      console.error('Error saving category:', error);
-      Toast.error('Error saving category. Please try again.');
-    }
-  }
-};
-
-// Statuses Page
-const StatusesPage = {
-  render() {
-    const container = DOM.create('div', '');
-    
-    const header = DOM.create('div', 'page-header');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    
-    const titleSection = DOM.create('div', '');
-    titleSection.appendChild(DOM.create('h1', 'page-title', 'Statuses'));
-    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your task statuses'));
-    header.appendChild(titleSection);
-    
-    const addBtn = DOM.create('button', 'btn btn-primary');
-    addBtn.textContent = '+ Add Status';
-    addBtn.onclick = () => StatusModal.show();
-    header.appendChild(addBtn);
-    
-    container.appendChild(header);
-
-    const statusesList = DOM.create('div', 'objectives-list');
-    
-    if (AppState.statuses.length === 0) {
-      const emptyState = DOM.create('div', 'empty-state');
-      emptyState.style.textAlign = 'center';
-      emptyState.style.padding = '3rem';
-      emptyState.style.color = '#6b7280';
-      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No statuses yet</p><p>Create your first status to get started</p>';
-      statusesList.appendChild(emptyState);
-    } else {
-      AppState.statuses.forEach(status => {
-        statusesList.appendChild(this.renderStatus(status));
-      });
-    }
-    
-    container.appendChild(statusesList);
-
-    return container;
-  },
-
-  renderStatus(status) {
-    const card = DOM.create('div', 'objective-card');
-    card.style.borderLeftColor = status.color || '#3b82f6';
-    
-    const header = DOM.create('div', 'objective-header');
-    const titleSection = DOM.create('div', '');
-    const titleDiv = DOM.create('div', '');
-    titleDiv.style.display = 'flex';
-    titleDiv.style.alignItems = 'center';
-    titleDiv.style.gap = '0.5rem';
-    
-    const statusDot = DOM.create('div', '');
-    statusDot.style.width = '12px';
-    statusDot.style.height = '12px';
-    statusDot.style.borderRadius = '50%';
-    statusDot.style.backgroundColor = status.color || '#3b82f6';
-    titleDiv.appendChild(statusDot);
-    titleDiv.appendChild(DOM.create('h3', 'objective-title', status.name.charAt(0).toUpperCase() + status.name.slice(1).replace('-', ' ')));
-    titleSection.appendChild(titleDiv);
-    header.appendChild(titleSection);
-    
-    const actions = DOM.create('div', 'objective-actions');
-    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    editBtn.textContent = 'Edit';
-    editBtn.onclick = () => StatusModal.show(status);
-    actions.appendChild(editBtn);
-    
-    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.onclick = () => this.deleteStatus(status);
-    actions.appendChild(deleteBtn);
-    
-    header.appendChild(actions);
-    card.appendChild(header);
-
-    // Show tasks with this status
-    const tasksWithStatus = AppState.tasks.filter(t => t.status === status.name);
-    if (tasksWithStatus.length > 0) {
-      const tasksSection = DOM.create('div', 'objective-tasks');
-      tasksSection.appendChild(DOM.create('p', 'objective-tasks-label', `Tasks: ${tasksWithStatus.length}`));
-      const taskList = DOM.create('div', 'objective-task-list');
-      tasksWithStatus.slice(0, 5).forEach(task => {
-        const taskItem = DOM.create('div', 'objective-task-item');
-        taskItem.textContent = task.task;
-        taskItem.onclick = () => {
-          Router.navigate('tasks');
-          setTimeout(() => TaskModal.show(task), 100);
-        };
-        taskList.appendChild(taskItem);
-      });
-      if (tasksWithStatus.length > 5) {
-        const more = DOM.create('div', 'objective-task-more');
-        more.textContent = `+${tasksWithStatus.length - 5} more`;
-        taskList.appendChild(more);
-      }
-      tasksSection.appendChild(taskList);
-      card.appendChild(tasksSection);
-    }
-
-    return card;
-  },
-
-  async deleteStatus(status) {
-    if (!confirm(`Are you sure you want to delete "${status.name}"?`)) return;
-    
-    try {
-      await API.deleteStatus(status.id);
-      AppState.statuses = AppState.statuses.filter(s => s.id !== status.id);
-      const fallbackStatus = AppState.statuses.find(s => s.name === 'pending') ? 'pending' : '';
-      const tasksUpdated = updateTaskReferences('status', status.name, fallbackStatus);
-      if (tasksUpdated) {
-        await API.saveTasks(AppState.tasks);
-      }
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Status deleted');
-    } catch (error) {
-      console.error('Error deleting status:', error);
-      Toast.error('Error deleting status. Please try again.');
-    }
-  }
-};
-
-// Status Modal
-const StatusModal = {
-  show(status = null, onSaveCallback = null) {
-    const overlay = DOM.create('div', 'modal-overlay active');
-    overlay.onclick = (e) => {
-      if (e.target === overlay) this.hide();
-    };
-
-    const modal = DOM.create('div', 'modal');
-    
-    const modalHeader = DOM.create('div', 'modal-header');
-    modalHeader.appendChild(DOM.create('h2', 'modal-title', status ? 'Edit Status' : 'New Status'));
-    const closeBtn = DOM.create('button', 'modal-close');
-    closeBtn.innerHTML = DOM.getIconSVG('close');
-    closeBtn.onclick = () => this.hide();
-    modalHeader.appendChild(closeBtn);
-    modal.appendChild(modalHeader);
-
-    const form = DOM.create('form', '');
-    
-    // Status name
-    const nameGroup = DOM.create('div', 'form-group');
-    nameGroup.appendChild(DOM.create('label', 'form-label', 'Status Name'));
-    const nameInput = DOM.create('input', 'form-input');
-    nameInput.type = 'text';
-    nameInput.name = 'name';
-    nameInput.value = status?.name || '';
-    nameInput.required = true;
-    nameInput.placeholder = 'e.g., pending, completed, in-progress';
-    nameGroup.appendChild(nameInput);
-    form.appendChild(nameGroup);
-
-    // Color
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.name = 'color';
-    colorInput.value = status?.color || '#3b82f6';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
-
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      this.save(status, new FormData(form), onSaveCallback);
-    };
-
-    modal.appendChild(form);
-
-    const footer = DOM.create('div', 'modal-footer');
-    const saveBtn = DOM.create('button', 'btn btn-primary');
-    saveBtn.type = 'submit';
-    saveBtn.textContent = 'Save';
-    saveBtn.onclick = () => form.requestSubmit();
-    footer.appendChild(saveBtn);
-    
-    const cancelBtn = DOM.create('button', 'btn btn-secondary');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = () => this.hide();
-    footer.appendChild(cancelBtn);
-    
-    modal.appendChild(footer);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-  },
-
-  hide() {
-    const overlay = document.querySelector('.modal-overlay');
-    if (overlay) overlay.remove();
-  },
-
-  async save(status, formData, callback) {
-    const statusData = {
-      name: formData.get('name'),
-      color: formData.get('color')
-    };
-    const previousName = status?.name || '';
-
-    try {
-      if (status) {
-        statusData.id = status.id;
-        await API.updateStatus(statusData);
-        const index = AppState.statuses.findIndex(s => s.id === status.id);
-        AppState.statuses[index] = statusData;
-        if (previousName && previousName !== statusData.name) {
-          const tasksUpdated = updateTaskReferences('status', previousName, statusData.name);
-          if (tasksUpdated) {
-            await API.saveTasks(AppState.tasks);
-          }
-        }
-      } else {
-        const newId = await API.addStatus(statusData);
-        statusData.id = newId;
-        AppState.statuses.push(statusData);
-      }
-      
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      if (callback) callback(statusData);
-      Toast.success('Status saved');
-    } catch (error) {
-      console.error('Error saving status:', error);
-      Toast.error('Error saving status. Please try again.');
-    }
-  }
-};
-
-// Task Modal
-const TaskModal = {
-  show(task = null, onSaveCallback = null, prefillDate = null) {
-    const overlay = DOM.create('div', 'modal-overlay active');
-    overlay.onclick = (e) => {
-      if (e.target === overlay) this.hide();
-    };
-
-    const modal = DOM.create('div', 'modal');
-    
-    const modalHeader = DOM.create('div', 'modal-header');
-    modalHeader.appendChild(DOM.create('h2', 'modal-title', task ? 'Edit Task' : 'New Task'));
-    const closeBtn = DOM.create('button', 'modal-close');
-    closeBtn.innerHTML = DOM.getIconSVG('close');
-    closeBtn.onclick = () => this.hide();
-    modalHeader.appendChild(closeBtn);
-    modal.appendChild(modalHeader);
-
-    const form = DOM.create('form', '');
-    
-    // Task name
-    const taskGroup = DOM.create('div', 'form-group');
-    taskGroup.appendChild(DOM.create('label', 'form-label', 'Task Name'));
-    const taskInput = DOM.create('input', 'form-input');
-    taskInput.type = 'text';
-    taskInput.name = 'task';
-    taskInput.value = task?.task || '';
-    taskInput.required = true;
-    taskGroup.appendChild(taskInput);
-    form.appendChild(taskGroup);
-
-    // Category
-    const catGroup = DOM.create('div', 'form-group');
-    catGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
-    const catSelect = DOM.create('select', 'form-select');
-    catSelect.name = 'category';
-    
-    const noneCatOption = DOM.create('option', '');
-    noneCatOption.value = '';
-    noneCatOption.textContent = 'None';
-    if (!task?.category) noneCatOption.selected = true;
-    catSelect.appendChild(noneCatOption);
-    
-    AppState.categories.forEach(cat => {
-      const option = DOM.create('option', '');
-      option.value = cat.name;
-      option.textContent = cat.name;
-      if (task?.category === cat.name) option.selected = true;
-      catSelect.appendChild(option);
-    });
-    
-    catGroup.appendChild(catSelect);
-    
-    const newCatBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newCatBtn.type = 'button';
-    newCatBtn.textContent = '+ New Category';
-    newCatBtn.style.marginTop = '0.5rem';
-    newCatBtn.onclick = () => {
-      this.hide();
-      CategoryModal.show(null, (newCategory) => {
-        this.show(task);
-      });
-    };
-    catGroup.appendChild(newCatBtn);
-    form.appendChild(catGroup);
-
-    // Date range
-    const startDateGroup = DOM.create('div', 'form-group');
-    startDateGroup.appendChild(DOM.create('label', 'form-label', 'Start Date'));
-    const startDateInput = DOM.create('input', 'form-input');
-    startDateInput.type = 'date';
-    startDateInput.name = 'startDate';
-    startDateInput.value = task?.startDate || task?.endDate || prefillDate || '';
-    startDateGroup.appendChild(startDateInput);
-    form.appendChild(startDateGroup);
-
-    const endDateGroup = DOM.create('div', 'form-group');
-    endDateGroup.appendChild(DOM.create('label', 'form-label', 'End Date'));
-    const endDateInput = DOM.create('input', 'form-input');
-    endDateInput.type = 'date';
-    endDateInput.name = 'endDate';
-    endDateInput.value = task?.endDate || task?.startDate || prefillDate || '';
-    endDateGroup.appendChild(endDateInput);
-    form.appendChild(endDateGroup);
-
-    const repeatGroup = DOM.create('div', 'form-group');
-    repeatGroup.appendChild(DOM.create('label', 'form-label', 'Repeat'));
-    const repeatSelect = DOM.create('select', 'form-select');
-    repeatSelect.name = 'repeatType';
-    const repeatOptions = [
-      { value: 'none', label: 'No repeat' },
-      { value: 'daily', label: 'Daily' },
-      { value: 'monthly', label: 'Monthly' }
-    ];
-    repeatOptions.forEach(optionData => {
-      const option = DOM.create('option', '');
-      option.value = optionData.value;
-      option.textContent = optionData.label;
-      if ((task?.repeatType || 'none') === optionData.value) option.selected = true;
-      repeatSelect.appendChild(option);
-    });
-    repeatGroup.appendChild(repeatSelect);
-    form.appendChild(repeatGroup);
-
-    const repeatUntilGroup = DOM.create('div', 'form-group');
-    repeatUntilGroup.appendChild(DOM.create('label', 'form-label', 'Repeat Until'));
-    const repeatUntilInput = DOM.create('input', 'form-input');
-    repeatUntilInput.type = 'date';
-    repeatUntilInput.name = 'repeatUntil';
-    repeatUntilInput.value = task?.repeatUntil || '';
-    repeatUntilGroup.appendChild(repeatUntilInput);
-    form.appendChild(repeatUntilGroup);
-
-    const timeGroup = DOM.create('div', 'form-group');
-    timeGroup.appendChild(DOM.create('label', 'form-label', 'Time Range'));
-    const timeRow = DOM.create('div', 'time-range-row');
-
-    const startTimeWrap = DOM.create('div', '');
-    const startTimeLabel = DOM.create('label', 'form-label', 'Start Time');
-    const startTimeInput = DOM.create('input', 'form-input');
-    startTimeInput.type = 'time';
-    startTimeInput.name = 'startTime';
-    startTimeInput.value = task?.startTime || '';
-    startTimeWrap.appendChild(startTimeLabel);
-    startTimeWrap.appendChild(startTimeInput);
-
-    const endTimeWrap = DOM.create('div', '');
-    const endTimeLabel = DOM.create('label', 'form-label', 'End Time');
-    const endTimeInput = DOM.create('input', 'form-input');
-    endTimeInput.type = 'time';
-    endTimeInput.name = 'endTime';
-    endTimeInput.value = task?.endTime || '';
-    endTimeWrap.appendChild(endTimeLabel);
-    endTimeWrap.appendChild(endTimeInput);
-
-    timeRow.appendChild(startTimeWrap);
-    timeRow.appendChild(endTimeWrap);
-    timeGroup.appendChild(timeRow);
-    form.appendChild(timeGroup);
-
-    // Status
-    const statusGroup = DOM.create('div', 'form-group');
-    statusGroup.appendChild(DOM.create('label', 'form-label', 'Status'));
-    const statusSelect = DOM.create('select', 'form-select');
-    statusSelect.name = 'status';
-    
-    AppState.statuses.forEach(status => {
-      const option = DOM.create('option', '');
-      option.value = status.name;
-      option.textContent = status.name.charAt(0).toUpperCase() + status.name.slice(1).replace('-', ' ');
-      if (task?.status === status.name) option.selected = true;
-      statusSelect.appendChild(option);
-    });
-    
-    statusGroup.appendChild(statusSelect);
-    
-    const newStatusBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newStatusBtn.type = 'button';
-    newStatusBtn.textContent = '+ New Status';
-    newStatusBtn.style.marginTop = '0.5rem';
-    newStatusBtn.onclick = () => {
-      this.hide();
-      StatusModal.show(null, (newStatus) => {
-        this.show(task);
-      });
-    };
-    statusGroup.appendChild(newStatusBtn);
-    form.appendChild(statusGroup);
-
-    // Priority
-    const priorityGroup = DOM.create('div', 'form-group');
-    priorityGroup.appendChild(DOM.create('label', 'form-label', 'Priority'));
-    const prioritySelect = DOM.create('select', 'form-select');
-    prioritySelect.name = 'priority';
-    const priorities = [
-      { value: 'high', label: 'High' },
-      { value: 'medium', label: 'Medium' },
-      { value: 'low', label: 'Low' }
-    ];
-    priorities.forEach(priority => {
-      const option = DOM.create('option', '');
-      option.value = priority.value;
-      option.textContent = priority.label;
-      if ((task?.priority || 'medium') === priority.value) option.selected = true;
-      prioritySelect.appendChild(option);
-    });
-    priorityGroup.appendChild(prioritySelect);
-    form.appendChild(priorityGroup);
-
-    // Objective
-    const objectiveGroup = DOM.create('div', 'form-group');
-    objectiveGroup.appendChild(DOM.create('label', 'form-label', 'Objective'));
-    const objectiveSelect = DOM.create('select', 'form-select');
-    objectiveSelect.name = 'objective';
-    
-    const noneOption = DOM.create('option', '');
-    noneOption.value = '';
-    noneOption.textContent = 'None';
-    if (!task?.objective) noneOption.selected = true;
-    objectiveSelect.appendChild(noneOption);
-    
-    AppState.objectives.forEach(obj => {
-      const option = DOM.create('option', '');
-      option.value = obj.name;
-      option.textContent = obj.name;
-      if (task?.objective === obj.name) option.selected = true;
-      objectiveSelect.appendChild(option);
-    });
-    
-    objectiveGroup.appendChild(objectiveSelect);
-    
-    const newObjectiveBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newObjectiveBtn.type = 'button';
-    newObjectiveBtn.textContent = '+ New Objective';
-    newObjectiveBtn.style.marginTop = '0.5rem';
-    newObjectiveBtn.onclick = () => {
-      this.hide();
-      ObjectiveModal.show(null, (newObjective) => {
-        this.show(task);
-      });
-    };
-    objectiveGroup.appendChild(newObjectiveBtn);
-    form.appendChild(objectiveGroup);
-
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      this.save(task, new FormData(form));
-    };
-
-    modal.appendChild(form);
-
-    const footer = DOM.create('div', 'modal-footer');
-    const saveBtn = DOM.create('button', 'btn btn-primary');
-    saveBtn.type = 'submit';
-    saveBtn.textContent = 'Save';
-    saveBtn.onclick = () => form.requestSubmit();
-    footer.appendChild(saveBtn);
-    
-    const cancelBtn = DOM.create('button', 'btn btn-secondary');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = () => this.hide();
-    footer.appendChild(cancelBtn);
-    
-    modal.appendChild(footer);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-  },
-
-  hide() {
-    const overlay = document.querySelector('.modal-overlay');
-    if (overlay) overlay.remove();
-  },
-
-  async save(task, formData) {
-    const rawStartDate = formData.get('startDate') || '';
-    const rawEndDate = formData.get('endDate') || '';
-    const startDate = rawStartDate || rawEndDate;
-    const endDate = rawEndDate || startDate;
-    const taskData = {
-      id: task?.id || Date.now(),
-      task: formData.get('task'),
-      category: formData.get('category'),
-      startDate,
-      endDate,
-      startTime: formData.get('startTime') || '',
-      endTime: formData.get('endTime') || '',
-      color: getObjectiveColor(formData.get('objective')),
-      status: formData.get('status') || 'pending',
-      objective: formData.get('objective') || '',
-      priority: formData.get('priority') || 'medium',
-      repeatType: formData.get('repeatType') || 'none',
-      repeatUntil: formData.get('repeatUntil') || ''
-    };
-
-    if (task) {
-      const index = AppState.tasks.findIndex(t => t.id === task.id);
-      AppState.tasks[index] = taskData;
-    } else {
-      AppState.tasks.push(taskData);
-    }
-
-    try {
-      await API.saveTasks(AppState.tasks);
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      Sidebar.render();
-      Toast.success(task ? 'Task updated' : 'Task created');
-    } catch (error) {
-      console.error('Error saving task:', error);
-      Toast.error('Error saving task. Please try again.');
-    }
-  }
-};
-
-// Initialize App
 async function init() {
-  // Show loader
-  const loader = document.getElementById('loader');
-  if (loader) {
-    loader.classList.remove('hidden');
-  }
-  
-  try {
-    Toast.init();
-    // Load tasks, objectives, categories, statuses, and finance data
-    await DataStore.refresh();
-    
-    // Render sidebar and initial page
-    Sidebar.render();
-    Router.render();
-  } catch (error) {
-    console.error('Error initializing app:', error);
-  } finally {
-    // Hide loader after a short delay for smooth transition
-    setTimeout(() => {
-      if (loader) {
-        loader.classList.add('hidden');
-        // Remove loader from DOM after animation
-        setTimeout(() => {
-          if (loader.parentNode) {
-            loader.parentNode.removeChild(loader);
-          }
-        }, 300);
-      }
-    }, 500);
-  }
+  await DataStore.refresh();
+  Router.render();
 }
 
-// Start app when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
