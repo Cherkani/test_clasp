@@ -6,6 +6,8 @@
  * - Objectives
  * - Categories
  * - Statuses
+ * - Finance
+ * - FinanceSettings
  * 
  * Run this function to reset your entire FlowTrack structure.
  */
@@ -13,7 +15,7 @@ function resetAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // Delete existing sheets if they exist
-  const sheetNames = ['Data', 'Objectives', 'Categories', 'Statuses'];
+  const sheetNames = ['Data', 'Objectives', 'Categories', 'Statuses', 'Finance', 'FinanceSettings'];
   
   sheetNames.forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
@@ -24,29 +26,39 @@ function resetAllSheets() {
   
   // Create Data sheet
   const dataSheet = ss.insertSheet('Data');
-  dataSheet.getRange(1, 1, 1, 10).setValues([[
-    'id', 
-    'task', 
-    'category', 
-    'startDate', 
-    'startTime', 
-    'dueDate', 
-    'dueTime', 
-    'color', 
-    'status', 
-    'objective'
+  dataSheet.getRange(1, 1, 1, 15).setValues([[
+    'id',
+    'task',
+    'category',
+    'startDate',
+    'startTime',
+    'endDate',
+    'endTime',
+    'color',
+    'status',
+    'objective',
+    'priority',
+    'repeatType',
+    'repeatUntil',
+    'impactType',
+    'estimatedValue'
   ]]);
-  dataSheet.getRange(1, 1, 1, 10).setFontWeight('bold');
+  dataSheet.getRange(1, 1, 1, 15).setFontWeight('bold');
   dataSheet.setColumnWidth(1, 50);  // id
-  dataSheet.setColumnWidth(2, 200); // task
-  dataSheet.setColumnWidth(3, 100); // category
-  dataSheet.setColumnWidth(4, 100); // startDate
-  dataSheet.setColumnWidth(5, 100); // startTime
-  dataSheet.setColumnWidth(6, 100); // dueDate
-  dataSheet.setColumnWidth(7, 100); // dueTime
-  dataSheet.setColumnWidth(8, 80);  // color
-  dataSheet.setColumnWidth(9, 100); // status
-  dataSheet.setColumnWidth(10, 100); // objective
+  dataSheet.setColumnWidth(2, 220); // task
+  dataSheet.setColumnWidth(3, 120); // category
+  dataSheet.setColumnWidth(4, 110); // startDate
+  dataSheet.setColumnWidth(5, 90); // startTime
+  dataSheet.setColumnWidth(6, 110); // endDate
+  dataSheet.setColumnWidth(7, 90); // endTime
+  dataSheet.setColumnWidth(8, 90);  // color
+  dataSheet.setColumnWidth(9, 110); // status
+  dataSheet.setColumnWidth(10, 140); // objective
+  dataSheet.setColumnWidth(11, 90); // priority
+  dataSheet.setColumnWidth(12, 110); // repeatType
+  dataSheet.setColumnWidth(13, 110); // repeatUntil
+  dataSheet.setColumnWidth(14, 120); // impactType
+  dataSheet.setColumnWidth(15, 130); // estimatedValue
   
   // Create Objectives sheet
   const objectivesSheet = ss.insertSheet('Objectives');
@@ -121,12 +133,41 @@ function resetAllSheets() {
   if (sampleStatuses.length > 0) {
     statusesSheet.getRange(2, 1, sampleStatuses.length, 3).setValues(sampleStatuses);
   }
+
+  // Create Finance sheet
+  const financeSheet = ss.insertSheet('Finance');
+  financeSheet.getRange(1, 1, 1, 7).setValues([[
+    'id',
+    'date',
+    'type',
+    'amount',
+    'category',
+    'note',
+    'recurringMonthly'
+  ]]);
+  financeSheet.getRange(1, 1, 1, 7).setFontWeight('bold');
+  financeSheet.setColumnWidth(1, 60);
+  financeSheet.setColumnWidth(2, 110);
+  financeSheet.setColumnWidth(3, 90);
+  financeSheet.setColumnWidth(4, 110);
+  financeSheet.setColumnWidth(5, 140);
+  financeSheet.setColumnWidth(6, 220);
+  financeSheet.setColumnWidth(7, 140);
+
+  // Create FinanceSettings sheet
+  const financeSettingsSheet = ss.insertSheet('FinanceSettings');
+  financeSettingsSheet.getRange(1, 1, 1, 2).setValues([['monthKey', 'budget']]);
+  financeSettingsSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
+  financeSettingsSheet.setColumnWidth(1, 120);
+  financeSettingsSheet.setColumnWidth(2, 120);
   
   // Freeze header rows
   dataSheet.setFrozenRows(1);
   objectivesSheet.setFrozenRows(1);
   categoriesSheet.setFrozenRows(1);
   statusesSheet.setFrozenRows(1);
+  financeSheet.setFrozenRows(1);
+  financeSettingsSheet.setFrozenRows(1);
   
   Logger.log('All sheets have been reset and recreated successfully!');
   return 'Reset complete! All sheets have been recreated with correct structure.';
@@ -143,10 +184,24 @@ function ensureSheetsExist() {
   let dataSheet = ss.getSheetByName('Data');
   if (!dataSheet) {
     dataSheet = ss.insertSheet('Data');
-    dataSheet.getRange(1, 1, 1, 10).setValues([[
-      'id', 'task', 'category', 'startDate', 'startTime', 'dueDate', 'dueTime', 'color', 'status', 'objective'
+    dataSheet.getRange(1, 1, 1, 15).setValues([[
+      'id',
+      'task',
+      'category',
+      'startDate',
+      'startTime',
+      'endDate',
+      'endTime',
+      'color',
+      'status',
+      'objective',
+      'priority',
+      'repeatType',
+      'repeatUntil',
+      'impactType',
+      'estimatedValue'
     ]]);
-    dataSheet.getRange(1, 1, 1, 10).setFontWeight('bold');
+    dataSheet.getRange(1, 1, 1, 15).setFontWeight('bold');
   }
   
   // Ensure Objectives sheet exists
@@ -177,6 +232,22 @@ function ensureSheetsExist() {
       'id', 'name', 'color'
     ]]);
     statusesSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
+  }
+
+  let financeSheet = ss.getSheetByName('Finance');
+  if (!financeSheet) {
+    financeSheet = ss.insertSheet('Finance');
+    financeSheet.getRange(1, 1, 1, 7).setValues([[
+      'id', 'date', 'type', 'amount', 'category', 'note', 'recurringMonthly'
+    ]]);
+    financeSheet.getRange(1, 1, 1, 7).setFontWeight('bold');
+  }
+
+  let financeSettingsSheet = ss.getSheetByName('FinanceSettings');
+  if (!financeSettingsSheet) {
+    financeSettingsSheet = ss.insertSheet('FinanceSettings');
+    financeSettingsSheet.getRange(1, 1, 1, 2).setValues([['monthKey', 'budget']]);
+    financeSettingsSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
   }
   
   Logger.log('All required sheets exist!');

@@ -14,7 +14,9 @@ function seedSmokeData() {
     "objective",
     "priority",
     "repeatType",
-    "repeatUntil"
+    "repeatUntil",
+    "impactType",
+    "estimatedValue"
   ]);
 
   const objectivesSheet = ensureSheet(ss, "Objectives", [
@@ -69,12 +71,14 @@ function seedSmokeData() {
   ];
 
   const tasks = [
-    [1001, "Prep launch deck", "Work", "2025-01-05", "", "2025-01-08", "", "#5470c6", "pending", "Launch Plan", "high", "none", ""],
-    [1002, "Review roadmap", "Work", "2025-01-06", "", "2025-01-07", "", "#73c0de", "completed", "Launch Plan", "medium", "none", ""],
-    [1003, "Morning run", "Health", "2025-01-03", "", "2025-01-03", "", "#91cc75", "completed", "Fitness", "low", "daily", "2025-01-20"],
-    [1004, "Strength session", "Health", "2025-01-04", "", "2025-01-04", "", "#ef4444", "pending", "Fitness", "medium", "monthly", "2025-04-30"],
-    [1005, "Finish online course", "Learning", "2025-01-02", "", "2025-01-09", "", "#f59e0b", "in-progress", "Courses", "high", "none", ""],
-    [1006, "Plan weekend", "Personal", "2025-01-01", "", "2025-01-02", "", "#10b981", "overdue", "", "low", "none", ""]
+    [1001, "Prep launch deck", "Work", "2025-01-05", "", "2025-01-08", "", "#5470c6", "pending", "Launch Plan", "high", "none", "", "long-term", 2400],
+    [1002, "Review roadmap", "Work", "2025-01-06", "", "2025-01-07", "", "#73c0de", "completed", "Launch Plan", "medium", "none", "", "long-term", 1200],
+    [1003, "Morning run", "Health", "2025-01-03", "", "2025-01-03", "", "#91cc75", "completed", "Fitness", "low", "daily", "2025-01-20", "non-monetary", 0],
+    [1004, "Strength session", "Health", "2025-01-04", "", "2025-01-04", "", "#ef4444", "pending", "Fitness", "medium", "monthly", "2025-04-30", "non-monetary", 0],
+    [1005, "Finish online course", "Learning", "2025-01-02", "", "2025-01-09", "", "#f59e0b", "in-progress", "Courses", "high", "none", "", "long-term", 1800],
+    [1006, "Plan weekend", "Personal", "2025-01-01", "", "2025-01-02", "", "#10b981", "overdue", "", "low", "none", "", "non-monetary", 0],
+    [1007, "Outline Q1 goals", "Work", "", "", "", "", "#6366f1", "pending", "Launch Plan", "high", "none", "", "money", 3500],
+    [1008, "Brainstorm hobbies", "Personal", "", "", "", "", "#f97316", "pending", "", "medium", "none", "", "non-monetary", 0]
   ];
 
   const extraStatuses = ["pending", "completed", "overdue", "in-progress"];
@@ -102,16 +106,24 @@ function seedSmokeData() {
       extraObjectives[i % extraObjectives.length],
       extraPriorities[i % extraPriorities.length],
       i % 3 === 0 ? "daily" : "none",
-      i % 3 === 0 ? "2025-01-28" : ""
+      i % 3 === 0 ? "2025-01-28" : "",
+      i % 4 === 0 ? "money" : (i % 4 === 1 ? "long-term" : "non-monetary"),
+      i % 4 === 0 ? 800 + i * 25 : (i % 4 === 1 ? 1200 + i * 30 : 0)
     ]);
   }
 
   const financeRecords = [
+    [101, "2024-12-01", "income", 3100, "Salary", "December salary", true],
+    [102, "2024-12-05", "expense", 180, "Groceries", "Bulk shopping", false],
+    [103, "2024-12-10", "expense", 95, "Dining", "Team dinner", false],
+    [104, "2024-12-18", "expense", 220, "Utilities", "Home utilities", true],
     [1, "2025-01-01", "income", 3200, "Salary", "Monthly salary", true],
     [2, "2025-01-02", "expense", 120, "Groceries", "Weekly grocery run", false],
     [3, "2025-01-03", "expense", 60, "Transport", "Commuting", false],
     [4, "2025-01-04", "expense", 45, "Fitness", "Gym pass", true],
-    [5, "2025-01-06", "expense", 85, "Learning", "Course fee", false]
+    [5, "2025-01-06", "expense", 85, "Learning", "Course fee", false],
+    [6, "2025-01-08", "income", 420, "Freelance", "Side project", false],
+    [7, "2025-01-12", "expense", 140, "Dining", "Team lunch", false]
   ];
 
   const financeCategories = ["Groceries", "Transport", "Dining", "Fitness", "Learning", "Entertainment"];
@@ -127,9 +139,21 @@ function seedSmokeData() {
       `Sample entry ${i + 1}`,
       i % 6 === 0
     ]);
+    if (i < 6) {
+      financeRecords.push([
+        200 + i,
+        `2024-12-${day}`,
+        "expense",
+        40 + i * 12,
+        financeCategories[(i + 2) % financeCategories.length],
+        `Dec spend ${i + 1}`,
+        false
+      ]);
+    }
   }
 
   const financeSettings = [
+    ["2024-12", 1700],
     ["2025-01", 1800],
     ["2025-02", 1900]
   ];

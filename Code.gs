@@ -78,7 +78,9 @@ function getDatags() {
       status: "completed",
       priority: "medium",
       repeatType: "none",
-      repeatUntil: ""
+      repeatUntil: "",
+      impactType: "long-term",
+      estimatedValue: 1200
     },
     {
       id: 2,
@@ -92,7 +94,9 @@ function getDatags() {
       status: "completed",
       priority: "high",
       repeatType: "none",
-      repeatUntil: ""
+      repeatUntil: "",
+      impactType: "money",
+      estimatedValue: 2500
     },
     {
       id: 3,
@@ -106,7 +110,9 @@ function getDatags() {
       status: "pending",
       priority: "low",
       repeatType: "none",
-      repeatUntil: ""
+      repeatUntil: "",
+      impactType: "non-monetary",
+      estimatedValue: 0
     }
   ];
 
@@ -146,7 +152,9 @@ function getDatags() {
       objective: row[9] || '', // Add objective from column 10 (index 9)
       priority: row[10] || 'medium',
       repeatType: row[11] || 'none',
-      repeatUntil: formatDateTime(row[12], "date") || ''
+      repeatUntil: formatDateTime(row[12], "date") || '',
+      impactType: row[13] || 'non-monetary',
+      estimatedValue: Number(row[14]) || 0
     };
     return addDerivedFields(task, startDateTime, dueDateTime, newStatus);
   });
@@ -180,7 +188,9 @@ function addDatags(taskbase) {
       item.objective || '', // Add objective column
       item.priority || 'medium',
       item.repeatType || 'none',
-      item.repeatUntil || ''
+      item.repeatUntil || '',
+      item.impactType || 'non-monetary',
+      item.estimatedValue || 0
     ]);
 
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
