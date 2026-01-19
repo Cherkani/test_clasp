@@ -767,8 +767,23 @@ const Dashboard = {
     const container = DOM.create('div', '');
 
     const header = DOM.create('div', 'page-header');
-    header.appendChild(DOM.create('h1', 'page-title', 'Dashboard'));
-    header.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks & finances'));
+    const titleWrap = DOM.create('div', '');
+    titleWrap.appendChild(DOM.create('h1', 'page-title', 'Dashboard'));
+    titleWrap.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks & finances'));
+    header.appendChild(titleWrap);
+
+    const monthControl = DOM.create('div', 'dashboard-month-control');
+    const monthLabel = DOM.create('label', 'form-label', 'Month');
+    const monthInput = DOM.create('input', 'form-input');
+    monthInput.type = 'month';
+    monthInput.value = FinancePage.getMonthKey(AppState.financeMonth);
+    monthInput.onchange = (event) => {
+      AppState.financeMonth = new Date(`${event.target.value}-01`);
+      Router.render();
+    };
+    monthLabel.appendChild(monthInput);
+    monthControl.appendChild(monthLabel);
+    header.appendChild(monthControl);
     container.appendChild(header);
 
     const layout = DOM.create('div', 'dashboard-layout');
@@ -776,7 +791,7 @@ const Dashboard = {
     const sideColumn = DOM.create('aside', 'dashboard-side');
 
     const filteredTasks = TaskFilters.applySearch(AppState.tasks);
-    const calendarMonth = new Date();
+    const calendarMonth = new Date(AppState.financeMonth || new Date());
     const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
     const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
     const occurrences = getTaskOccurrences(filteredTasks, monthStart, monthEnd);
@@ -1095,8 +1110,8 @@ const Dashboard = {
     card.appendChild(DOM.create('h2', '', 'Work Insights'));
 
     const currentMonth = new Date();
-    const tasksThisMonth = this.getTasksForMonth(new Date());
-    const objectiveDueThisMonth = this.getObjectivesDueInMonth(new Date());
+    const tasksThisMonth = this.getTasksForMonth(calendarMonth);
+    const objectiveDueThisMonth = this.getObjectivesDueInMonth(calendarMonth);
     const completionRate = this.getCompletionRate(tasksThisMonth);
     const overdueCount = tasksThisMonth.filter(task => task.status === 'overdue').length;
     const productivityScore = this.getProductivityScore(tasksThisMonth, overdueCount);
