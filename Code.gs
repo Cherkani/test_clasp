@@ -634,7 +634,9 @@ function getAppData() {
   const statuses = getStatuses();
   const financeRecords = getFinanceRecords();
   const financeSettings = getFinanceSettings();
-  const stats = getDerivedStats(tasks, financeRecords, objectives, categories, statuses);
+  const events = getEvents();
+  const debts = getDebts();
+  const stats = getDerivedStats(tasks, financeRecords, objectives, categories, statuses, events, debts);
 
   return {
     tasks,
@@ -643,11 +645,263 @@ function getAppData() {
     statuses,
     financeRecords,
     financeSettings,
+    events,
+    debts,
     stats
   };
 }
 
-function getDerivedStats(tasks, financeRecords, objectives, categories, statuses) {
+// Events Functions
+function getEvents() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Events");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Events");
+    sheet.getRange(1, 1, 1, 9).setValues([[
+      "id",
+      "title",
+      "description",
+      "startDate",
+      "startTime",
+      "endDate",
+      "endTime",
+      "category",
+      "color"
+    ]]);
+    sheet.getRange(1, 1, 1, 9).setFontWeight("bold");
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  const tz = Session.getScriptTimeZone();
+  const formatDate = (value) => {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd");
+    }
+    return String(value);
+  };
+  
+  const formatTime = (value) => {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      return Utilities.formatDate(value, tz, "HH:mm:ss");
+    }
+    return String(value);
+  };
+
+  return values.slice(1)
+    .filter(row => row.join('') !== '')
+    .map(row => ({
+      id: row[0],
+      title: row[1] || '',
+      description: row[2] || '',
+      startDate: formatDate(row[3]),
+      startTime: formatTime(row[4]),
+      endDate: formatDate(row[5]),
+      endTime: formatTime(row[6]),
+      category: row[7] || '',
+      color: row[8] || '#3b82f6'
+    }));
+}
+
+function addEvent(event) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Events");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Events");
+    sheet.getRange(1, 1, 1, 9).setValues([[
+      "id", "title", "description", "startDate", "startTime", "endDate", "endTime", "category", "color"
+    ]]);
+    sheet.getRange(1, 1, 1, 9).setFontWeight("bold");
+  }
+
+  let newId = 1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    if (existingIds.length > 0) {
+      newId = Math.max(...existingIds.filter(id => id !== '' && id != null)) + 1;
+    }
+  }
+  
+  sheet.appendRow([
+    newId,
+    event.title || '',
+    event.description || '',
+    event.startDate || '',
+    event.startTime || '',
+    event.endDate || '',
+    event.endTime || '',
+    event.category || '',
+    event.color || '#3b82f6'
+  ]);
+
+  return newId;
+}
+
+function updateEvent(event) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Events");
+  if (!sheet) return false;
+
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === event.id);
+  
+  if (rowIndex > 0) {
+    sheet.getRange(rowIndex + 1, 2, 1, 8).setValues([[
+      event.title || '',
+      event.description || '',
+      event.startDate || '',
+      event.startTime || '',
+      event.endDate || '',
+      event.endTime || '',
+      event.category || '',
+      event.color || '#3b82f6'
+    ]]);
+    return true;
+  }
+  return false;
+}
+
+function deleteEvent(eventId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Events");
+  if (!sheet) return false;
+
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === eventId);
+  
+  if (rowIndex > 0) {
+    sheet.deleteRow(rowIndex + 1);
+    return true;
+  }
+  return false;
+}
+
+// Debt Functions
+function getDebts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Debts");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Debts");
+    sheet.getRange(1, 1, 1, 8).setValues([[
+      "id",
+      "person",
+      "amount",
+      "direction",
+      "description",
+      "date",
+      "status",
+      "relatedTaskId"
+    ]]);
+    sheet.getRange(1, 1, 1, 8).setFontWeight("bold");
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  const tz = Session.getScriptTimeZone();
+  const formatDate = (value) => {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd");
+    }
+    return String(value);
+  };
+
+  return values.slice(1)
+    .filter(row => row.join('') !== '')
+    .map(row => ({
+      id: row[0],
+      person: row[1] || '',
+      amount: Number(row[2]) || 0,
+      direction: row[3] || 'owed', // 'owed' = they owe me, 'owe' = I owe them
+      description: row[4] || '',
+      date: formatDate(row[5]),
+      status: row[6] || 'pending', // 'pending', 'paid', 'cancelled'
+      relatedTaskId: row[7] || null
+    }));
+}
+
+function addDebt(debt) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Debts");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Debts");
+    sheet.getRange(1, 1, 1, 8).setValues([[
+      "id", "person", "amount", "direction", "description", "date", "status", "relatedTaskId"
+    ]]);
+    sheet.getRange(1, 1, 1, 8).setFontWeight("bold");
+  }
+
+  let newId = 1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    if (existingIds.length > 0) {
+      newId = Math.max(...existingIds.filter(id => id !== '' && id != null)) + 1;
+    }
+  }
+  
+  sheet.appendRow([
+    newId,
+    debt.person || '',
+    debt.amount || 0,
+    debt.direction || 'owed',
+    debt.description || '',
+    debt.date || '',
+    debt.status || 'pending',
+    debt.relatedTaskId || ''
+  ]);
+
+  return newId;
+}
+
+function updateDebt(debt) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Debts");
+  if (!sheet) return false;
+
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === debt.id);
+  
+  if (rowIndex > 0) {
+    sheet.getRange(rowIndex + 1, 2, 1, 7).setValues([[
+      debt.person || '',
+      debt.amount || 0,
+      debt.direction || 'owed',
+      debt.description || '',
+      debt.date || '',
+      debt.status || 'pending',
+      debt.relatedTaskId || ''
+    ]]);
+    return true;
+  }
+  return false;
+}
+
+function deleteDebt(debtId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Debts");
+  if (!sheet) return false;
+
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === debtId);
+  
+  if (rowIndex > 0) {
+    sheet.deleteRow(rowIndex + 1);
+    return true;
+  }
+  return false;
+}
+
+function getDerivedStats(tasks, financeRecords, objectives, categories, statuses, events, debts) {
   const taskTotals = tasks.reduce((acc, task) => {
     acc.total += 1;
     if (task.status === "completed") acc.completed += 1;
@@ -664,9 +918,24 @@ function getDerivedStats(tasks, financeRecords, objectives, categories, statuses
     return acc;
   }, { income: 0, expenses: 0, net: 0 });
 
+  const debtTotals = debts.reduce((acc, debt) => {
+    if (debt.status === 'pending') {
+      if (debt.direction === 'owed') {
+        acc.owedToMe += debt.amount;
+      } else {
+        acc.iOwe += debt.amount;
+      }
+    }
+    return acc;
+  }, { owedToMe: 0, iOwe: 0, net: 0 });
+
+  debtTotals.net = debtTotals.owedToMe - debtTotals.iOwe;
+
   return {
     tasks: taskTotals,
     finance: financeTotals,
+    debts: debtTotals,
+    events: { total: events.length },
     reference: {
       objectives: objectives.length,
       categories: categories.length,

@@ -6,6 +6,8 @@ const AppState = {
   objectives: [],
   categories: [],
   statuses: [],
+  events: [],
+  debts: [],
   isSyncing: false,
   sidebarCollapsed: false,
   timelineView: 'month',
@@ -21,7 +23,8 @@ const AppState = {
   referenceTab: 'objectives',
   mobileSidebarOpen: false,
   taskFilters: { statuses: [], categories: [], objectives: [] },
-  financeFilters: { types: [], categories: [] }
+  financeFilters: { types: [], categories: [] },
+  eventsSidebarOpen: false
 };
 
 // Google Apps Script API
@@ -219,10 +222,90 @@ const API = {
             statuses: [],
             financeRecords: [],
             financeSettings: {},
+            events: [],
+            debts: [],
             stats: null
           });
         })
         .getAppData();
+    });
+  },
+
+  async getEvents() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching events:', error);
+          resolve([]);
+        })
+        .getEvents();
+    });
+  },
+
+  async addEvent(event) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addEvent(event);
+    });
+  },
+
+  async updateEvent(event) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateEvent(event);
+    });
+  },
+
+  async deleteEvent(eventId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteEvent(eventId);
+    });
+  },
+
+  async getDebts() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching debts:', error);
+          resolve([]);
+        })
+        .getDebts();
+    });
+  },
+
+  async addDebt(debt) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addDebt(debt);
+    });
+  },
+
+  async updateDebt(debt) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateDebt(debt);
+    });
+  },
+
+  async deleteDebt(debtId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteDebt(debtId);
     });
   }
 };
@@ -235,6 +318,8 @@ const DataStore = {
     AppState.statuses = data.statuses || [];
     AppState.financeRecords = data.financeRecords || [];
     AppState.financeSettings = data.financeSettings || {};
+    AppState.events = data.events || [];
+    AppState.debts = data.debts || [];
     AppState.stats = data.stats || null;
   },
 
@@ -609,6 +694,7 @@ const Sidebar = {
       { id: 'tasks', label: 'Tasks', icon: 'tasks' },
       { id: 'timeline', label: 'Timeline', icon: 'timeline' },
       { id: 'finance', label: 'Finance', icon: 'finance' },
+      { id: 'debts', label: 'Debts', icon: 'finance' },
       { id: 'reference', label: 'Reference', icon: 'tag' }
     ];
 
@@ -625,6 +711,19 @@ const Sidebar = {
 
     nav.appendChild(navList);
     sidebar.appendChild(nav);
+
+    // Events Button
+    if (!AppState.sidebarCollapsed) {
+      const eventsSection = DOM.create('div', 'sync-section');
+      const eventsBtn = DOM.create('button', 'sync-button sync-button-compact');
+      eventsBtn.innerHTML = DOM.getIconSVG('calendar') + ' Events';
+      eventsBtn.onclick = () => {
+        AppState.eventsSidebarOpen = !AppState.eventsSidebarOpen;
+        EventsSidebar.render();
+      };
+      eventsSection.appendChild(eventsBtn);
+      sidebar.appendChild(eventsSection);
+    }
 
     // Sync Section
     const syncSection = DOM.create('div', 'sync-section');
@@ -726,6 +825,9 @@ const Router = {
       case 'finance':
         pageContent = FinancePage.render();
         break;
+      case 'debts':
+        pageContent = DebtsPage.render();
+        break;
       case 'reference':
         pageContent = ReferencePage.render();
         break;
@@ -771,19 +873,6 @@ const Dashboard = {
     titleWrap.appendChild(DOM.create('h1', 'page-title', 'Dashboard'));
     titleWrap.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks & finances'));
     header.appendChild(titleWrap);
-
-    const monthControl = DOM.create('div', 'dashboard-month-control');
-    const monthLabel = DOM.create('label', 'form-label', 'Month');
-    const monthInput = DOM.create('input', 'form-input');
-    monthInput.type = 'month';
-    monthInput.value = FinancePage.getMonthKey(AppState.financeMonth);
-    monthInput.onchange = (event) => {
-      AppState.financeMonth = new Date(`${event.target.value}-01`);
-      Router.render();
-    };
-    monthLabel.appendChild(monthInput);
-    monthControl.appendChild(monthLabel);
-    header.appendChild(monthControl);
     container.appendChild(header);
 
     const layout = DOM.create('div', 'dashboard-layout');
@@ -791,25 +880,6 @@ const Dashboard = {
     const sideColumn = DOM.create('aside', 'dashboard-side');
 
     const filteredTasks = TaskFilters.applySearch(AppState.tasks);
-    const calendarMonth = new Date(AppState.financeMonth || new Date());
-    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-    const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
-    const occurrences = getTaskOccurrences(filteredTasks, monthStart, monthEnd);
-    const tasksByDate = {};
-    occurrences.forEach(task => {
-      const start = DateUtils.parseDate(task.occurrenceStart || task.startDate);
-      const end = DateUtils.parseDate(task.occurrenceEnd || task.endDate || task.startDate);
-      if (!start || !end) return;
-      let cursor = new Date(start);
-      while (cursor <= end) {
-        if (cursor.getMonth() === calendarMonth.getMonth() && cursor.getFullYear() === calendarMonth.getFullYear()) {
-          const key = DateUtils.formatDate(cursor);
-          if (!tasksByDate[key]) tasksByDate[key] = 0;
-          tasksByDate[key] += 1;
-        }
-        cursor = DateUtils.addDays(cursor, 1);
-      }
-    });
     const fallbackStats = {
       total: AppState.tasks.length,
       completed: AppState.tasks.filter(t => t.status === 'completed').length,
@@ -863,6 +933,8 @@ const Dashboard = {
     mainColumn.appendChild(this.renderWorkCharts());
 
     sideColumn.appendChild(this.renderFinanceSummary());
+    sideColumn.appendChild(this.renderDebtsSummary());
+    sideColumn.appendChild(this.renderEventsSummary());
     sideColumn.appendChild(this.renderFinanceRecent());
     sideColumn.appendChild(this.renderFinanceInsights());
     sideColumn.appendChild(this.renderWorkInsights());
@@ -926,6 +998,101 @@ const Dashboard = {
       progress.innerHTML = '<div class="dashboard-finance-progress-text">Set a monthly budget to track progress.</div>';
     }
     card.appendChild(progress);
+
+    return card;
+  },
+
+  renderDebtsSummary() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', '', 'Debts Summary'));
+    
+    const totals = AppState.debts.reduce((acc, debt) => {
+      if (debt.status === 'pending') {
+        if (debt.direction === 'owed') acc.owedToMe += debt.amount;
+        else acc.iOwe += debt.amount;
+      }
+      return acc;
+    }, { owedToMe: 0, iOwe: 0 });
+
+    const summary = DOM.create('div', 'dashboard-finance-summary');
+    summary.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Owed to Me</div>
+        <div class="dashboard-finance-value income">$${totals.owedToMe.toFixed(2)}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">I Owe</div>
+        <div class="dashboard-finance-value expense">$${totals.iOwe.toFixed(2)}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Net</div>
+        <div class="dashboard-finance-value ${totals.owedToMe - totals.iOwe >= 0 ? 'income' : 'expense'}">
+          $${(totals.owedToMe - totals.iOwe).toFixed(2)}
+        </div>
+      </div>
+    `;
+    card.appendChild(summary);
+
+    const viewBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    viewBtn.textContent = 'View All Debts';
+    viewBtn.style.marginTop = '1rem';
+    viewBtn.style.width = '100%';
+    viewBtn.onclick = () => Router.navigate('debts');
+    card.appendChild(viewBtn);
+
+    return card;
+  },
+
+  renderEventsSummary() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', '', 'Upcoming Events'));
+    
+    const now = new Date();
+    const upcomingEvents = AppState.events
+      .filter(event => {
+        const eventDate = DateUtils.parseDate(event.startDate || event.endDate);
+        return eventDate && eventDate >= now;
+      })
+      .sort((a, b) => {
+        const dateA = DateUtils.parseDate(a.startDate || a.endDate);
+        const dateB = DateUtils.parseDate(b.startDate || b.endDate);
+        return (dateA || new Date()) - (dateB || new Date());
+      })
+      .slice(0, 5);
+
+    if (upcomingEvents.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No upcoming events.';
+      card.appendChild(empty);
+    } else {
+      const list = DOM.create('div', 'dashboard-finance-list');
+      upcomingEvents.forEach(event => {
+        const item = DOM.create('div', 'dashboard-finance-item');
+        const title = DOM.create('div', 'dashboard-finance-item-title', event.title);
+        const date = DOM.create('div', 'dashboard-finance-item-date', 
+          `${event.startDate || ''} ${event.startTime || ''}`
+        );
+        item.appendChild(title);
+        item.appendChild(date);
+        item.onclick = () => {
+          AppState.eventsSidebarOpen = true;
+          EventsSidebar.render();
+        };
+        list.appendChild(item);
+      });
+      card.appendChild(list);
+    }
+
+    const addBtn = DOM.create('button', 'btn btn-primary btn-sm');
+    addBtn.textContent = '+ New Event';
+    addBtn.style.marginTop = '1rem';
+    addBtn.style.width = '100%';
+    addBtn.onclick = () => {
+      AppState.eventsSidebarOpen = true;
+      EventsSidebar.render();
+      EventModal.show();
+    };
+    card.appendChild(addBtn);
 
     return card;
   },
@@ -1109,12 +1276,13 @@ const Dashboard = {
     const card = DOM.create('div', 'card dashboard-finance');
     card.appendChild(DOM.create('h2', '', 'Work Insights'));
 
+    // Use all tasks instead of filtering by month
+    const allTasks = AppState.tasks;
     const currentMonth = new Date();
-    const tasksThisMonth = this.getTasksForMonth(calendarMonth);
-    const objectiveDueThisMonth = this.getObjectivesDueInMonth(calendarMonth);
-    const completionRate = this.getCompletionRate(tasksThisMonth);
-    const overdueCount = tasksThisMonth.filter(task => task.status === 'overdue').length;
-    const productivityScore = this.getProductivityScore(tasksThisMonth, overdueCount);
+    const objectiveDueThisMonth = this.getObjectivesDueInMonth(currentMonth);
+    const completionRate = this.getCompletionRate(allTasks);
+    const overdueCount = allTasks.filter(task => task.status === 'overdue').length;
+    const productivityScore = this.getProductivityScore(allTasks, overdueCount);
 
     const summary = DOM.create('div', 'dashboard-insights-grid');
     summary.innerHTML = `
@@ -1131,7 +1299,7 @@ const Dashboard = {
         <div class="dashboard-finance-value">${productivityScore}</div>
       </div>
       <div>
-        <div class="dashboard-finance-label">Objectives Due</div>
+        <div class="dashboard-finance-label">Objectives Due This Month</div>
         <div class="dashboard-finance-value">${objectiveDueThisMonth.length}</div>
       </div>
     `;
@@ -1753,14 +1921,10 @@ const CalendarPage = {
     const filteredTasks = TaskFilters.applySearch(AppState.tasks);
 
     // Add calendar days (simplified - you can add full calendar logic)
+    const today = new Date();
     for (let i = 1; i <= 31; i++) {
       const day = DOM.create('div', 'calendar-day');
       day.appendChild(DOM.create('div', 'calendar-day-number', i));
-      const dateKey = DateUtils.formatDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), i));
-      const count = tasksByDate[dateKey] || 0;
-      if (count > 0) {
-        day.appendChild(DOM.create('div', 'calendar-day-tasks', `${count} tasks`));
-      }
       calendar.appendChild(day);
     }
 
@@ -4285,6 +4449,538 @@ const StatusModal = {
   }
 };
 
+// Events Sidebar
+const EventsSidebar = {
+  render() {
+    let sidebar = document.querySelector('.events-sidebar');
+    if (!sidebar) {
+      sidebar = DOM.create('div', 'events-sidebar');
+      sidebar.style.cssText = `
+        position: fixed;
+        right: ${AppState.eventsSidebarOpen ? '0' : '-400px'};
+        top: 0;
+        width: 380px;
+        height: 100vh;
+        background: white;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+        z-index: 1500;
+        transition: right 0.3s ease;
+        overflow-y: auto;
+        padding: 1.5rem;
+      `;
+      document.body.appendChild(sidebar);
+    } else {
+      sidebar.style.right = AppState.eventsSidebarOpen ? '0' : '-400px';
+    }
+
+    if (!AppState.eventsSidebarOpen) return;
+
+    sidebar.innerHTML = '';
+
+    const header = DOM.create('div', 'page-header');
+    header.style.marginBottom = '1.5rem';
+    const title = DOM.create('h2', 'page-title', 'Events');
+    const closeBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => {
+      AppState.eventsSidebarOpen = false;
+      this.render();
+    };
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    sidebar.appendChild(header);
+
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ New Event';
+    addBtn.style.marginBottom = '1rem';
+    addBtn.onclick = () => EventModal.show();
+    sidebar.appendChild(addBtn);
+
+    const eventsList = DOM.create('div', 'task-list');
+    if (AppState.events.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No events yet. Create one!';
+      eventsList.appendChild(empty);
+    } else {
+      AppState.events.forEach(event => {
+        const eventCard = DOM.create('div', 'task-item');
+        eventCard.style.borderLeftColor = event.color || '#3b82f6';
+        
+        const title = DOM.create('div', 'task-title', event.title);
+        const desc = DOM.create('div', 'text-sm text-gray-500', event.description || '');
+        const date = DOM.create('div', 'task-meta-item', 
+          `${event.startDate || ''} ${event.startTime || ''} - ${event.endDate || ''} ${event.endTime || ''}`
+        );
+        
+        const actions = DOM.create('div', 'task-actions');
+        const editBtn = DOM.create('button', 'btn btn-xs btn-secondary');
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => EventModal.show(event);
+        const deleteBtn = DOM.create('button', 'btn btn-xs btn-danger');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.onclick = () => this.deleteEvent(event.id);
+        
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        
+        eventCard.appendChild(title);
+        if (event.description) eventCard.appendChild(desc);
+        eventCard.appendChild(date);
+        eventCard.appendChild(actions);
+        eventsList.appendChild(eventCard);
+      });
+    }
+    sidebar.appendChild(eventsList);
+  },
+
+  async deleteEvent(eventId) {
+    if (!confirm('Delete this event?')) return;
+    try {
+      await API.deleteEvent(eventId);
+      await DataStore.refresh();
+      this.render();
+      Router.render();
+      Toast.success('Event deleted');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      Toast.error('Error deleting event');
+    }
+  }
+};
+
+// Event Modal
+const EventModal = {
+  show(event = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    const header = DOM.create('div', 'modal-header');
+    header.appendChild(DOM.create('h2', 'modal-title', event ? 'Edit Event' : 'New Event'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    const form = DOM.create('form', '');
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(event);
+    };
+
+    const titleGroup = DOM.create('div', 'form-group');
+    titleGroup.appendChild(DOM.create('label', 'form-label', 'Title *'));
+    const titleInput = DOM.create('input', 'form-input');
+    titleInput.type = 'text';
+    titleInput.required = true;
+    titleInput.value = event?.title || '';
+    titleInput.name = 'title';
+    titleGroup.appendChild(titleInput);
+    form.appendChild(titleGroup);
+
+    const descGroup = DOM.create('div', 'form-group');
+    descGroup.appendChild(DOM.create('label', 'form-label', 'Description'));
+    const descInput = DOM.create('textarea', 'form-input');
+    descInput.name = 'description';
+    descInput.value = event?.description || '';
+    descGroup.appendChild(descInput);
+    form.appendChild(descGroup);
+
+    const dateRow = DOM.create('div', 'time-range-row');
+    const startDateGroup = DOM.create('div', 'form-group');
+    startDateGroup.appendChild(DOM.create('label', 'form-label', 'Start Date'));
+    const startDateInput = DOM.create('input', 'form-input');
+    startDateInput.type = 'date';
+    startDateInput.value = event?.startDate || '';
+    startDateInput.name = 'startDate';
+    startDateGroup.appendChild(startDateInput);
+    dateRow.appendChild(startDateGroup);
+
+    const startTimeGroup = DOM.create('div', 'form-group');
+    startTimeGroup.appendChild(DOM.create('label', 'form-label', 'Start Time'));
+    const startTimeInput = DOM.create('input', 'form-input');
+    startTimeInput.type = 'time';
+    startTimeInput.value = event?.startTime || '';
+    startTimeInput.name = 'startTime';
+    startTimeGroup.appendChild(startTimeInput);
+    dateRow.appendChild(startTimeGroup);
+    form.appendChild(dateRow);
+
+    const endDateRow = DOM.create('div', 'time-range-row');
+    const endDateGroup = DOM.create('div', 'form-group');
+    endDateGroup.appendChild(DOM.create('label', 'form-label', 'End Date'));
+    const endDateInput = DOM.create('input', 'form-input');
+    endDateInput.type = 'date';
+    endDateInput.value = event?.endDate || '';
+    endDateInput.name = 'endDate';
+    endDateGroup.appendChild(endDateInput);
+    endDateRow.appendChild(endDateGroup);
+
+    const endTimeGroup = DOM.create('div', 'form-group');
+    endTimeGroup.appendChild(DOM.create('label', 'form-label', 'End Time'));
+    const endTimeInput = DOM.create('input', 'form-input');
+    endTimeInput.type = 'time';
+    endTimeInput.value = event?.endTime || '';
+    endTimeInput.name = 'endTime';
+    endTimeGroup.appendChild(endTimeInput);
+    endDateRow.appendChild(endTimeGroup);
+    form.appendChild(endDateRow);
+
+    const categoryGroup = DOM.create('div', 'form-group');
+    categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
+    const categorySelect = DOM.create('select', 'form-select');
+    categorySelect.name = 'category';
+    const emptyOption = DOM.create('option', '', '');
+    emptyOption.value = '';
+    emptyOption.textContent = 'None';
+    categorySelect.appendChild(emptyOption);
+    AppState.categories.forEach(cat => {
+      const option = DOM.create('option', '', cat.name);
+      option.value = cat.name;
+      if (event?.category === cat.name) option.selected = true;
+      categorySelect.appendChild(option);
+    });
+    categoryGroup.appendChild(categorySelect);
+    form.appendChild(categoryGroup);
+
+    const colorGroup = DOM.create('div', 'form-group');
+    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
+    const colorInput = DOM.create('input', 'form-input');
+    colorInput.type = 'color';
+    colorInput.value = event?.color || '#3b82f6';
+    colorInput.name = 'color';
+    colorGroup.appendChild(colorInput);
+    form.appendChild(colorGroup);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    footer.appendChild(cancelBtn);
+    footer.appendChild(saveBtn);
+    form.appendChild(footer);
+
+    modal.appendChild(form);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(event) {
+    const form = document.querySelector('.modal form');
+    const formData = new FormData(form);
+    const eventData = {
+      title: formData.get('title'),
+      description: formData.get('description') || '',
+      startDate: formData.get('startDate') || '',
+      startTime: formData.get('startTime') || '',
+      endDate: formData.get('endDate') || '',
+      endTime: formData.get('endTime') || '',
+      category: formData.get('category') || '',
+      color: formData.get('color') || '#3b82f6'
+    };
+
+    try {
+      if (event) {
+        eventData.id = event.id;
+        await API.updateEvent(eventData);
+        const index = AppState.events.findIndex(e => e.id === event.id);
+        if (index >= 0) AppState.events[index] = eventData;
+      } else {
+        const newId = await API.addEvent(eventData);
+        eventData.id = newId;
+        AppState.events.push(eventData);
+      }
+      this.hide();
+      await DataStore.refresh();
+      EventsSidebar.render();
+      Router.render();
+      Toast.success('Event saved');
+    } catch (error) {
+      console.error('Error saving event:', error);
+      Toast.error('Error saving event');
+    }
+  }
+};
+
+// Debts Page
+const DebtsPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.appendChild(DOM.create('h1', 'page-title', 'Debts'));
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ New Debt';
+    addBtn.onclick = () => DebtModal.show();
+    header.appendChild(addBtn);
+    container.appendChild(header);
+
+    const summaryCard = DOM.create('div', 'card');
+    const summaryTitle = DOM.create('h3', 'section-title', 'Summary');
+    summaryCard.appendChild(summaryTitle);
+    
+    const totals = AppState.debts.reduce((acc, debt) => {
+      if (debt.status === 'pending') {
+        if (debt.direction === 'owed') acc.owedToMe += debt.amount;
+        else acc.iOwe += debt.amount;
+      }
+      return acc;
+    }, { owedToMe: 0, iOwe: 0 });
+
+    const summaryGrid = DOM.create('div', 'dashboard-finance-summary');
+    const owedCard = DOM.create('div', 'dashboard-finance-item');
+    owedCard.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Owed to Me</div>
+        <div class="dashboard-finance-value income">$${totals.owedToMe.toFixed(2)}</div>
+      </div>
+    `;
+    const oweCard = DOM.create('div', 'dashboard-finance-item');
+    oweCard.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">I Owe</div>
+        <div class="dashboard-finance-value expense">$${totals.iOwe.toFixed(2)}</div>
+      </div>
+    `;
+    const netCard = DOM.create('div', 'dashboard-finance-item');
+    const net = totals.owedToMe - totals.iOwe;
+    netCard.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Net</div>
+        <div class="dashboard-finance-value ${net >= 0 ? 'income' : 'expense'}">$${net.toFixed(2)}</div>
+      </div>
+    `;
+    summaryGrid.appendChild(owedCard);
+    summaryGrid.appendChild(oweCard);
+    summaryGrid.appendChild(netCard);
+    summaryCard.appendChild(summaryGrid);
+    container.appendChild(summaryCard);
+
+    const listCard = DOM.create('div', 'card');
+    listCard.appendChild(DOM.create('h3', 'section-title', 'All Debts'));
+    
+    const debtsList = DOM.create('div', 'finance-daily-list');
+    if (AppState.debts.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No debts tracked yet.';
+      debtsList.appendChild(empty);
+    } else {
+      AppState.debts.forEach(debt => {
+        const debtRow = DOM.create('div', 'finance-record');
+        const details = DOM.create('div', 'finance-record-details');
+        const title = DOM.create('div', 'finance-record-title', 
+          `${debt.person} - ${debt.direction === 'owed' ? 'Owed to me' : 'I owe'}`
+        );
+        const meta = DOM.create('div', 'finance-record-meta', 
+          `${debt.date || 'No date'} | ${debt.description || 'No description'}`
+        );
+        const status = DOM.create('span', 'finance-record-tag', debt.status);
+        details.appendChild(title);
+        details.appendChild(meta);
+        details.appendChild(status);
+        
+        const amount = DOM.create('div', `finance-record-amount ${debt.direction === 'owed' ? 'income' : 'expense'}`);
+        amount.textContent = `$${debt.amount.toFixed(2)}`;
+        
+        const actions = DOM.create('div', 'finance-record-actions');
+        const editBtn = DOM.create('button', 'btn btn-xs btn-secondary');
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => DebtModal.show(debt);
+        const deleteBtn = DOM.create('button', 'btn btn-xs btn-danger');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.onclick = () => this.deleteDebt(debt.id);
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        
+        debtRow.appendChild(details);
+        debtRow.appendChild(amount);
+        debtRow.appendChild(actions);
+        debtsList.appendChild(debtRow);
+      });
+    }
+    listCard.appendChild(debtsList);
+    container.appendChild(listCard);
+
+    return container;
+  },
+
+  async deleteDebt(debtId) {
+    if (!confirm('Delete this debt record?')) return;
+    try {
+      await API.deleteDebt(debtId);
+      await DataStore.refresh();
+      Router.render();
+      Toast.success('Debt deleted');
+    } catch (error) {
+      console.error('Error deleting debt:', error);
+      Toast.error('Error deleting debt');
+    }
+  }
+};
+
+// Debt Modal
+const DebtModal = {
+  show(debt = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    const header = DOM.create('div', 'modal-header');
+    header.appendChild(DOM.create('h2', 'modal-title', debt ? 'Edit Debt' : 'New Debt'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    const form = DOM.create('form', '');
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(debt);
+    };
+
+    const personGroup = DOM.create('div', 'form-group');
+    personGroup.appendChild(DOM.create('label', 'form-label', 'Person *'));
+    const personInput = DOM.create('input', 'form-input');
+    personInput.type = 'text';
+    personInput.required = true;
+    personInput.value = debt?.person || '';
+    personInput.name = 'person';
+    personGroup.appendChild(personInput);
+    form.appendChild(personGroup);
+
+    const amountGroup = DOM.create('div', 'form-group');
+    amountGroup.appendChild(DOM.create('label', 'form-label', 'Amount *'));
+    const amountInput = DOM.create('input', 'form-input');
+    amountInput.type = 'number';
+    amountInput.step = '0.01';
+    amountInput.required = true;
+    amountInput.value = debt?.amount || '';
+    amountInput.name = 'amount';
+    amountGroup.appendChild(amountInput);
+    form.appendChild(amountGroup);
+
+    const directionGroup = DOM.create('div', 'form-group');
+    directionGroup.appendChild(DOM.create('label', 'form-label', 'Direction *'));
+    const directionSelect = DOM.create('select', 'form-select');
+    directionSelect.name = 'direction';
+    directionSelect.required = true;
+    const owedOption = DOM.create('option', '', 'Owed to me (they owe me)');
+    owedOption.value = 'owed';
+    if (debt?.direction === 'owed') owedOption.selected = true;
+    const oweOption = DOM.create('option', '', 'I owe them');
+    oweOption.value = 'owe';
+    if (debt?.direction === 'owe') oweOption.selected = true;
+    directionSelect.appendChild(owedOption);
+    directionSelect.appendChild(oweOption);
+    directionGroup.appendChild(directionSelect);
+    form.appendChild(directionGroup);
+
+    const descGroup = DOM.create('div', 'form-group');
+    descGroup.appendChild(DOM.create('label', 'form-label', 'Description'));
+    const descInput = DOM.create('textarea', 'form-input');
+    descInput.name = 'description';
+    descInput.value = debt?.description || '';
+    descGroup.appendChild(descInput);
+    form.appendChild(descGroup);
+
+    const dateGroup = DOM.create('div', 'form-group');
+    dateGroup.appendChild(DOM.create('label', 'form-label', 'Date'));
+    const dateInput = DOM.create('input', 'form-input');
+    dateInput.type = 'date';
+    dateInput.value = debt?.date || '';
+    dateInput.name = 'date';
+    dateGroup.appendChild(dateInput);
+    form.appendChild(dateGroup);
+
+    const statusGroup = DOM.create('div', 'form-group');
+    statusGroup.appendChild(DOM.create('label', 'form-label', 'Status'));
+    const statusSelect = DOM.create('select', 'form-select');
+    statusSelect.name = 'status';
+    ['pending', 'paid', 'cancelled'].forEach(status => {
+      const option = DOM.create('option', '', status);
+      option.value = status;
+      if (debt?.status === status) option.selected = true;
+      statusSelect.appendChild(option);
+    });
+    statusGroup.appendChild(statusSelect);
+    form.appendChild(statusGroup);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    footer.appendChild(cancelBtn);
+    footer.appendChild(saveBtn);
+    form.appendChild(footer);
+
+    modal.appendChild(form);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(debt) {
+    const form = document.querySelector('.modal form');
+    const formData = new FormData(form);
+    const debtData = {
+      person: formData.get('person'),
+      amount: parseFloat(formData.get('amount')) || 0,
+      direction: formData.get('direction'),
+      description: formData.get('description') || '',
+      date: formData.get('date') || '',
+      status: formData.get('status') || 'pending',
+      relatedTaskId: debt?.relatedTaskId || ''
+    };
+
+    try {
+      if (debt) {
+        debtData.id = debt.id;
+        await API.updateDebt(debtData);
+        const index = AppState.debts.findIndex(d => d.id === debt.id);
+        if (index >= 0) AppState.debts[index] = debtData;
+      } else {
+        const newId = await API.addDebt(debtData);
+        debtData.id = newId;
+        AppState.debts.push(debtData);
+      }
+      this.hide();
+      await DataStore.refresh();
+      Router.render();
+      Toast.success('Debt saved');
+    } catch (error) {
+      console.error('Error saving debt:', error);
+      Toast.error('Error saving debt');
+    }
+  }
+};
+
 // Task Modal
 const TaskModal = {
   show(task = null, onSaveCallback = null, prefillDate = null) {
@@ -4629,6 +5325,7 @@ async function init() {
     
     // Render sidebar and initial page
     Sidebar.render();
+    EventsSidebar.render();
     Router.render();
   } catch (error) {
     console.error('Error initializing app:', error);

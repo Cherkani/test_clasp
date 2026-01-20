@@ -15,7 +15,7 @@ function resetAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // Delete existing sheets if they exist
-  const sheetNames = ['Data', 'Objectives', 'Categories', 'Statuses', 'Finance', 'FinanceSettings'];
+  const sheetNames = ['Data', 'Objectives', 'Categories', 'Statuses', 'Finance', 'FinanceSettings', 'Events', 'Debts'];
   
   sheetNames.forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
@@ -160,6 +160,52 @@ function resetAllSheets() {
   financeSettingsSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
   financeSettingsSheet.setColumnWidth(1, 120);
   financeSettingsSheet.setColumnWidth(2, 120);
+
+  // Create Events sheet
+  const eventsSheet = ss.insertSheet('Events');
+  eventsSheet.getRange(1, 1, 1, 9).setValues([[
+    'id',
+    'title',
+    'description',
+    'startDate',
+    'startTime',
+    'endDate',
+    'endTime',
+    'category',
+    'color'
+  ]]);
+  eventsSheet.getRange(1, 1, 1, 9).setFontWeight('bold');
+  eventsSheet.setColumnWidth(1, 50);  // id
+  eventsSheet.setColumnWidth(2, 200); // title
+  eventsSheet.setColumnWidth(3, 250); // description
+  eventsSheet.setColumnWidth(4, 110); // startDate
+  eventsSheet.setColumnWidth(5, 90);  // startTime
+  eventsSheet.setColumnWidth(6, 110); // endDate
+  eventsSheet.setColumnWidth(7, 90);  // endTime
+  eventsSheet.setColumnWidth(8, 120); // category
+  eventsSheet.setColumnWidth(9, 80);  // color
+
+  // Create Debts sheet
+  const debtsSheet = ss.insertSheet('Debts');
+  debtsSheet.getRange(1, 1, 1, 8).setValues([[
+    'id',
+    'person',
+    'amount',
+    'direction',
+    'description',
+    'date',
+    'status',
+    'relatedTaskId'
+  ]]);
+  debtsSheet.getRange(1, 1, 1, 8).setFontWeight('bold');
+  debtsSheet.setColumnWidth(1, 50);  // id
+  debtsSheet.setColumnWidth(2, 150); // person
+  debtsSheet.setColumnWidth(3, 100); // amount
+  debtsSheet.setColumnWidth(4, 100); // direction
+  debtsSheet.setColumnWidth(5, 250); // description
+  debtsSheet.setColumnWidth(6, 110); // date
+  debtsSheet.setColumnWidth(7, 100); // status
+  debtsSheet.setColumnWidth(8, 120); // relatedTaskId
   
   // Freeze header rows
   dataSheet.setFrozenRows(1);
@@ -168,6 +214,8 @@ function resetAllSheets() {
   statusesSheet.setFrozenRows(1);
   financeSheet.setFrozenRows(1);
   financeSettingsSheet.setFrozenRows(1);
+  eventsSheet.setFrozenRows(1);
+  debtsSheet.setFrozenRows(1);
   
   Logger.log('All sheets have been reset and recreated successfully!');
   return 'Reset complete! All sheets have been recreated with correct structure.';
@@ -248,6 +296,24 @@ function ensureSheetsExist() {
     financeSettingsSheet = ss.insertSheet('FinanceSettings');
     financeSettingsSheet.getRange(1, 1, 1, 2).setValues([['monthKey', 'budget']]);
     financeSettingsSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
+  }
+
+  let eventsSheet = ss.getSheetByName('Events');
+  if (!eventsSheet) {
+    eventsSheet = ss.insertSheet('Events');
+    eventsSheet.getRange(1, 1, 1, 9).setValues([[
+      'id', 'title', 'description', 'startDate', 'startTime', 'endDate', 'endTime', 'category', 'color'
+    ]]);
+    eventsSheet.getRange(1, 1, 1, 9).setFontWeight('bold');
+  }
+
+  let debtsSheet = ss.getSheetByName('Debts');
+  if (!debtsSheet) {
+    debtsSheet = ss.insertSheet('Debts');
+    debtsSheet.getRange(1, 1, 1, 8).setValues([[
+      'id', 'person', 'amount', 'direction', 'description', 'date', 'status', 'relatedTaskId'
+    ]]);
+    debtsSheet.getRange(1, 1, 1, 8).setFontWeight('bold');
   }
   
   Logger.log('All required sheets exist!');

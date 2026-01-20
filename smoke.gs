@@ -42,6 +42,27 @@ function seedSmokeData() {
   ]);
 
   const financeSettingsSheet = ensureSheet(ss, "FinanceSettings", ["monthKey", "budget"]);
+  const eventsSheet = ensureSheet(ss, "Events", [
+    "id",
+    "title",
+    "description",
+    "startDate",
+    "startTime",
+    "endDate",
+    "endTime",
+    "category",
+    "color"
+  ]);
+  const debtsSheet = ensureSheet(ss, "Debts", [
+    "id",
+    "person",
+    "amount",
+    "direction",
+    "description",
+    "date",
+    "status",
+    "relatedTaskId"
+  ]);
 
   clearSheetData(dataSheet);
   clearSheetData(objectivesSheet);
@@ -49,6 +70,8 @@ function seedSmokeData() {
   clearSheetData(statusesSheet);
   clearSheetData(financeSheet);
   clearSheetData(financeSettingsSheet);
+  clearSheetData(eventsSheet);
+  clearSheetData(debtsSheet);
 
   const categories = [
     [1, "Work", "#3b82f6"],
@@ -158,12 +181,26 @@ function seedSmokeData() {
     ["2025-02", 1900]
   ];
 
+  const events = [
+    [1, "Team Meeting", "Weekly sync", "2025-01-10", "10:00", "2025-01-10", "11:00", "Work", "#3b82f6"],
+    [2, "Birthday Party", "Friend's birthday", "2025-01-15", "18:00", "2025-01-15", "22:00", "Personal", "#10b981"],
+    [3, "Doctor Appointment", "Annual checkup", "2025-01-20", "14:00", "2025-01-20", "15:00", "Health", "#ef4444"]
+  ];
+
+  const debts = [
+    [1, "John Doe", 150, "owed", "Lent money for lunch", "2025-01-05", "pending", ""],
+    [2, "Jane Smith", 50, "owe", "Split dinner bill", "2025-01-08", "pending", ""],
+    [3, "Mike Johnson", 200, "owed", "Project payment", "2025-01-12", "pending", ""]
+  ];
+
   dataSheet.getRange(2, 1, tasks.length, tasks[0].length).setValues(tasks);
   objectivesSheet.getRange(2, 1, objectives.length, objectives[0].length).setValues(objectives);
   categoriesSheet.getRange(2, 1, categories.length, categories[0].length).setValues(categories);
   statusesSheet.getRange(2, 1, statuses.length, statuses[0].length).setValues(statuses);
   financeSheet.getRange(2, 1, financeRecords.length, financeRecords[0].length).setValues(financeRecords);
   financeSettingsSheet.getRange(2, 1, financeSettings.length, financeSettings[0].length).setValues(financeSettings);
+  eventsSheet.getRange(2, 1, events.length, events[0].length).setValues(events);
+  debtsSheet.getRange(2, 1, debts.length, debts[0].length).setValues(debts);
 }
 
 function ensureSheet(ss, name, headers) {
