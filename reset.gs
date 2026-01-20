@@ -15,7 +15,7 @@ function resetAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // Delete existing sheets if they exist
-  const sheetNames = ['Data', 'Objectives', 'Categories', 'Statuses', 'Finance', 'FinanceSettings', 'Events', 'Debts'];
+  const sheetNames = ['Data', 'Objectives', 'Categories', 'Statuses', 'Finance', 'FinanceSettings', 'FinanceCategories', 'Events', 'Debts'];
   
   sheetNames.forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
@@ -158,6 +158,11 @@ function resetAllSheets() {
   const financeSettingsSheet = ss.insertSheet('FinanceSettings');
   financeSettingsSheet.getRange(1, 1, 1, 2).setValues([['monthKey', 'budget']]);
   financeSettingsSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
+
+  // Create FinanceCategories sheet
+  const financeCategoriesSheet = ss.insertSheet('FinanceCategories');
+  financeCategoriesSheet.getRange(1, 1, 1, 3).setValues([['id', 'name', 'color']]);
+  financeCategoriesSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
   financeSettingsSheet.setColumnWidth(1, 120);
   financeSettingsSheet.setColumnWidth(2, 120);
 
@@ -296,6 +301,13 @@ function ensureSheetsExist() {
     financeSettingsSheet = ss.insertSheet('FinanceSettings');
     financeSettingsSheet.getRange(1, 1, 1, 2).setValues([['monthKey', 'budget']]);
     financeSettingsSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
+  }
+
+  let financeCategoriesSheet = ss.getSheetByName('FinanceCategories');
+  if (!financeCategoriesSheet) {
+    financeCategoriesSheet = ss.insertSheet('FinanceCategories');
+    financeCategoriesSheet.getRange(1, 1, 1, 3).setValues([['id', 'name', 'color']]);
+    financeCategoriesSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
   }
 
   let eventsSheet = ss.getSheetByName('Events');

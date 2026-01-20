@@ -125,8 +125,27 @@ body {
   overflow-y: auto;
 }
 
+.sidebar-actions {
+  padding: 0.75rem 1.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.sidebar-action {
+  width: 100%;
+  justify-content: center;
+}
+
 .nav-list {
   list-style: none;
+}
+
+.nav-section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9ca3af;
+  margin: 0.75rem 1.5rem 0.35rem;
 }
 
 .nav-item {
@@ -225,6 +244,98 @@ body {
   padding: 2rem;
 }
 
+.app-main {
+  min-width: 0;
+  animation: fadeIn 0.25s ease;
+}
+
+.flow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.flow-bar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 240px;
+}
+
+.flow-bar-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.flow-pill {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.flow-pill.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.flow-pill.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.flow-pill.info {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.flow-bar-search {
+  width: 100%;
+}
+
+.flow-bar-input {
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  font-size: 0.85rem;
+}
+
+.flow-bar-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  background: #fff;
+}
+
+.flow-bar-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Page Header */
 .page-header {
   margin-bottom: 2rem;
@@ -304,6 +415,7 @@ body {
   border: 1px solid #e5e7eb;
   margin-bottom: 1.5rem;
   align-items: flex-start;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .filter-title {
@@ -317,6 +429,10 @@ body {
   flex-direction: column;
   gap: 0.5rem;
   min-width: 160px;
+  background: #ffffff;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
 }
 
 .filter-label {
@@ -338,6 +454,22 @@ body {
   gap: 0.4rem;
   font-size: 0.85rem;
   color: #374151;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.filter-option input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
 }
 
 .filter-empty {
@@ -394,8 +526,7 @@ body {
 }
 
 .dashboard-side .card {
-  position: sticky;
-  top: 1rem;
+  position: static;
 }
 
 .dashboard-finance-summary {
@@ -576,6 +707,7 @@ body {
   .dashboard-side .card {
     position: static;
   }
+
 }
 
 /* Buttons */
@@ -589,6 +721,11 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .btn-primary {
@@ -1007,6 +1144,12 @@ body {
   margin-top: 1.5rem;
   padding-top: 1.5rem;
   border-top: 1px solid #e5e7eb;
+}
+
+.modal-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
 }
 
 /* Utilities */
@@ -1672,7 +1815,32 @@ body {
 
 .finance-chart-card canvas {
   width: 100%;
-  height: 240px;
+  height: 180px;
+}
+
+.finance-ratio-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  min-width: 160px;
+}
+
+.finance-ratio-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.finance-ratio-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e3a8a;
 }
 
 .finance-highlights-grid {

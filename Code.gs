@@ -627,6 +627,101 @@ function saveFinanceSettings(settings) {
   }
 }
 
+function getFinanceCategories() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("FinanceCategories");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("FinanceCategories");
+    sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
+    sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
+    
+    // Add sample finance categories
+    const sampleCategories = [
+      [1, "Food", "#ef4444"],
+      [2, "Transport", "#3b82f6"],
+      [3, "Shopping", "#10b981"],
+      [4, "Bills", "#f59e0b"],
+      [5, "Entertainment", "#8b5cf6"],
+      [6, "Salary", "#10b981"],
+      [7, "Freelance", "#3b82f6"]
+    ];
+    if (sampleCategories.length > 0) {
+      sheet.getRange(2, 1, sampleCategories.length, 3).setValues(sampleCategories);
+    }
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  return values.slice(1).map(row => ({
+    id: row[0],
+    name: row[1],
+    color: row[2] || '#3b82f6'
+  }));
+}
+
+function addFinanceCategory(category) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("FinanceCategories");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("FinanceCategories");
+    sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
+    sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
+  }
+
+  let newId = 1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    if (existingIds.length > 0) {
+      newId = Math.max(...existingIds.filter(id => id !== '' && id != null)) + 1;
+    }
+  }
+  
+  sheet.appendRow([
+    newId,
+    category.name,
+    category.color || '#3b82f6'
+  ]);
+
+  return newId;
+}
+
+function updateFinanceCategory(category) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("FinanceCategories");
+  if (!sheet) return false;
+
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === category.id);
+  
+  if (rowIndex > 0) {
+    sheet.getRange(rowIndex + 1, 2, 1, 2).setValues([[
+      category.name,
+      category.color || '#3b82f6'
+    ]]);
+    return true;
+  }
+  return false;
+}
+
+function deleteFinanceCategory(categoryId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("FinanceCategories");
+  if (!sheet) return false;
+
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === categoryId);
+  
+  if (rowIndex > 0) {
+    sheet.deleteRow(rowIndex + 1);
+    return true;
+  }
+  return false;
+}
+
 function getAppData() {
   const tasks = getDatags();
   const objectives = getObjectives();
@@ -634,6 +729,7 @@ function getAppData() {
   const statuses = getStatuses();
   const financeRecords = getFinanceRecords();
   const financeSettings = getFinanceSettings();
+  const financeCategories = getFinanceCategories();
   const events = getEvents();
   const debts = getDebts();
   const stats = getDerivedStats(tasks, financeRecords, objectives, categories, statuses, events, debts);
@@ -645,6 +741,7 @@ function getAppData() {
     statuses,
     financeRecords,
     financeSettings,
+    financeCategories,
     events,
     debts,
     stats
@@ -780,6 +877,88 @@ function deleteEvent(eventId) {
     return true;
   }
   return false;
+}
+
+// Google Calendar Integration
+function createGoogleCalendarEvent(event) {
+  try {
+    const calendar = CalendarApp.getDefaultCalendar();
+    if (!calendar) {
+      return { success: false, error: 'No default calendar found' };
+    }
+
+    // Parse dates and times
+    const tz = Session.getScriptTimeZone();
+    let startDateTime, endDateTime;
+
+    if (event.startDate) {
+      const startDateStr = event.startDate;
+      const startTimeStr = event.startTime || '00:00:00';
+      const startDateTimeStr = `${startDateStr}T${startTimeStr}`;
+      startDateTime = new Date(startDateTimeStr);
+      
+      if (event.endDate) {
+        const endDateStr = event.endDate;
+        const endTimeStr = event.endTime || event.startTime || '23:59:59';
+        const endDateTimeStr = `${endDateStr}T${endTimeStr}`;
+        endDateTime = new Date(endDateTimeStr);
+      } else {
+        // If no end date, use start date + 1 hour
+        endDateTime = new Date(startDateTime);
+        endDateTime.setHours(endDateTime.getHours() + 1);
+      }
+    } else {
+      return { success: false, error: 'Start date is required' };
+    }
+
+    // Validate dates
+    if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+      return { success: false, error: 'Invalid date format' };
+    }
+
+    // Create calendar event
+    const calendarEvent = calendar.createEvent(
+      event.title || 'Untitled Event',
+      startDateTime,
+      endDateTime,
+      {
+        description: event.description || '',
+        location: event.category || ''
+      }
+    );
+
+    // Set event color if provided (Google Calendar uses color IDs)
+    if (event.color) {
+      try {
+        // Map hex colors to Google Calendar color IDs (1-11)
+        const colorMap = {
+          '#3b82f6': '9',  // Blue
+          '#10b981': '10', // Green
+          '#ef4444': '11', // Red
+          '#f59e0b': '5',  // Orange
+          '#8b5cf6': '3',  // Purple
+          '#ec4899': '6'   // Pink
+        };
+        const colorId = colorMap[event.color] || '9';
+        calendarEvent.setColor(colorId);
+      } catch (e) {
+        // Color setting is optional, continue if it fails
+        console.log('Could not set event color:', e);
+      }
+    }
+
+    return {
+      success: true,
+      eventId: calendarEvent.getId(),
+      calendarLink: ''
+    };
+  } catch (error) {
+    console.error('Error creating Google Calendar event:', error);
+    return {
+      success: false,
+      error: error.toString()
+    };
+  }
 }
 
 // Debt Functions

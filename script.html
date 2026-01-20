@@ -14,17 +14,21 @@ const AppState = {
   timelineCurrentDate: new Date(),
   timelineCollapsedDates: {},
   timelineFilters: { statuses: [], categories: [], objectives: [] },
+  eventsTimelineView: 'month',
+  eventsTimelineCurrentDate: new Date(),
+  eventsTimelineCollapsedDates: {},
   financeRecords: [],
   financeSettings: {},
+  financeCategories: [],
   stats: null,
   financeMonth: new Date(),
   dashboardCharts: {},
   searchQuery: '',
   referenceTab: 'objectives',
+  financeTab: 'transactions',
   mobileSidebarOpen: false,
   taskFilters: { statuses: [], categories: [], objectives: [] },
   financeFilters: { types: [], categories: [] },
-  eventsSidebarOpen: false
 };
 
 // Google Apps Script API
@@ -209,6 +213,45 @@ const API = {
     });
   },
 
+  async getFinanceCategories() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching finance categories:', error);
+          resolve([]);
+        })
+        .getFinanceCategories();
+    });
+  },
+
+  async addFinanceCategory(category) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addFinanceCategory(category);
+    });
+  },
+
+  async updateFinanceCategory(category) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateFinanceCategory(category);
+    });
+  },
+
+  async deleteFinanceCategory(categoryId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteFinanceCategory(categoryId);
+    });
+  },
+
   async getAppData() {
     return new Promise((resolve) => {
       google.script.run
@@ -222,6 +265,7 @@ const API = {
             statuses: [],
             financeRecords: [],
             financeSettings: {},
+            financeCategories: [],
             events: [],
             debts: [],
             stats: null
@@ -307,6 +351,18 @@ const API = {
         .withFailureHandler(reject)
         .deleteDebt(debtId);
     });
+  },
+
+  async createGoogleCalendarEvent(event) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error creating Google Calendar event:', error);
+          resolve({ success: false, error: error.toString() });
+        })
+        .createGoogleCalendarEvent(event);
+    });
   }
 };
 
@@ -318,6 +374,7 @@ const DataStore = {
     AppState.statuses = data.statuses || [];
     AppState.financeRecords = data.financeRecords || [];
     AppState.financeSettings = data.financeSettings || {};
+    AppState.financeCategories = data.financeCategories || [];
     AppState.events = data.events || [];
     AppState.debts = data.debts || [];
     AppState.stats = data.stats || null;
@@ -326,6 +383,98 @@ const DataStore = {
   async refresh() {
     const data = await API.getAppData();
     this.apply(data);
+  }
+};
+
+// Save Manager for Optimistic Updates
+const SaveManager = {
+  pendingSaves: 0,
+  snapshots: new Map(),
+
+  startSave(operationId, snapshot) {
+    this.pendingSaves++;
+    if (snapshot) {
+      this.snapshots.set(operationId, snapshot);
+    }
+    this.updateSyncButton();
+  },
+
+  endSave(operationId, success = true) {
+    this.pendingSaves = Math.max(0, this.pendingSaves - 1);
+    if (operationId && this.snapshots.has(operationId)) {
+      if (!success) {
+        // Rollback on failure
+        const snapshot = this.snapshots.get(operationId);
+        this.rollback(snapshot);
+      }
+      this.snapshots.delete(operationId);
+    }
+    this.updateSyncButton();
+  },
+
+  rollback(snapshot) {
+    if (snapshot.tasks) AppState.tasks = snapshot.tasks;
+    if (snapshot.objectives) AppState.objectives = snapshot.objectives;
+    if (snapshot.categories) AppState.categories = snapshot.categories;
+    if (snapshot.statuses) AppState.statuses = snapshot.statuses;
+    if (snapshot.financeRecords) AppState.financeRecords = snapshot.financeRecords;
+    if (snapshot.financeSettings) AppState.financeSettings = snapshot.financeSettings;
+    if (snapshot.events) AppState.events = snapshot.events;
+    if (snapshot.debts) AppState.debts = snapshot.debts;
+    Router.render();
+    Sidebar.render();
+  },
+
+  createSnapshot() {
+    return {
+      tasks: JSON.parse(JSON.stringify(AppState.tasks)),
+      objectives: JSON.parse(JSON.stringify(AppState.objectives)),
+      categories: JSON.parse(JSON.stringify(AppState.categories)),
+      statuses: JSON.parse(JSON.stringify(AppState.statuses)),
+      financeRecords: JSON.parse(JSON.stringify(AppState.financeRecords)),
+      financeSettings: JSON.parse(JSON.stringify(AppState.financeSettings)),
+      events: JSON.parse(JSON.stringify(AppState.events)),
+      debts: JSON.parse(JSON.stringify(AppState.debts))
+    };
+  },
+
+  updateSyncButton() {
+    AppState.isSyncing = this.pendingSaves > 0;
+    // Update sidebar sync button
+    const syncBtn = document.querySelector('.sync-button');
+    if (syncBtn) {
+      syncBtn.className = `sync-button sync-button-compact ${this.pendingSaves > 0 ? 'syncing' : ''}`;
+      const isCollapsed = AppState.sidebarCollapsed;
+      if (this.pendingSaves > 0) {
+        syncBtn.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="animate-spin"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>' + (isCollapsed ? '' : ' Saving...');
+      } else {
+        syncBtn.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' + (isCollapsed ? '' : ' Synced');
+      }
+    }
+  },
+
+  async saveWithOptimisticUpdate(operationId, updateFn, saveFn, onSuccess, onError) {
+    // Create snapshot for rollback
+    const snapshot = this.createSnapshot();
+    
+    // Start save tracking first to show loading state
+    this.startSave(operationId, snapshot);
+    
+    // Optimistically update UI
+    updateFn();
+    Router.render();
+    
+    try {
+      // Save in background
+      await saveFn();
+      this.endSave(operationId, true);
+      if (onSuccess) onSuccess();
+    } catch (error) {
+      console.error('Save failed:', error);
+      this.endSave(operationId, false);
+      if (onError) onError(error);
+      else Toast.error('Failed to save. Changes have been reverted.');
+    }
   }
 };
 
@@ -486,6 +635,7 @@ const DOM = {
       timeline: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
       target: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>',
       finance: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M5 7V5a2 2 0 012-2h10a2 2 0 012 2v2m0 0v12a2 2 0 01-2 2H7a2 2 0 01-2-2V7m5 4h4"></path></svg>',
+      flag: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5v16M5 5h10l-1.5 4L15 13H5"></path></svg>',
       sync: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
       check: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
       loading: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="animate-spin"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>',
@@ -683,47 +833,74 @@ const Sidebar = {
       };
       searchSection.appendChild(searchInput);
       sidebar.appendChild(searchSection);
+
+      const actions = DOM.create('div', 'sidebar-actions');
+      const taskBtn = DOM.create('button', 'btn btn-primary btn-sm sidebar-action');
+      taskBtn.textContent = '+ New Task';
+      taskBtn.onclick = () => TaskModal.show();
+      const eventBtn = DOM.create('button', 'btn btn-secondary btn-sm sidebar-action');
+      eventBtn.textContent = '+ New Event';
+      eventBtn.onclick = () => EventModal.show();
+      const financeBtn = DOM.create('button', 'btn btn-secondary btn-sm sidebar-action');
+      financeBtn.textContent = '+ Log Expense';
+      financeBtn.onclick = () => FinanceModal.show();
+      actions.append(taskBtn, eventBtn, financeBtn);
+      sidebar.appendChild(actions);
     }
 
     // Navigation
     const nav = DOM.create('nav', 'sidebar-nav');
     const navList = DOM.create('ul', 'nav-list');
-    
-    const navItems = [
-      { id: 'dashboard', label: 'Dashboard', icon: 'home' },
-      { id: 'tasks', label: 'Tasks', icon: 'tasks' },
-      { id: 'timeline', label: 'Timeline', icon: 'timeline' },
-      { id: 'finance', label: 'Finance', icon: 'finance' },
-      { id: 'debts', label: 'Debts', icon: 'finance' },
-      { id: 'reference', label: 'Reference', icon: 'tag' }
+
+    const navGroups = [
+      {
+        title: 'Workspace',
+        items: [
+          { id: 'dashboard', label: 'Dashboard', icon: 'home' },
+          { id: 'timeline', label: 'Tasks', icon: 'tasks' },
+          { id: 'events', label: 'Events', icon: 'calendar' },
+          { id: 'calendar', label: 'Calendar', icon: 'calendar' }
+        ]
+      },
+      {
+        title: 'Money',
+        items: [
+          { id: 'finance', label: 'Finance', icon: 'finance' },
+          { id: 'debts', label: 'Debts', icon: 'finance' }
+        ]
+      },
+      {
+        title: 'Reference',
+        items: [
+          { id: 'objectives', label: 'Objectives', icon: 'flag' },
+          { id: 'categories', label: 'Categories', icon: 'tag' },
+          { id: 'statuses', label: 'Statuses', icon: 'check' }
+        ]
+      }
     ];
 
-    navItems.forEach(item => {
-      const li = DOM.create('li', 'nav-item');
-      if (AppState.currentPage === item.id) li.classList.add('active');
-      li.onclick = () => Router.navigate(item.id);
-      
-      li.appendChild(DOM.createIcon(item.icon));
-      const text = DOM.create('span', 'nav-item-text', item.label);
-      li.appendChild(text);
-      navList.appendChild(li);
+    navGroups.forEach(group => {
+      if (!AppState.sidebarCollapsed) {
+        const section = DOM.create('li', 'nav-section-title', group.title);
+        navList.appendChild(section);
+      }
+      group.items.forEach(item => {
+        const li = DOM.create('li', 'nav-item');
+        if (AppState.currentPage === item.id || (AppState.currentPage === 'reference' && ['objectives', 'categories', 'statuses'].includes(item.id))) {
+          if (AppState.referenceTab === item.id || AppState.currentPage === item.id) {
+            li.classList.add('active');
+          }
+        }
+        li.onclick = () => Router.navigate(item.id);
+        li.appendChild(DOM.createIcon(item.icon));
+        const text = DOM.create('span', 'nav-item-text', item.label);
+        li.appendChild(text);
+        navList.appendChild(li);
+      });
     });
 
     nav.appendChild(navList);
     sidebar.appendChild(nav);
-
-    // Events Button
-    if (!AppState.sidebarCollapsed) {
-      const eventsSection = DOM.create('div', 'sync-section');
-      const eventsBtn = DOM.create('button', 'sync-button sync-button-compact');
-      eventsBtn.innerHTML = DOM.getIconSVG('calendar') + ' Events';
-      eventsBtn.onclick = () => {
-        AppState.eventsSidebarOpen = !AppState.eventsSidebarOpen;
-        EventsSidebar.render();
-      };
-      eventsSection.appendChild(eventsBtn);
-      sidebar.appendChild(eventsSection);
-    }
 
     // Sync Section
     const syncSection = DOM.create('div', 'sync-section');
@@ -770,6 +947,11 @@ const Sidebar = {
   },
 
   async sync() {
+    // Wait for any pending saves to complete
+    while (SaveManager.pendingSaves > 0) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
     AppState.isSyncing = true;
     this.render();
     
@@ -814,7 +996,12 @@ const Router = {
         pageContent = Dashboard.render();
         break;
       case 'tasks':
-        pageContent = TasksPage.render();
+        // Redirect to timeline (Task view)
+        AppState.currentPage = 'timeline';
+        pageContent = TimelinePage.render();
+        break;
+      case 'events':
+        pageContent = EventsTimelinePage.render();
         break;
       case 'calendar':
         pageContent = CalendarPage.render();
@@ -847,8 +1034,12 @@ const Router = {
         pageContent = Dashboard.render();
     }
 
+    const main = DOM.create('div', 'app-main');
+    main.appendChild(FlowBar.render());
+    main.appendChild(pageContent);
+
     content.innerHTML = '';
-    content.appendChild(pageContent);
+    content.appendChild(main);
 
     const mainContent = document.querySelector('.main-content');
     if (!mainContent) {
@@ -860,6 +1051,67 @@ const Router = {
       if (existing) existing.replaceWith(content);
       else mainContent.appendChild(content);
     }
+  }
+};
+
+const FlowBar = {
+  render() {
+    const bar = DOM.create('div', 'flow-bar');
+    const left = DOM.create('div', 'flow-bar-left');
+    const right = DOM.create('div', 'flow-bar-actions');
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextWeek = DateUtils.addDays(today, 7);
+    const activeTasks = AppState.tasks.filter(task => task.status !== 'completed');
+    const getDueDate = (task) => DateUtils.parseDate(task.endDate || task.startDate);
+    const overdue = activeTasks.filter(task => {
+      const due = getDueDate(task);
+      return due && due < today;
+    });
+    const dueToday = activeTasks.filter(task => {
+      const due = getDueDate(task);
+      return due && due.getTime() === today.getTime();
+    });
+    const upcoming = activeTasks.filter(task => {
+      const due = getDueDate(task);
+      return due && due > today && due <= nextWeek;
+    });
+
+    const summary = DOM.create('div', 'flow-bar-summary');
+    summary.innerHTML = `
+      <div class="flow-pill danger">${overdue.length} overdue</div>
+      <div class="flow-pill warning">${dueToday.length} due today</div>
+      <div class="flow-pill info">${upcoming.length} next 7 days</div>
+    `;
+    left.appendChild(summary);
+
+    const search = DOM.create('div', 'flow-bar-search');
+    const input = DOM.create('input', 'flow-bar-input');
+    input.type = 'search';
+    input.placeholder = 'Search across tasks, events, money...';
+    input.value = AppState.searchQuery;
+    input.oninput = (event) => {
+      AppState.searchQuery = event.target.value;
+      Router.render();
+    };
+    search.appendChild(input);
+    left.appendChild(search);
+
+    const taskBtn = DOM.create('button', 'btn btn-primary btn-sm');
+    taskBtn.textContent = '+ Task';
+    taskBtn.onclick = () => TaskModal.show();
+    const eventBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    eventBtn.textContent = '+ Event';
+    eventBtn.onclick = () => EventModal.show();
+    const financeBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    financeBtn.textContent = '+ Expense';
+    financeBtn.onclick = () => FinanceModal.show();
+    right.append(taskBtn, eventBtn, financeBtn);
+
+    bar.appendChild(left);
+    bar.appendChild(right);
+    return bar;
   }
 };
 
@@ -878,6 +1130,10 @@ const Dashboard = {
     const layout = DOM.create('div', 'dashboard-layout');
     const mainColumn = DOM.create('div', 'dashboard-main');
     const sideColumn = DOM.create('aside', 'dashboard-side');
+
+    // Charts at the top
+    mainColumn.appendChild(this.renderFinanceCharts());
+    mainColumn.appendChild(this.renderWorkCharts());
 
     const filteredTasks = TaskFilters.applySearch(AppState.tasks);
     const fallbackStats = {
@@ -928,9 +1184,6 @@ const Dashboard = {
 
     recentTasks.appendChild(taskList);
     mainColumn.appendChild(recentTasks);
-
-    mainColumn.appendChild(this.renderFinanceCharts());
-    mainColumn.appendChild(this.renderWorkCharts());
 
     sideColumn.appendChild(this.renderFinanceSummary());
     sideColumn.appendChild(this.renderDebtsSummary());
@@ -1075,8 +1328,7 @@ const Dashboard = {
         item.appendChild(title);
         item.appendChild(date);
         item.onclick = () => {
-          AppState.eventsSidebarOpen = true;
-          EventsSidebar.render();
+          Router.navigate('events');
         };
         list.appendChild(item);
       });
@@ -1088,8 +1340,6 @@ const Dashboard = {
     addBtn.style.marginTop = '1rem';
     addBtn.style.width = '100%';
     addBtn.onclick = () => {
-      AppState.eventsSidebarOpen = true;
-      EventsSidebar.render();
       EventModal.show();
     };
     card.appendChild(addBtn);
@@ -1683,17 +1933,23 @@ const Dashboard = {
 const TaskActions = {
   async deleteTask(task) {
     if (!confirm(`Delete task "${task.task}"?`)) return;
-    AppState.tasks = AppState.tasks.filter(item => item.id !== task.id);
-    try {
-      await API.saveTasks(AppState.tasks);
-      await DataStore.refresh();
-      Router.render();
-      Sidebar.render();
-      Toast.success('Task deleted');
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      Toast.error('Error deleting task. Please try again.');
-    }
+    
+    const operationId = `delete-task-${task.id}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.tasks = AppState.tasks.filter(item => item.id !== task.id);
+      },
+      async () => {
+        await API.saveTasks(AppState.tasks);
+      },
+      () => {
+        Toast.success('Task deleted');
+      },
+      (error) => {
+        Toast.error('Error deleting task. Please try again.');
+      }
+    );
   }
 };
 
@@ -1933,7 +2189,7 @@ const CalendarPage = {
   }
 };
 
-// Timeline Page
+// Timeline Page (Task View)
 const TimelinePage = {
   render() {
     const container = DOM.create('div', '');
@@ -1948,6 +2204,11 @@ const TimelinePage = {
     leftSection.style.display = 'flex';
     leftSection.style.alignItems = 'center';
     leftSection.style.gap = '1rem';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Task'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Calendar view of your tasks'));
+    leftSection.appendChild(titleSection);
 
     const navControls = DOM.create('div', 'timeline-nav');
     navControls.style.display = 'flex';
@@ -2223,15 +2484,25 @@ const TimelinePage = {
       const endDate = DateUtils.formatDate(DateUtils.addDays(newDate, durationDays));
       const updatedTask = { ...task, startDate: dateStr, endDate };
 
-      const taskIndex = AppState.tasks.findIndex(t => t.id === task.id);
-      if (taskIndex !== -1) {
-        AppState.tasks[taskIndex] = updatedTask;
-      }
-
-      await API.saveTasks(AppState.tasks);
-      await DataStore.refresh();
-
-      Router.render();
+      const operationId = `update-task-date-${task.id}`;
+      await SaveManager.saveWithOptimisticUpdate(
+        operationId,
+        () => {
+          const taskIndex = AppState.tasks.findIndex(t => t.id === task.id);
+          if (taskIndex !== -1) {
+            AppState.tasks[taskIndex] = updatedTask;
+          }
+        },
+        async () => {
+          await API.saveTasks(AppState.tasks);
+        },
+        () => {
+          // Silent success for drag and drop
+        },
+        (error) => {
+          Toast.error('Error updating task date. Please try again.');
+        }
+      );
     } catch (error) {
       console.error('Error updating task date:', error);
       Toast.error('Error updating task date. Please try again.');
@@ -2241,11 +2512,24 @@ const TimelinePage = {
   async updateTaskData(taskId, updates) {
     const taskIndex = AppState.tasks.findIndex(t => t.id === taskId);
     if (taskIndex === -1) return;
-    const updatedTask = { ...AppState.tasks[taskIndex], ...updates };
-    AppState.tasks[taskIndex] = updatedTask;
-    await API.saveTasks(AppState.tasks);
-    await DataStore.refresh();
-    Router.render();
+    
+    const operationId = `update-task-data-${taskId}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        const updatedTask = { ...AppState.tasks[taskIndex], ...updates };
+        AppState.tasks[taskIndex] = updatedTask;
+      },
+      async () => {
+        await API.saveTasks(AppState.tasks);
+      },
+      () => {
+        // Silent success
+      },
+      (error) => {
+        Toast.error('Error updating task');
+      }
+    );
   },
 
   isToday(date) {
@@ -2640,53 +2924,72 @@ const FinancePage = {
     header.appendChild(DOM.create('p', 'page-subtitle', 'Track income, expenses, and budgets'));
     container.appendChild(header);
 
-    const controls = DOM.create('div', 'finance-controls');
-    const monthLabel = DOM.create('label', 'finance-label', 'Month');
-    const monthInput = DOM.create('input', 'form-input');
-    monthInput.type = 'month';
-    monthInput.value = this.getMonthKey(AppState.financeMonth);
-    monthInput.onchange = (event) => {
-      AppState.financeMonth = new Date(`${event.target.value}-01`);
-      Router.render();
-    };
-    monthLabel.appendChild(monthInput);
+    // Tabs
+    const tabs = DOM.create('div', 'reference-tabs');
+    const tabList = [
+      { id: 'transactions', label: 'Transactions' },
+      { id: 'categories', label: 'Categories' }
+    ];
 
-    const budgetLabel = DOM.create('label', 'finance-label', 'Monthly Budget');
-    const budgetInput = DOM.create('input', 'form-input');
-    budgetInput.type = 'number';
-    budgetInput.min = '0';
-    budgetInput.step = '0.01';
-    budgetInput.value = this.getMonthlyBudget(this.getMonthKey(AppState.financeMonth));
+    tabList.forEach(tab => {
+      const tabBtn = DOM.create('button', 'reference-tab');
+      tabBtn.textContent = tab.label;
+      if (AppState.financeTab === tab.id) tabBtn.classList.add('active');
+      tabBtn.onclick = () => {
+        AppState.financeTab = tab.id;
+        Router.render();
+      };
+      tabs.appendChild(tabBtn);
+    });
 
-    const budgetButton = DOM.create('button', 'btn btn-secondary btn-sm');
-    budgetButton.textContent = 'Save Budget';
-    budgetButton.onclick = async () => {
-      const value = parseFloat(budgetInput.value || '0');
-      const monthKey = this.getMonthKey(AppState.financeMonth);
-      AppState.financeSettings[monthKey] = Number.isFinite(value) ? value : 0;
-      await API.saveFinanceSettings(AppState.financeSettings);
-      Toast.success('Budget saved');
-      Router.render();
-    };
+    container.appendChild(tabs);
 
-    budgetLabel.appendChild(budgetInput);
-    budgetLabel.appendChild(budgetButton);
+    const content = DOM.create('div', 'reference-content');
+    if (AppState.financeTab === 'categories') {
+      content.appendChild(FinanceCategoriesPage.render());
+    } else {
+      // Transactions tab
+      const controls = DOM.create('div', 'finance-controls');
+      const monthLabel = DOM.create('label', 'finance-label', 'Month');
+      const monthInput = DOM.create('input', 'form-input');
+      monthInput.type = 'month';
+      monthInput.value = this.getMonthKey(AppState.financeMonth);
+      monthInput.onchange = (event) => {
+        AppState.financeMonth = new Date(`${event.target.value}-01`);
+        Router.render();
+      };
+      monthLabel.appendChild(monthInput);
 
-    controls.appendChild(monthLabel);
-    controls.appendChild(budgetLabel);
-    container.appendChild(controls);
+      const ratioBadge = DOM.create('div', 'finance-ratio-badge');
+      const monthTotals = this.getTotals(this.getMonthlyRecords());
+      const percentSpent = monthTotals.income > 0
+        ? Math.round((monthTotals.expenses / monthTotals.income) * 100)
+        : 0;
+      ratioBadge.innerHTML = `
+        <span class="finance-ratio-label">Income vs Spend</span>
+        <span class="finance-ratio-value">${percentSpent}% spent</span>
+      `;
 
-    const monthRecords = this.getMonthlyRecords();
-    const filteredRecords = this.applyFinanceFilters(monthRecords);
-    container.appendChild(this.renderFinanceFilters(monthRecords));
-    container.appendChild(this.renderSummary(filteredRecords));
-    container.appendChild(this.renderSpendRatioCharts(filteredRecords));
-    container.appendChild(this.renderHighlights(filteredRecords));
-    container.appendChild(this.renderCategoryBreakdown(filteredRecords));
-    container.appendChild(this.renderAdvice(filteredRecords));
-    container.appendChild(this.renderAddForm());
-    container.appendChild(this.renderDailyBreakdown(filteredRecords));
-    container.appendChild(this.renderRecurringList(filteredRecords));
+      controls.appendChild(monthLabel);
+      controls.appendChild(ratioBadge);
+      content.appendChild(controls);
+
+      const monthRecords = this.getMonthlyRecords();
+      const filteredRecords = this.applyFinanceFilters(monthRecords);
+      
+      // Charts at the top
+      content.appendChild(this.renderSpendRatioCharts(filteredRecords));
+      
+      // Summary
+      content.appendChild(this.renderSummary(filteredRecords));
+      
+      // Filters and transactions
+      content.appendChild(this.renderFinanceFilters(monthRecords));
+      content.appendChild(this.renderAddForm());
+      content.appendChild(this.renderDailyBreakdown(filteredRecords));
+    }
+
+    container.appendChild(content);
 
     return container;
   },
@@ -3201,9 +3504,21 @@ const FinancePage = {
     amountInput.placeholder = 'Amount';
     amountInput.required = true;
 
-    const categoryInput = DOM.create('input', 'form-input');
-    categoryInput.type = 'text';
-    categoryInput.placeholder = 'Category';
+    const categoryGroup = DOM.create('div', 'form-group');
+    categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
+    const categorySelect = DOM.create('select', 'form-input');
+    categorySelect.name = 'category';
+    const defaultOption = DOM.create('option', '');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select category';
+    categorySelect.appendChild(defaultOption);
+    AppState.financeCategories.forEach(cat => {
+      const option = DOM.create('option', '');
+      option.value = cat.name;
+      option.textContent = cat.name;
+      categorySelect.appendChild(option);
+    });
+    categoryGroup.appendChild(categorySelect);
 
     const noteInput = DOM.create('input', 'form-input');
     noteInput.type = 'text';
@@ -3222,7 +3537,7 @@ const FinancePage = {
     form.appendChild(dateInput);
     form.appendChild(typeSelect);
     form.appendChild(amountInput);
-    form.appendChild(categoryInput);
+    form.appendChild(categoryGroup);
     form.appendChild(noteInput);
     form.appendChild(recurringWrapper);
     form.appendChild(submitBtn);
@@ -3234,15 +3549,34 @@ const FinancePage = {
         date: dateInput.value,
         type: typeSelect.value,
         amount: parseFloat(amountInput.value || '0'),
-        category: categoryInput.value,
+        category: categorySelect.value,
         note: noteInput.value,
         recurringMonthly: recurringInput.checked
       };
 
-      AppState.financeRecords.push(record);
-      await API.saveFinanceRecords(AppState.financeRecords);
-      Toast.success('Transaction saved');
-      Router.render();
+      const operationId = `create-finance-${Date.now()}`;
+      await SaveManager.saveWithOptimisticUpdate(
+        operationId,
+        () => {
+          AppState.financeRecords.push(record);
+          // Reset form
+          dateInput.value = FinancePage.formatDateInput(new Date());
+          typeSelect.value = 'expense';
+          amountInput.value = '';
+          categorySelect.value = '';
+          noteInput.value = '';
+          recurringInput.checked = false;
+        },
+        async () => {
+          await API.saveFinanceRecords(AppState.financeRecords);
+        },
+        () => {
+          Toast.success('Transaction saved');
+        },
+        (error) => {
+          Toast.error('Error saving transaction');
+        }
+      );
     };
 
     card.appendChild(form);
@@ -3408,10 +3742,23 @@ const FinancePage = {
       event.stopPropagation();
       if (!confirm('Delete this transaction?')) return;
       const targetId = record.recurrenceSourceId || record.id;
-      AppState.financeRecords = AppState.financeRecords.filter(item => item.id !== targetId);
-      await API.saveFinanceRecords(AppState.financeRecords);
-      Toast.success('Transaction deleted');
-      Router.render();
+      const operationId = `delete-finance-${targetId}`;
+      
+      await SaveManager.saveWithOptimisticUpdate(
+        operationId,
+        () => {
+          AppState.financeRecords = AppState.financeRecords.filter(item => item.id !== targetId);
+        },
+        async () => {
+          await API.saveFinanceRecords(AppState.financeRecords);
+        },
+        () => {
+          Toast.success('Transaction deleted');
+        },
+        (error) => {
+          Toast.error('Error deleting transaction');
+        }
+      );
     };
 
     actions.appendChild(editBtn);
@@ -3546,11 +3893,21 @@ const FinanceModal = {
 
     const categoryGroup = DOM.create('div', 'form-group');
     categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
-    const categoryInput = DOM.create('input', 'form-input');
-    categoryInput.type = 'text';
-    categoryInput.name = 'category';
-    categoryInput.value = record?.category || '';
-    categoryGroup.appendChild(categoryInput);
+    const categorySelect = DOM.create('select', 'form-input');
+    categorySelect.name = 'category';
+    const defaultOption = DOM.create('option', '');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select category';
+    categorySelect.appendChild(defaultOption);
+    AppState.financeCategories.forEach(cat => {
+      const option = DOM.create('option', '');
+      option.value = cat.name;
+      option.textContent = cat.name;
+      if (record?.category === cat.name) option.selected = true;
+      categorySelect.appendChild(option);
+    });
+    categorySelect.value = record?.category || '';
+    categoryGroup.appendChild(categorySelect);
     form.appendChild(categoryGroup);
 
     const noteGroup = DOM.create('div', 'form-group');
@@ -3613,22 +3970,263 @@ const FinanceModal = {
       recurringMonthly: formData.get('recurringMonthly') === 'on'
     };
 
-    const existingIndex = AppState.financeRecords.findIndex(item => item.id === targetId);
-    if (existingIndex >= 0) {
-      AppState.financeRecords[existingIndex] = updated;
+    const operationId = record ? `update-finance-${targetId}` : `create-finance-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        const existingIndex = AppState.financeRecords.findIndex(item => item.id === targetId);
+        if (existingIndex >= 0) {
+          AppState.financeRecords[existingIndex] = updated;
+        } else {
+          AppState.financeRecords.push(updated);
+        }
+        this.hide();
+      },
+      async () => {
+        await API.saveFinanceRecords(AppState.financeRecords);
+      },
+      () => {
+        Toast.success(record ? 'Transaction updated' : 'Transaction saved');
+      },
+      (error) => {
+        Toast.error('Error saving transaction. Please try again.');
+      }
+    );
+  }
+};
+
+// Finance Categories Page
+const FinanceCategoriesPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Finance Categories'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Manage your finance categories'));
+    header.appendChild(titleSection);
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ Add Category';
+    addBtn.onclick = () => FinanceCategoryModal.show();
+    header.appendChild(addBtn);
+    
+    container.appendChild(header);
+
+    const categoriesList = DOM.create('div', 'objectives-list');
+    
+    if (AppState.financeCategories.length === 0) {
+      const emptyState = DOM.create('div', 'empty-state');
+      emptyState.style.textAlign = 'center';
+      emptyState.style.padding = '3rem';
+      emptyState.style.color = '#6b7280';
+      emptyState.innerHTML = '<p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No finance categories yet</p><p>Create your first category to get started</p>';
+      categoriesList.appendChild(emptyState);
     } else {
-      AppState.financeRecords.push(updated);
+      AppState.financeCategories.forEach(category => {
+        categoriesList.appendChild(this.renderCategory(category));
+      });
+    }
+    
+    container.appendChild(categoriesList);
+
+    return container;
+  },
+
+  renderCategory(category) {
+    const card = DOM.create('div', 'objective-card');
+    card.style.borderLeftColor = category.color || '#3b82f6';
+    
+    const header = DOM.create('div', 'objective-header');
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h3', 'objective-title', category.name));
+    header.appendChild(titleSection);
+    
+    const actions = DOM.create('div', 'objective-actions');
+    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => FinanceCategoryModal.show(category);
+    actions.appendChild(editBtn);
+    
+    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = () => this.deleteCategory(category);
+    actions.appendChild(deleteBtn);
+    
+    header.appendChild(actions);
+    card.appendChild(header);
+
+    // Show finance records with this category
+    const recordsWithCategory = AppState.financeRecords.filter(r => r.category === category.name);
+    if (recordsWithCategory.length > 0) {
+      const recordsSection = DOM.create('div', 'objective-tasks');
+      recordsSection.appendChild(DOM.create('p', 'objective-tasks-label', `Transactions: ${recordsWithCategory.length}`));
+      const total = recordsWithCategory.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      recordsSection.appendChild(DOM.create('p', 'objective-tasks-label', `Total: ${FinancePage.formatCurrency(total)}`));
+      card.appendChild(recordsSection);
     }
 
-    try {
-      await API.saveFinanceRecords(AppState.financeRecords);
-      this.hide();
-      Toast.success(record ? 'Transaction updated' : 'Transaction saved');
-      Router.render();
-    } catch (error) {
-      console.error('Error saving transaction:', error);
-      Toast.error('Error saving transaction. Please try again.');
-    }
+    return card;
+  },
+
+  async deleteCategory(category) {
+    if (!confirm(`Are you sure you want to delete "${category.name}"?`)) return;
+    
+    const operationId = `delete-finance-category-${category.id}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.financeCategories = AppState.financeCategories.filter(c => c.id !== category.id);
+        // Update finance records to remove category reference
+        AppState.financeRecords.forEach(record => {
+          if (record.category === category.name) {
+            record.category = '';
+          }
+        });
+      },
+      async () => {
+        await API.deleteFinanceCategory(category.id);
+        await API.saveFinanceRecords(AppState.financeRecords);
+      },
+      () => {
+        Toast.success('Category deleted');
+      },
+      (error) => {
+        Toast.error('Error deleting category. Please try again.');
+      }
+    );
+  }
+};
+
+// Finance Category Modal
+const FinanceCategoryModal = {
+  show(category = null, onSaveCallback = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    
+    const modalHeader = DOM.create('div', 'modal-header');
+    modalHeader.appendChild(DOM.create('h2', 'modal-title', category ? 'Edit Finance Category' : 'New Finance Category'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    modalHeader.appendChild(closeBtn);
+    modal.appendChild(modalHeader);
+
+    const form = DOM.create('form', '');
+    
+    // Category name
+    const nameGroup = DOM.create('div', 'form-group');
+    nameGroup.appendChild(DOM.create('label', 'form-label', 'Category Name'));
+    const nameInput = DOM.create('input', 'form-input');
+    nameInput.type = 'text';
+    nameInput.name = 'name';
+    nameInput.value = category?.name || '';
+    nameInput.required = true;
+    nameInput.placeholder = 'e.g., Food, Transport, Salary';
+    nameGroup.appendChild(nameInput);
+    form.appendChild(nameGroup);
+
+    // Color
+    const colorGroup = DOM.create('div', 'form-group');
+    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
+    const colorInput = DOM.create('input', 'form-input');
+    colorInput.type = 'color';
+    colorInput.name = 'color';
+    colorInput.value = category?.color || '#3b82f6';
+    colorGroup.appendChild(colorInput);
+    form.appendChild(colorGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(category, new FormData(form), onSaveCallback);
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(category, formData, callback) {
+    const categoryData = {
+      name: formData.get('name'),
+      color: formData.get('color')
+    };
+    const previousName = category?.name || '';
+
+    const operationId = category ? `update-finance-category-${category.id}` : `create-finance-category-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (category) {
+          categoryData.id = category.id;
+          const index = AppState.financeCategories.findIndex(c => c.id === category.id);
+          if (index >= 0) AppState.financeCategories[index] = categoryData;
+          // Update finance records if name changed
+          if (previousName && previousName !== categoryData.name) {
+            AppState.financeRecords.forEach(record => {
+              if (record.category === previousName) {
+                record.category = categoryData.name;
+              }
+            });
+          }
+        } else {
+          categoryData.id = Date.now(); // Temporary ID
+          AppState.financeCategories.push(categoryData);
+        }
+        this.hide();
+      },
+      async () => {
+        if (category) {
+          await API.updateFinanceCategory(categoryData);
+          if (previousName && previousName !== categoryData.name) {
+            await API.saveFinanceRecords(AppState.financeRecords);
+          }
+        } else {
+          const newId = await API.addFinanceCategory(categoryData);
+          // Update the temporary ID with the real one
+          const tempIndex = AppState.financeCategories.findIndex(c => c.id === categoryData.id);
+          if (tempIndex >= 0) {
+            AppState.financeCategories[tempIndex].id = newId;
+          }
+        }
+      },
+      () => {
+        if (callback) callback(categoryData);
+        Toast.success('Category saved');
+      },
+      (error) => {
+        Toast.error('Error saving category. Please try again.');
+      }
+    );
   }
 };
 
@@ -3670,6 +4268,11 @@ const ReferencePage = {
 
     container.appendChild(tabs);
 
+    // Charts at the top
+    const analytics = FinancePage.renderCharts(FinancePage.getMonthlyRecords());
+    analytics.querySelector('.section-title').textContent = 'Reference Analytics';
+    container.appendChild(analytics);
+
     const content = DOM.create('div', 'reference-content');
     if (AppState.referenceTab === 'categories') {
       content.appendChild(CategoriesPage.render());
@@ -3682,10 +4285,6 @@ const ReferencePage = {
     container.appendChild(content);
 
     container.appendChild(FinancePage.renderTaskValueSnapshot());
-
-    const analytics = FinancePage.renderCharts(FinancePage.getMonthlyRecords());
-    analytics.querySelector('.section-title').textContent = 'Reference Analytics';
-    container.appendChild(analytics);
     return container;
   }
 };
@@ -3782,7 +4381,7 @@ const ObjectivesPage = {
         const taskItem = DOM.create('div', 'objective-task-item');
         taskItem.textContent = task.task;
         taskItem.onclick = () => {
-          Router.navigate('tasks');
+          Router.navigate('timeline');
           setTimeout(() => TaskModal.show(task), 100);
         };
         taskList.appendChild(taskItem);
@@ -3802,20 +4401,24 @@ const ObjectivesPage = {
   async deleteObjective(objective) {
     if (!confirm(`Are you sure you want to delete "${objective.name}"?`)) return;
     
-    try {
-      await API.deleteObjective(objective.id);
-      AppState.objectives = AppState.objectives.filter(o => o.id !== objective.id);
-      const tasksUpdated = updateTaskReferences('objective', objective.name, '');
-      if (tasksUpdated) {
+    const operationId = `delete-objective-${objective.id}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.objectives = AppState.objectives.filter(o => o.id !== objective.id);
+        updateTaskReferences('objective', objective.name, '');
+      },
+      async () => {
+        await API.deleteObjective(objective.id);
         await API.saveTasks(AppState.tasks);
+      },
+      () => {
+        Toast.success('Objective deleted');
+      },
+      (error) => {
+        Toast.error('Error deleting objective. Please try again.');
       }
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Objective deleted');
-    } catch (error) {
-      console.error('Error deleting objective:', error);
-      Toast.error('Error deleting objective. Please try again.');
-    }
+    );
   }
 };
 
@@ -3957,33 +4560,47 @@ const ObjectiveModal = {
     };
     const previousName = objective?.name || '';
 
-    try {
-      if (objective) {
-        objectiveData.id = objective.id;
-        await API.updateObjective(objectiveData);
-        const index = AppState.objectives.findIndex(o => o.id === objective.id);
-        AppState.objectives[index] = objectiveData;
-        if (previousName && previousName !== objectiveData.name) {
-          const tasksUpdated = updateTaskReferences('objective', previousName, objectiveData.name);
-          if (tasksUpdated) {
+    const operationId = objective ? `update-objective-${objective.id}` : `create-objective-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (objective) {
+          objectiveData.id = objective.id;
+          const index = AppState.objectives.findIndex(o => o.id === objective.id);
+          if (index >= 0) AppState.objectives[index] = objectiveData;
+          if (previousName && previousName !== objectiveData.name) {
+            updateTaskReferences('objective', previousName, objectiveData.name);
+          }
+        } else {
+          objectiveData.id = Date.now(); // Temporary ID
+          AppState.objectives.push(objectiveData);
+        }
+        this.hide();
+      },
+      async () => {
+        if (objective) {
+          await API.updateObjective(objectiveData);
+          if (previousName && previousName !== objectiveData.name) {
             await API.saveTasks(AppState.tasks);
           }
+        } else {
+          const newId = await API.addObjective(objectiveData);
+          // Update the temporary ID with the real one
+          const tempIndex = AppState.objectives.findIndex(o => o.id === objectiveData.id);
+          if (tempIndex >= 0) {
+            AppState.objectives[tempIndex].id = newId;
+          }
         }
-      } else {
-        const newId = await API.addObjective(objectiveData);
-        objectiveData.id = newId;
-        AppState.objectives.push(objectiveData);
+      },
+      () => {
+        if (callback) callback(objectiveData);
+        Toast.success('Objective saved');
+      },
+      (error) => {
+        Toast.error('Error saving objective. Please try again.');
       }
-      
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      if (callback) callback(objectiveData);
-      Toast.success('Objective saved');
-    } catch (error) {
-      console.error('Error saving objective:', error);
-      Toast.error('Error saving objective. Please try again.');
-    }
+    );
   }
 };
 
@@ -4077,27 +4694,33 @@ const CategoriesPage = {
   async deleteCategory(category) {
     if (!confirm(`Are you sure you want to delete "${category.name}"?`)) return;
     
-    try {
-      await API.deleteCategory(category.id);
-      AppState.categories = AppState.categories.filter(c => c.id !== category.id);
-      const objectivesToUpdate = AppState.objectives.filter(o => o.category === category.name);
-      objectivesToUpdate.forEach(objective => {
-        objective.category = '';
-      });
-      if (objectivesToUpdate.length > 0) {
-        await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
-      }
-      const tasksUpdated = updateTaskReferences('category', category.name, '');
-      if (tasksUpdated) {
+    const operationId = `delete-category-${category.id}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.categories = AppState.categories.filter(c => c.id !== category.id);
+        AppState.objectives.forEach(objective => {
+          if (objective.category === category.name) {
+            objective.category = '';
+          }
+        });
+        updateTaskReferences('category', category.name, '');
+      },
+      async () => {
+        await API.deleteCategory(category.id);
+        const objectivesToUpdate = AppState.objectives.filter(o => o.category === '');
+        if (objectivesToUpdate.length > 0) {
+          await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
+        }
         await API.saveTasks(AppState.tasks);
+      },
+      () => {
+        Toast.success('Category deleted');
+      },
+      (error) => {
+        Toast.error('Error deleting category. Please try again.');
       }
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Category deleted');
-    } catch (error) {
-      console.error('Error deleting category:', error);
-      Toast.error('Error deleting category. Please try again.');
-    }
+    );
   }
 };
 
@@ -4179,40 +4802,56 @@ const CategoryModal = {
     };
     const previousName = category?.name || '';
 
-    try {
-      if (category) {
-        categoryData.id = category.id;
-        await API.updateCategory(categoryData);
-        const index = AppState.categories.findIndex(c => c.id === category.id);
-        AppState.categories[index] = categoryData;
-        if (previousName && previousName !== categoryData.name) {
-          const objectivesToUpdate = AppState.objectives.filter(o => o.category === previousName);
-          objectivesToUpdate.forEach(objective => {
-            objective.category = categoryData.name;
-          });
-          if (objectivesToUpdate.length > 0) {
-            await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
+    const operationId = category ? `update-category-${category.id}` : `create-category-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (category) {
+          categoryData.id = category.id;
+          const index = AppState.categories.findIndex(c => c.id === category.id);
+          if (index >= 0) AppState.categories[index] = categoryData;
+          if (previousName && previousName !== categoryData.name) {
+            AppState.objectives.forEach(objective => {
+              if (objective.category === previousName) {
+                objective.category = categoryData.name;
+              }
+            });
+            updateTaskReferences('category', previousName, categoryData.name);
           }
-          const tasksUpdated = updateTaskReferences('category', previousName, categoryData.name);
-          if (tasksUpdated) {
+        } else {
+          categoryData.id = Date.now(); // Temporary ID
+          AppState.categories.push(categoryData);
+        }
+        this.hide();
+      },
+      async () => {
+        if (category) {
+          await API.updateCategory(categoryData);
+          if (previousName && previousName !== categoryData.name) {
+            const objectivesToUpdate = AppState.objectives.filter(o => o.category === categoryData.name && o.category === previousName);
+            if (objectivesToUpdate.length > 0) {
+              await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
+            }
             await API.saveTasks(AppState.tasks);
           }
+        } else {
+          const newId = await API.addCategory(categoryData);
+          // Update the temporary ID with the real one
+          const tempIndex = AppState.categories.findIndex(c => c.id === categoryData.id);
+          if (tempIndex >= 0) {
+            AppState.categories[tempIndex].id = newId;
+          }
         }
-      } else {
-        const newId = await API.addCategory(categoryData);
-        categoryData.id = newId;
-        AppState.categories.push(categoryData);
+      },
+      () => {
+        if (callback) callback(categoryData);
+        Toast.success('Category saved');
+      },
+      (error) => {
+        Toast.error('Error saving category. Please try again.');
       }
-      
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      if (callback) callback(categoryData);
-      Toast.success('Category saved');
-    } catch (error) {
-      console.error('Error saving category:', error);
-      Toast.error('Error saving category. Please try again.');
-    }
+    );
   }
 };
 
@@ -4303,7 +4942,7 @@ const StatusesPage = {
         const taskItem = DOM.create('div', 'objective-task-item');
         taskItem.textContent = task.task;
         taskItem.onclick = () => {
-          Router.navigate('tasks');
+          Router.navigate('timeline');
           setTimeout(() => TaskModal.show(task), 100);
         };
         taskList.appendChild(taskItem);
@@ -4323,21 +4962,25 @@ const StatusesPage = {
   async deleteStatus(status) {
     if (!confirm(`Are you sure you want to delete "${status.name}"?`)) return;
     
-    try {
-      await API.deleteStatus(status.id);
-      AppState.statuses = AppState.statuses.filter(s => s.id !== status.id);
-      const fallbackStatus = AppState.statuses.find(s => s.name === 'pending') ? 'pending' : '';
-      const tasksUpdated = updateTaskReferences('status', status.name, fallbackStatus);
-      if (tasksUpdated) {
+    const operationId = `delete-status-${status.id}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.statuses = AppState.statuses.filter(s => s.id !== status.id);
+        const fallbackStatus = AppState.statuses.find(s => s.name === 'pending') ? 'pending' : '';
+        updateTaskReferences('status', status.name, fallbackStatus);
+      },
+      async () => {
+        await API.deleteStatus(status.id);
         await API.saveTasks(AppState.tasks);
+      },
+      () => {
+        Toast.success('Status deleted');
+      },
+      (error) => {
+        Toast.error('Error deleting status. Please try again.');
       }
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Status deleted');
-    } catch (error) {
-      console.error('Error deleting status:', error);
-      Toast.error('Error deleting status. Please try again.');
-    }
+    );
   }
 };
 
@@ -4419,138 +5062,560 @@ const StatusModal = {
     };
     const previousName = status?.name || '';
 
-    try {
-      if (status) {
-        statusData.id = status.id;
-        await API.updateStatus(statusData);
-        const index = AppState.statuses.findIndex(s => s.id === status.id);
-        AppState.statuses[index] = statusData;
-        if (previousName && previousName !== statusData.name) {
-          const tasksUpdated = updateTaskReferences('status', previousName, statusData.name);
-          if (tasksUpdated) {
+    const operationId = status ? `update-status-${status.id}` : `create-status-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (status) {
+          statusData.id = status.id;
+          const index = AppState.statuses.findIndex(s => s.id === status.id);
+          if (index >= 0) AppState.statuses[index] = statusData;
+          if (previousName && previousName !== statusData.name) {
+            updateTaskReferences('status', previousName, statusData.name);
+          }
+        } else {
+          statusData.id = Date.now(); // Temporary ID
+          AppState.statuses.push(statusData);
+        }
+        this.hide();
+      },
+      async () => {
+        if (status) {
+          await API.updateStatus(statusData);
+          if (previousName && previousName !== statusData.name) {
             await API.saveTasks(AppState.tasks);
           }
+        } else {
+          const newId = await API.addStatus(statusData);
+          // Update the temporary ID with the real one
+          const tempIndex = AppState.statuses.findIndex(s => s.id === statusData.id);
+          if (tempIndex >= 0) {
+            AppState.statuses[tempIndex].id = newId;
+          }
         }
-      } else {
-        const newId = await API.addStatus(statusData);
-        statusData.id = newId;
-        AppState.statuses.push(statusData);
+      },
+      () => {
+        if (callback) callback(statusData);
+        Toast.success('Status saved');
+      },
+      (error) => {
+        Toast.error('Error saving status. Please try again.');
       }
+    );
+  }
+};
+
+// Events Timeline Page (Calendar View for Events)
+const EventsTimelinePage = {
+  render() {
+    const container = DOM.create('div', '');
+
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+
+    // Left section: Title and navigation
+    const leftSection = DOM.create('div', '');
+    leftSection.style.display = 'flex';
+    leftSection.style.alignItems = 'center';
+    leftSection.style.gap = '1rem';
+    
+    const titleSection = DOM.create('div', '');
+    titleSection.appendChild(DOM.create('h1', 'page-title', 'Events'));
+    titleSection.appendChild(DOM.create('p', 'page-subtitle', 'Calendar view of your events'));
+    leftSection.appendChild(titleSection);
+
+    const navControls = DOM.create('div', 'timeline-nav');
+    navControls.style.display = 'flex';
+    navControls.style.alignItems = 'center';
+    navControls.style.gap = '0.5rem';
+
+    const prevBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    prevBtn.innerHTML = DOM.getIconSVG('chevronLeft');
+    prevBtn.onclick = () => this.navigateTimeline(-1);
+    navControls.appendChild(prevBtn);
+
+    const monthYear = DOM.create('div', 'timeline-month-year');
+    monthYear.textContent = this.formatViewLabel(AppState.eventsTimelineCurrentDate || new Date());
+    monthYear.style.fontSize = '1.125rem';
+    monthYear.style.fontWeight = '600';
+    monthYear.style.minWidth = '140px';
+    monthYear.style.textAlign = 'center';
+    navControls.appendChild(monthYear);
+
+    const nextBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    nextBtn.innerHTML = DOM.getIconSVG('chevronRight');
+    nextBtn.onclick = () => this.navigateTimeline(1);
+    navControls.appendChild(nextBtn);
+
+    const todayBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    todayBtn.textContent = 'Today';
+    todayBtn.onclick = () => this.goToToday();
+    navControls.appendChild(todayBtn);
+
+    leftSection.appendChild(navControls);
+
+    // Right section: View toggle and Add button
+    const rightSection = DOM.create('div', '');
+    rightSection.style.display = 'flex';
+    rightSection.style.gap = '0.5rem';
+    rightSection.style.alignItems = 'center';
+
+    const currentView = AppState.eventsTimelineView || 'month';
+
+    const monthBtn = DOM.create('button', `btn btn-sm ${currentView === 'month' ? 'btn-primary' : 'btn-secondary'}`);
+    monthBtn.textContent = 'Month';
+    monthBtn.onclick = () => this.setView('month');
+    rightSection.appendChild(monthBtn);
+
+    const weekBtn = DOM.create('button', `btn btn-sm ${currentView === 'week' ? 'btn-primary' : 'btn-secondary'}`);
+    weekBtn.textContent = 'Week';
+    weekBtn.onclick = () => this.setView('week');
+    rightSection.appendChild(weekBtn);
+
+    const dayBtn = DOM.create('button', `btn btn-sm ${currentView === 'day' ? 'btn-primary' : 'btn-secondary'}`);
+    dayBtn.textContent = 'Day';
+    dayBtn.onclick = () => this.setView('day');
+    rightSection.appendChild(dayBtn);
+
+    const addBtn = DOM.create('button', 'btn btn-primary btn-sm');
+    addBtn.textContent = '+ Add Event';
+    addBtn.onclick = () => EventModal.show();
+    rightSection.appendChild(addBtn);
+
+    header.appendChild(leftSection);
+    header.appendChild(rightSection);
+    container.appendChild(header);
+
+    const timelineWrapper = DOM.create('div', 'timeline-wrapper');
+    timelineWrapper.style.overflowX = 'auto';
+    timelineWrapper.style.marginTop = '1rem';
+    timelineWrapper.setAttribute('data-view', AppState.eventsTimelineView || 'month');
+
+    const timeline = DOM.create('div', 'timeline-container');
+    this.renderTimeline(timeline);
+    timelineWrapper.appendChild(timeline);
+
+    container.appendChild(timelineWrapper);
+
+    return container;
+  },
+
+  setView(view) {
+    if (!AppState.eventsTimelineView) AppState.eventsTimelineView = {};
+    AppState.eventsTimelineView = view;
+    if (!AppState.eventsTimelineCurrentDate) AppState.eventsTimelineCurrentDate = new Date();
+    Router.render();
+  },
+
+  navigateTimeline(delta) {
+    const currentDate = new Date(AppState.eventsTimelineCurrentDate || new Date());
+    const view = AppState.eventsTimelineView || 'month';
+    if (view === 'day') {
+      currentDate.setDate(currentDate.getDate() + delta);
+    } else if (view === 'week') {
+      currentDate.setDate(currentDate.getDate() + (delta * 7));
+    } else {
+      currentDate.setMonth(currentDate.getMonth() + delta);
+    }
+    AppState.eventsTimelineCurrentDate = currentDate;
+    Router.render();
+  },
+
+  goToToday() {
+    AppState.eventsTimelineCurrentDate = new Date();
+    Router.render();
+  },
+
+  formatViewLabel(date) {
+    const view = AppState.eventsTimelineView || 'month';
+    if (view === 'day') {
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+    if (view === 'week') {
+      const start = new Date(date);
+      start.setDate(date.getDate() - date.getDay());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const startLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const endLabel = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return `${startLabel} - ${endLabel}`;
+    }
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  },
+
+  isToday(date) {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  },
+
+  renderTimeline(container) {
+    const view = AppState.eventsTimelineView || 'month';
+    const currentDate = AppState.eventsTimelineCurrentDate || new Date();
+    let startDate, endDate, days = [];
+
+    if (view === 'day') {
+      startDate = DateUtils.parseDate(currentDate);
+      endDate = DateUtils.parseDate(currentDate);
+      days = [new Date(startDate)];
+    } else if (view === 'week') {
+      const dayOfWeek = currentDate.getDay();
+      startDate = new Date(currentDate);
+      startDate.setDate(currentDate.getDate() - dayOfWeek);
+      startDate = DateUtils.parseDate(startDate);
+      endDate = DateUtils.addDays(startDate, 6);
+
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        days.push(date);
+      }
+    } else {
+      startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      startDate = DateUtils.parseDate(startDate);
+      endDate = DateUtils.parseDate(endDate);
+
+      const firstDay = startDate.getDay();
+      for (let i = firstDay - 1; i >= 0; i--) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() - i - 1);
+        days.push(date);
+      }
+
+      for (let i = 1; i <= endDate.getDate(); i++) {
+        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), i);
+        days.push(date);
+      }
+
+      const lastDay = endDate.getDay();
+      for (let i = 1; i <= 6 - lastDay; i++) {
+        const date = new Date(endDate);
+        date.setDate(endDate.getDate() + i);
+        days.push(date);
+      }
+    }
+
+    // Group events by date
+    const eventsByDate = {};
+    AppState.events.forEach(event => {
+      const eventStart = DateUtils.parseDate(event.startDate || event.endDate);
+      const eventEnd = DateUtils.parseDate(event.endDate || event.startDate);
+      if (!eventStart && !eventEnd) return;
       
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      if (callback) callback(statusData);
-      Toast.success('Status saved');
+      const start = eventStart || eventEnd;
+      const end = eventEnd || eventStart;
+      
+      let cursor = new Date(start);
+      while (cursor <= end) {
+        const dateKey = this.getDateKey(cursor);
+        if (!eventsByDate[dateKey]) {
+          eventsByDate[dateKey] = [];
+        }
+        eventsByDate[dateKey].push(event);
+        cursor = DateUtils.addDays(cursor, 1);
+      }
+    });
+
+    // Create timeline header
+    const header = DOM.create('div', 'timeline-header');
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    dayNames.forEach(dayName => {
+      const dayHeader = DOM.create('div', 'timeline-day-header');
+      dayHeader.appendChild(DOM.create('div', 'timeline-day-name', dayName));
+      header.appendChild(dayHeader);
+    });
+    container.appendChild(header);
+
+    // Create timeline body
+    const body = DOM.create('div', 'timeline-body');
+    
+    days.forEach(day => {
+      const dayColumn = DOM.create('div', 'timeline-day-column');
+      const dateKey = this.getDateKey(day);
+      const dayEvents = eventsByDate[dateKey] || [];
+      const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+      const isCollapsed = !!(AppState.eventsTimelineCollapsedDates && AppState.eventsTimelineCollapsedDates[dateKey]);
+
+      if (!isCurrentMonth) {
+        dayColumn.classList.add('timeline-day-other-month');
+      } else if (this.isToday(day)) {
+        dayColumn.classList.add('timeline-day-today');
+      } else if (day.getDay() === 0 || day.getDay() === 6) {
+        dayColumn.classList.add('timeline-day-weekend');
+      }
+
+      const dayHeader = DOM.create('div', 'timeline-day-column-header');
+      const headerInfo = DOM.create('div', 'timeline-day-header-info');
+      headerInfo.appendChild(DOM.create('div', 'timeline-day-name', dayNames[day.getDay()]));
+      headerInfo.appendChild(DOM.create('div', 'timeline-day-number', day.getDate()));
+      dayHeader.appendChild(headerInfo);
+
+      const dateStr = DateUtils.formatDate(day);
+      const addBtn = DOM.create('button', 'timeline-day-add');
+      addBtn.innerHTML = DOM.getIconSVG('plus');
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        EventModal.show(null, null, dateStr);
+      };
+      dayHeader.appendChild(addBtn);
+
+      const collapseButton = DOM.create('button', 'timeline-day-toggle');
+      collapseButton.textContent = isCollapsed ? 'Show' : 'Hide';
+      collapseButton.onclick = (e) => {
+        e.stopPropagation();
+        if (!AppState.eventsTimelineCollapsedDates) AppState.eventsTimelineCollapsedDates = {};
+        const nextCollapsed = !dayColumn.classList.contains('collapsed');
+        dayColumn.classList.toggle('collapsed', nextCollapsed);
+        AppState.eventsTimelineCollapsedDates[dateKey] = nextCollapsed;
+        collapseButton.textContent = nextCollapsed ? 'Show' : 'Hide';
+      };
+      dayHeader.appendChild(collapseButton);
+      dayColumn.appendChild(dayHeader);
+
+      if (isCollapsed) {
+        dayColumn.classList.add('collapsed');
+      }
+
+      const eventsContainer = DOM.create('div', 'timeline-day-tasks');
+      const collapsedSummary = DOM.create('div', 'timeline-day-collapsed-summary', `${dayEvents.length} events hidden`);
+      dayColumn.appendChild(collapsedSummary);
+
+      if (view === 'day') {
+        this.renderDaySchedule(eventsContainer, dayEvents, day);
+      } else {
+        dayEvents.forEach(event => {
+          eventsContainer.appendChild(this.renderEventCard(event));
+        });
+
+        if (dayEvents.length === 0) {
+          const emptyDay = DOM.create('div', 'timeline-day-empty');
+          const addIndicator = DOM.create('div', 'add-task-indicator');
+          addIndicator.innerHTML = DOM.getIconSVG('plus');
+          addIndicator.style.opacity = '0';
+          addIndicator.style.position = 'absolute';
+          addIndicator.style.top = '0.5rem';
+          addIndicator.style.right = '0.5rem';
+          addIndicator.style.width = '20px';
+          addIndicator.style.height = '20px';
+          addIndicator.style.color = '#6b7280';
+          addIndicator.style.transition = 'opacity 0.2s';
+          emptyDay.appendChild(addIndicator);
+
+          const text = DOM.create('div', '');
+          text.textContent = 'Click to add event';
+          text.style.fontSize = '0.75rem';
+          text.style.color = '#9ca3af';
+          emptyDay.appendChild(text);
+
+          eventsContainer.appendChild(emptyDay);
+        }
+      }
+
+      dayColumn.appendChild(eventsContainer);
+      body.appendChild(dayColumn);
+    });
+    
+    container.appendChild(body);
+  },
+
+  renderEventCard(event) {
+    const eventBar = DOM.create('div', 'timeline-task-bar');
+    eventBar.style.backgroundColor = event.color || '#3b82f6';
+    eventBar.style.borderLeftColor = event.color || '#3b82f6';
+
+    const eventContent = DOM.create('div', 'timeline-task-content');
+
+    const title = DOM.create('div', 'timeline-task-title');
+    title.textContent = event.title.length > 25 ? event.title.substring(0, 25) + '...' : event.title;
+    title.title = event.title;
+    eventContent.appendChild(title);
+
+    const meta = DOM.create('div', 'timeline-task-meta');
+    const timeInfo = event.startTime || event.endTime
+      ? ` • ${(event.startTime || '')}${event.endTime ? `-${event.endTime}` : ''}`
+      : '';
+    const categoryInfo = event.category ? ` • ${event.category}` : '';
+    meta.textContent = `${event.startDate || ''}${timeInfo}${categoryInfo}`;
+    eventContent.appendChild(meta);
+
+    eventBar.appendChild(eventContent);
+    eventBar.onclick = (e) => {
+      if (!e.defaultPrevented) EventModal.show(event);
+    };
+
+    const calendarBtn = DOM.create('button', 'btn btn-xs btn-secondary');
+    calendarBtn.textContent = '📅';
+    calendarBtn.style.position = 'absolute';
+    calendarBtn.style.top = '0.5rem';
+    calendarBtn.style.right = '0.5rem';
+    calendarBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await this.addToGoogleCalendar(event);
+    };
+    eventBar.appendChild(calendarBtn);
+
+    return eventBar;
+  },
+
+  renderDaySchedule(container, dayEvents, selectedDate) {
+    const allDayEvents = [];
+    const eventsByHour = {};
+    const selectedKey = this.getDateKey(selectedDate);
+
+    dayEvents.forEach(event => {
+      const eventStart = DateUtils.parseDate(event.startDate);
+      const eventEnd = DateUtils.parseDate(event.endDate || event.startDate);
+      const startMinutes = this.getEventStartMinutes(event);
+      const endMinutes = this.getEventEndMinutes(event);
+
+      if (!startMinutes && !endMinutes) {
+        allDayEvents.push(event);
+        return;
+      }
+
+      let startHour = 0;
+      let endHour = 23;
+
+      if (eventStart && this.getDateKey(eventStart) === selectedKey && startMinutes !== null) {
+        startHour = Math.floor(startMinutes / 60);
+      }
+      if (eventEnd && this.getDateKey(eventEnd) === selectedKey && endMinutes !== null) {
+        endHour = Math.max(startHour, Math.ceil(endMinutes / 60));
+      }
+
+      for (let hour = startHour; hour <= endHour; hour += 1) {
+        if (!eventsByHour[hour]) eventsByHour[hour] = [];
+        eventsByHour[hour].push(event);
+      }
+    });
+
+    if (allDayEvents.length > 0) {
+      const allDaySection = DOM.create('div', 'timeline-day-all-day');
+      const allDayLabel = DOM.create('div', 'timeline-day-all-day-label', 'All Day');
+      allDaySection.appendChild(allDayLabel);
+      allDayEvents.forEach(event => allDaySection.appendChild(this.renderEventCard(event)));
+      container.appendChild(allDaySection);
+    }
+
+    const hoursContainer = DOM.create('div', 'timeline-day-hours');
+    for (let hour = 0; hour < 24; hour += 1) {
+      const hourRow = DOM.create('div', 'timeline-hour-row');
+      const hourLabel = DOM.create('div', 'timeline-hour-label', `${String(hour).padStart(2, '0')}:00`);
+      const hourEvents = DOM.create('div', 'timeline-hour-tasks');
+
+      (eventsByHour[hour] || []).forEach(event => {
+        hourEvents.appendChild(this.renderEventCard(event));
+      });
+
+      if (!eventsByHour[hour] || eventsByHour[hour].length === 0) {
+        hourEvents.appendChild(DOM.create('div', 'timeline-hour-empty', ''));
+      }
+
+      hourRow.appendChild(hourLabel);
+      hourRow.appendChild(hourEvents);
+      hoursContainer.appendChild(hourRow);
+    }
+
+    if (dayEvents.length === 0) {
+      const emptyDay = DOM.create('div', 'timeline-day-empty');
+      const text = DOM.create('div', '');
+      text.textContent = 'No events for this day';
+      text.style.fontSize = '0.875rem';
+      text.style.color = '#9ca3af';
+      emptyDay.appendChild(text);
+      container.appendChild(emptyDay);
+    }
+
+    container.appendChild(hoursContainer);
+  },
+
+  getEventStartMinutes(event) {
+    if (!event.startTime) return null;
+    const match = event.startTime.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    if (!match) return null;
+    let hour = parseInt(match[1], 10);
+    const minutes = parseInt(match[2] || '0', 10);
+    const meridian = match[3];
+    if (meridian) {
+      const upper = meridian.toUpperCase();
+      if (upper === 'PM' && hour < 12) hour += 12;
+      if (upper === 'AM' && hour === 12) hour = 0;
+    }
+    if (hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return null;
+    return hour * 60 + minutes;
+  },
+
+  getEventEndMinutes(event) {
+    if (!event.endTime) return null;
+    const match = event.endTime.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    if (!match) return null;
+    let hour = parseInt(match[1], 10);
+    const minutes = parseInt(match[2] || '0', 10);
+    const meridian = match[3];
+    if (meridian) {
+      const upper = meridian.toUpperCase();
+      if (upper === 'PM' && hour < 12) hour += 12;
+      if (upper === 'AM' && hour === 12) hour = 0;
+    }
+    if (hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return null;
+    return hour * 60 + minutes;
+  },
+
+  getDateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  },
+
+  async addToGoogleCalendar(event) {
+    try {
+      const result = await API.createGoogleCalendarEvent(event);
+      if (result.success) {
+        Toast.success('Event added to Google Calendar!');
+      } else {
+        Toast.error(result.error || 'Failed to add to Google Calendar');
+      }
     } catch (error) {
-      console.error('Error saving status:', error);
-      Toast.error('Error saving status. Please try again.');
+      console.error('Error adding to Google Calendar:', error);
+      Toast.error('Error adding to Google Calendar');
     }
   }
 };
 
-// Events Sidebar
-const EventsSidebar = {
-  render() {
-    let sidebar = document.querySelector('.events-sidebar');
-    if (!sidebar) {
-      sidebar = DOM.create('div', 'events-sidebar');
-      sidebar.style.cssText = `
-        position: fixed;
-        right: ${AppState.eventsSidebarOpen ? '0' : '-400px'};
-        top: 0;
-        width: 380px;
-        height: 100vh;
-        background: white;
-        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-        z-index: 1500;
-        transition: right 0.3s ease;
-        overflow-y: auto;
-        padding: 1.5rem;
-      `;
-      document.body.appendChild(sidebar);
-    } else {
-      sidebar.style.right = AppState.eventsSidebarOpen ? '0' : '-400px';
-    }
-
-    if (!AppState.eventsSidebarOpen) return;
-
-    sidebar.innerHTML = '';
-
-    const header = DOM.create('div', 'page-header');
-    header.style.marginBottom = '1.5rem';
-    const title = DOM.create('h2', 'page-title', 'Events');
-    const closeBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    closeBtn.innerHTML = DOM.getIconSVG('close');
-    closeBtn.onclick = () => {
-      AppState.eventsSidebarOpen = false;
-      this.render();
-    };
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    sidebar.appendChild(header);
-
-    const addBtn = DOM.create('button', 'btn btn-primary');
-    addBtn.textContent = '+ New Event';
-    addBtn.style.marginBottom = '1rem';
-    addBtn.onclick = () => EventModal.show();
-    sidebar.appendChild(addBtn);
-
-    const eventsList = DOM.create('div', 'task-list');
-    if (AppState.events.length === 0) {
-      const empty = DOM.create('div', 'empty-state');
-      empty.textContent = 'No events yet. Create one!';
-      eventsList.appendChild(empty);
-    } else {
-      AppState.events.forEach(event => {
-        const eventCard = DOM.create('div', 'task-item');
-        eventCard.style.borderLeftColor = event.color || '#3b82f6';
-        
-        const title = DOM.create('div', 'task-title', event.title);
-        const desc = DOM.create('div', 'text-sm text-gray-500', event.description || '');
-        const date = DOM.create('div', 'task-meta-item', 
-          `${event.startDate || ''} ${event.startTime || ''} - ${event.endDate || ''} ${event.endTime || ''}`
-        );
-        
-        const actions = DOM.create('div', 'task-actions');
-        const editBtn = DOM.create('button', 'btn btn-xs btn-secondary');
-        editBtn.textContent = 'Edit';
-        editBtn.onclick = () => EventModal.show(event);
-        const deleteBtn = DOM.create('button', 'btn btn-xs btn-danger');
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.onclick = () => this.deleteEvent(event.id);
-        
-        actions.appendChild(editBtn);
-        actions.appendChild(deleteBtn);
-        
-        eventCard.appendChild(title);
-        if (event.description) eventCard.appendChild(desc);
-        eventCard.appendChild(date);
-        eventCard.appendChild(actions);
-        eventsList.appendChild(eventCard);
-      });
-    }
-    sidebar.appendChild(eventsList);
-  },
-
-  async deleteEvent(eventId) {
-    if (!confirm('Delete this event?')) return;
-    try {
-      await API.deleteEvent(eventId);
-      await DataStore.refresh();
-      this.render();
-      Router.render();
-      Toast.success('Event deleted');
-    } catch (error) {
-      console.error('Error deleting event:', error);
-      Toast.error('Error deleting event');
-    }
+const EventActions = {
+  async deleteEvent(event) {
+    if (!confirm(`Delete event "${event.title}"?`)) return;
+    
+    const operationId = `delete-event-${event.id}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.events = AppState.events.filter(e => e.id !== event.id);
+      },
+      async () => {
+        await API.deleteEvent(event.id);
+      },
+      () => {
+        Toast.success('Event deleted');
+      },
+      (error) => {
+        Toast.error('Error deleting event. Please try again.');
+      }
+    );
   }
 };
 
 // Event Modal
 const EventModal = {
-  show(event = null) {
+  show(event = null, onSaveCallback = null, prefillDate = null) {
     const overlay = DOM.create('div', 'modal-overlay active');
     overlay.onclick = (e) => {
       if (e.target === overlay) this.hide();
@@ -4568,7 +5633,7 @@ const EventModal = {
     const form = DOM.create('form', '');
     form.onsubmit = (e) => {
       e.preventDefault();
-      this.save(event);
+      this.save(event, onSaveCallback);
     };
 
     const titleGroup = DOM.create('div', 'form-group');
@@ -4594,7 +5659,7 @@ const EventModal = {
     startDateGroup.appendChild(DOM.create('label', 'form-label', 'Start Date'));
     const startDateInput = DOM.create('input', 'form-input');
     startDateInput.type = 'date';
-    startDateInput.value = event?.startDate || '';
+    startDateInput.value = event?.startDate || prefillDate || '';
     startDateInput.name = 'startDate';
     startDateGroup.appendChild(startDateInput);
     dateRow.appendChild(startDateGroup);
@@ -4614,7 +5679,7 @@ const EventModal = {
     endDateGroup.appendChild(DOM.create('label', 'form-label', 'End Date'));
     const endDateInput = DOM.create('input', 'form-input');
     endDateInput.type = 'date';
-    endDateInput.value = event?.endDate || '';
+    endDateInput.value = event?.endDate || prefillDate || '';
     endDateInput.name = 'endDate';
     endDateGroup.appendChild(endDateInput);
     endDateRow.appendChild(endDateGroup);
@@ -4655,12 +5720,15 @@ const EventModal = {
     colorGroup.appendChild(colorInput);
     form.appendChild(colorGroup);
 
+    const syncHint = DOM.create('div', 'modal-hint', 'New events sync automatically to Google Calendar.');
+    form.appendChild(syncHint);
+
     const footer = DOM.create('div', 'modal-footer');
     const cancelBtn = DOM.create('button', 'btn btn-secondary');
     cancelBtn.type = 'button';
     cancelBtn.textContent = 'Cancel';
     cancelBtn.onclick = () => this.hide();
-    const saveBtn = DOM.create('button', 'btn btn-primary');
+    const saveBtn = DOM.create('button', 'btn btn-primary modal-save');
     saveBtn.type = 'submit';
     saveBtn.textContent = 'Save';
     footer.appendChild(cancelBtn);
@@ -4677,8 +5745,14 @@ const EventModal = {
     if (overlay) overlay.remove();
   },
 
-  async save(event) {
+  async save(event, onSaveCallback) {
     const form = document.querySelector('.modal form');
+    const saveButton = form?.querySelector('.modal-save');
+    if (saveButton) {
+      saveButton.classList.add('loading');
+      saveButton.textContent = 'Saving...';
+      saveButton.disabled = true;
+    }
     const formData = new FormData(form);
     const eventData = {
       title: formData.get('title'),
@@ -4690,27 +5764,75 @@ const EventModal = {
       category: formData.get('category') || '',
       color: formData.get('color') || '#3b82f6'
     };
+    const operationId = event ? `update-event-${event.id}` : `create-event-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (event) {
+          eventData.id = event.id;
+          const index = AppState.events.findIndex(e => e.id === event.id);
+          if (index >= 0) AppState.events[index] = eventData;
+        } else {
+          eventData.id = Date.now(); // Temporary ID
+          AppState.events.push(eventData);
+        }
+        this.hide();
+      },
+      async () => {
+        if (event) {
+          await API.updateEvent(eventData);
+        } else {
+          const newId = await API.addEvent(eventData);
+          // Update the temporary ID with the real one
+          const tempIndex = AppState.events.findIndex(e => e.id === eventData.id);
+          if (tempIndex >= 0) {
+            AppState.events[tempIndex].id = newId;
+          }
+        }
 
-    try {
-      if (event) {
-        eventData.id = event.id;
-        await API.updateEvent(eventData);
-        const index = AppState.events.findIndex(e => e.id === event.id);
-        if (index >= 0) AppState.events[index] = eventData;
-      } else {
-        const newId = await API.addEvent(eventData);
-        eventData.id = newId;
-        AppState.events.push(eventData);
+        const shouldSyncToCalendar = !event;
+        const calendarStartDate = eventData.startDate || eventData.endDate;
+        const calendarEndDate = eventData.endDate || eventData.startDate;
+        if (shouldSyncToCalendar && calendarStartDate) {
+          const calendarPayload = {
+            ...eventData,
+            startDate: calendarStartDate,
+            endDate: calendarEndDate
+          };
+          try {
+            const result = await API.createGoogleCalendarEvent(calendarPayload);
+            if (result.success) {
+              Toast.success('Event saved and synced to Google Calendar');
+            } else {
+              Toast.success('Event saved, but calendar sync failed: ' + (result.error || 'Unknown error'));
+            }
+          } catch (error) {
+            console.error('Error adding to Google Calendar:', error);
+            Toast.success('Event saved, but calendar sync failed');
+          }
+        } else if (!calendarStartDate) {
+          Toast.success('Event saved. Add a date to sync with Google Calendar.');
+        } else {
+          Toast.success('Event updated');
+        }
+      },
+      () => {
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+      },
+      (error) => {
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+        Toast.error('Error saving event');
       }
-      this.hide();
-      await DataStore.refresh();
-      EventsSidebar.render();
-      Router.render();
-      Toast.success('Event saved');
-    } catch (error) {
-      console.error('Error saving event:', error);
-      Toast.error('Error saving event');
-    }
+    );
   }
 };
 
@@ -4822,15 +5944,23 @@ const DebtsPage = {
 
   async deleteDebt(debtId) {
     if (!confirm('Delete this debt record?')) return;
-    try {
-      await API.deleteDebt(debtId);
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Debt deleted');
-    } catch (error) {
-      console.error('Error deleting debt:', error);
-      Toast.error('Error deleting debt');
-    }
+    
+    const operationId = `delete-debt-${debtId}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.debts = AppState.debts.filter(d => d.id !== debtId);
+      },
+      async () => {
+        await API.deleteDebt(debtId);
+      },
+      () => {
+        Toast.success('Debt deleted');
+      },
+      (error) => {
+        Toast.error('Error deleting debt');
+      }
+    );
   }
 };
 
@@ -4959,25 +6089,40 @@ const DebtModal = {
       relatedTaskId: debt?.relatedTaskId || ''
     };
 
-    try {
-      if (debt) {
-        debtData.id = debt.id;
-        await API.updateDebt(debtData);
-        const index = AppState.debts.findIndex(d => d.id === debt.id);
-        if (index >= 0) AppState.debts[index] = debtData;
-      } else {
-        const newId = await API.addDebt(debtData);
-        debtData.id = newId;
-        AppState.debts.push(debtData);
+    const operationId = debt ? `update-debt-${debt.id}` : `create-debt-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (debt) {
+          debtData.id = debt.id;
+          const index = AppState.debts.findIndex(d => d.id === debt.id);
+          if (index >= 0) AppState.debts[index] = debtData;
+        } else {
+          debtData.id = Date.now(); // Temporary ID
+          AppState.debts.push(debtData);
+        }
+        this.hide();
+      },
+      async () => {
+        if (debt) {
+          await API.updateDebt(debtData);
+        } else {
+          const newId = await API.addDebt(debtData);
+          // Update the temporary ID with the real one
+          const tempIndex = AppState.debts.findIndex(d => d.id === debtData.id);
+          if (tempIndex >= 0) {
+            AppState.debts[tempIndex].id = newId;
+          }
+        }
+      },
+      () => {
+        Toast.success('Debt saved');
+      },
+      (error) => {
+        Toast.error('Error saving debt');
       }
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      Toast.success('Debt saved');
-    } catch (error) {
-      console.error('Error saving debt:', error);
-      Toast.error('Error saving debt');
-    }
+    );
   }
 };
 
@@ -5289,24 +6434,31 @@ const TaskModal = {
       estimatedValue: parseFloat(formData.get('estimatedValue') || '0') || 0
     };
 
-    if (task) {
-      const index = AppState.tasks.findIndex(t => t.id === task.id);
-      AppState.tasks[index] = taskData;
-    } else {
-      AppState.tasks.push(taskData);
-    }
-
-    try {
-      await API.saveTasks(AppState.tasks);
-      this.hide();
-      await DataStore.refresh();
-      Router.render();
-      Sidebar.render();
-      Toast.success(task ? 'Task updated' : 'Task created');
-    } catch (error) {
-      console.error('Error saving task:', error);
-      Toast.error('Error saving task. Please try again.');
-    }
+    const operationId = task ? `update-task-${task.id}` : `create-task-${Date.now()}`;
+    
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (task) {
+          const index = AppState.tasks.findIndex(t => t.id === task.id);
+          if (index >= 0) {
+            AppState.tasks[index] = taskData;
+          }
+        } else {
+          AppState.tasks.push(taskData);
+        }
+        this.hide();
+      },
+      async () => {
+        await API.saveTasks(AppState.tasks);
+      },
+      () => {
+        Toast.success(task ? 'Task updated' : 'Task created');
+      },
+      (error) => {
+        Toast.error('Error saving task. Please try again.');
+      }
+    );
   }
 };
 
@@ -5325,7 +6477,6 @@ async function init() {
     
     // Render sidebar and initial page
     Sidebar.render();
-    EventsSidebar.render();
     Router.render();
   } catch (error) {
     console.error('Error initializing app:', error);
