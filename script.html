@@ -29,6 +29,7 @@ const AppState = {
   mobileSidebarOpen: false,
   taskFilters: { statuses: [], categories: [], objectives: [] },
   financeFilters: { types: [], categories: [] },
+  calendarCurrentDate: new Date(),
 };
 
 // Google Apps Script API
@@ -612,6 +613,15 @@ function getObjectiveColor(name) {
   return AppState.objectives.find(objective => objective.name === name)?.color || '';
 }
 
+const ColorPalette = {
+  colors: ['#4f46e5', '#22c55e', '#f59e0b', '#ef4444', '#14b8a6', '#ec4899', '#6366f1', '#0ea5e9'],
+  getNext(existingColors = []) {
+    const normalized = existingColors.map(color => (color || '').toLowerCase());
+    const next = this.colors.find(color => !normalized.includes(color.toLowerCase()));
+    return next || this.colors[normalized.length % this.colors.length];
+  }
+};
+
 // DOM Utilities
 const DOM = {
   create(tag, className = '', content = '') {
@@ -647,6 +657,24 @@ const DOM = {
       menu: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>'
     };
     return icons[name] || '';
+  }
+};
+
+const SelectUtils = {
+  addCreateOption(select, label, onCreate) {
+    const option = DOM.create('option', '');
+    option.value = '__create__';
+    option.textContent = `+ Add ${label}`;
+    select.appendChild(option);
+    select.dataset.prevValue = select.value;
+    select.addEventListener('change', () => {
+      if (select.value === '__create__') {
+        select.value = select.dataset.prevValue || '';
+        onCreate();
+      } else {
+        select.dataset.prevValue = select.value;
+      }
+    });
   }
 };
 
@@ -2158,34 +2186,121 @@ const CalendarPage = {
     const container = DOM.create('div', '');
     
     const header = DOM.create('div', 'page-header');
-    header.appendChild(DOM.create('h1', 'page-title', 'Calendar'));
-    header.appendChild(DOM.create('p', 'page-subtitle', 'View your tasks on the calendar'));
+    const titleWrap = DOM.create('div', '');
+    titleWrap.appendChild(DOM.create('h1', 'page-title', 'Calendar'));
+    titleWrap.appendChild(DOM.create('p', 'page-subtitle', 'Tasks and events by day'));
+    header.appendChild(titleWrap);
+
+    const navControls = DOM.create('div', 'calendar-nav');
+    const prevBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    prevBtn.innerHTML = DOM.getIconSVG('chevronLeft');
+    prevBtn.onclick = () => this.navigateMonth(-1);
+    const monthLabel = DOM.create('div', 'calendar-month-label');
+    monthLabel.textContent = this.formatMonth(AppState.calendarCurrentDate);
+    const nextBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    nextBtn.innerHTML = DOM.getIconSVG('chevronRight');
+    nextBtn.onclick = () => this.navigateMonth(1);
+    const todayBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    todayBtn.textContent = 'Today';
+    todayBtn.onclick = () => this.goToToday();
+    navControls.append(prevBtn, monthLabel, nextBtn, todayBtn);
+    header.appendChild(navControls);
     container.appendChild(header);
 
     const calendar = DOM.create('div', 'calendar');
-    
-    // Simple calendar grid (you can enhance this)
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     days.forEach(day => {
-      const dayHeader = DOM.create('div', 'calendar-day');
+      const dayHeader = DOM.create('div', 'calendar-day calendar-header');
       dayHeader.style.textAlign = 'center';
       dayHeader.style.fontWeight = 'bold';
       dayHeader.textContent = day;
       calendar.appendChild(dayHeader);
     });
 
-    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
+    const viewDate = new Date(AppState.calendarCurrentDate);
+    const startOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+    const endOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
+    const startOffset = startOfMonth.getDay();
 
-    // Add calendar days (simplified - you can add full calendar logic)
+    for (let i = 0; i < startOffset; i++) {
+      const blank = DOM.create('div', 'calendar-day other-month');
+      calendar.appendChild(blank);
+    }
+
+    const filteredTasks = TaskFilters.applySearch(AppState.tasks);
     const today = new Date();
-    for (let i = 1; i <= 31; i++) {
-      const day = DOM.create('div', 'calendar-day');
-      day.appendChild(DOM.create('div', 'calendar-day-number', i));
-      calendar.appendChild(day);
+    today.setHours(0, 0, 0, 0);
+
+    for (let dayIndex = 1; dayIndex <= endOfMonth.getDate(); dayIndex++) {
+      const date = new Date(viewDate.getFullYear(), viewDate.getMonth(), dayIndex);
+      const cell = DOM.create('div', 'calendar-day');
+      if (date.getTime() === today.getTime()) cell.classList.add('today');
+      const label = DOM.create('div', 'calendar-day-number', dayIndex);
+      cell.appendChild(label);
+
+      const { tasksCount, eventsCount } = this.getCountsForDate(date, filteredTasks, AppState.events);
+      if (tasksCount || eventsCount) {
+        const badges = DOM.create('div', 'calendar-day-badges');
+        if (tasksCount) {
+          badges.appendChild(DOM.create('span', 'calendar-badge task', `${tasksCount} task${tasksCount === 1 ? '' : 's'}`));
+        }
+        if (eventsCount) {
+          badges.appendChild(DOM.create('span', 'calendar-badge event', `${eventsCount} event${eventsCount === 1 ? '' : 's'}`));
+        }
+        cell.appendChild(badges);
+      } else {
+        cell.appendChild(DOM.create('div', 'calendar-day-empty', '—'));
+      }
+
+      cell.onclick = () => TaskModal.show(null, null, DateUtils.formatDate(date));
+      calendar.appendChild(cell);
     }
 
     container.appendChild(calendar);
     return container;
+  },
+
+  navigateMonth(delta) {
+    const next = new Date(AppState.calendarCurrentDate);
+    next.setMonth(next.getMonth() + delta);
+    AppState.calendarCurrentDate = next;
+    Router.render();
+  },
+
+  goToToday() {
+    AppState.calendarCurrentDate = new Date();
+    Router.render();
+  },
+
+  formatMonth(date) {
+    return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  },
+
+  getCountsForDate(date, tasks, events) {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const tasksCount = tasks.filter(task => {
+      const start = DateUtils.parseDate(task.startDate || task.endDate);
+      const end = DateUtils.parseDate(task.endDate || task.startDate);
+      if (!start && !end) return false;
+      const startDate = start || end;
+      const endDate = end || start;
+      return startDate <= dayEnd && endDate >= dayStart;
+    }).length;
+
+    const eventsCount = events.filter(eventItem => {
+      const start = DateUtils.parseDate(eventItem.startDate || eventItem.endDate);
+      const end = DateUtils.parseDate(eventItem.endDate || eventItem.startDate);
+      if (!start && !end) return false;
+      const startDate = start || end;
+      const endDate = end || start;
+      return startDate <= dayEnd && endDate >= dayStart;
+    }).length;
+
+    return { tasksCount, eventsCount };
   }
 };
 
@@ -2982,6 +3097,7 @@ const FinancePage = {
       
       // Summary
       content.appendChild(this.renderSummary(filteredRecords));
+      content.appendChild(this.renderFocusSummary());
       
       // Filters and transactions
       content.appendChild(this.renderFinanceFilters(monthRecords));
@@ -3061,6 +3177,7 @@ const FinancePage = {
 
     const grid = DOM.create('div', 'finance-chart-grid');
     const ratioWrap = DOM.create('div', 'finance-chart-card');
+    ratioWrap.classList.add('finance-chart-compact');
     ratioWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Spend vs Remaining'));
     const ratioCanvas = DOM.create('canvas', '');
     ratioCanvas.id = 'financeSpendRatioChart';
@@ -3076,6 +3193,54 @@ const FinancePage = {
 
     card.appendChild(grid);
     setTimeout(() => this.drawFinancePercentCharts(records), 0);
+    return card;
+  },
+
+  renderFocusSummary() {
+    const card = DOM.create('div', 'finance-card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Focus Snapshot'));
+
+    const activeTasks = AppState.tasks.filter(task => task.status !== 'completed');
+    const objectiveCounts = activeTasks.reduce((acc, task) => {
+      const key = task.objective || 'No objective';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const categoryCounts = activeTasks.reduce((acc, task) => {
+      const key = task.category || 'Uncategorized';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    const topObjective = Object.entries(objectiveCounts).sort((a, b) => b[1] - a[1])[0];
+    const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
+    const objectivesInUse = Object.keys(objectiveCounts).filter(key => key !== 'No objective').length;
+    const activeFocusAreas = Object.keys(objectiveCounts).length;
+
+    const grid = DOM.create('div', 'finance-focus-grid');
+    grid.innerHTML = `
+      <div class="finance-focus-card">
+        <div class="finance-focus-label">Top Objective</div>
+        <div class="finance-focus-value">${topObjective ? topObjective[0] : '—'}</div>
+        <div class="finance-focus-sub">${topObjective ? `${topObjective[1]} task(s)` : 'No active tasks'}</div>
+      </div>
+      <div class="finance-focus-card">
+        <div class="finance-focus-label">Top Category</div>
+        <div class="finance-focus-value">${topCategory ? topCategory[0] : '—'}</div>
+        <div class="finance-focus-sub">${topCategory ? `${topCategory[1]} task(s)` : 'No active tasks'}</div>
+      </div>
+      <div class="finance-focus-card">
+        <div class="finance-focus-label">Objectives in Use</div>
+        <div class="finance-focus-value">${objectivesInUse}</div>
+        <div class="finance-focus-sub">Active objectives</div>
+      </div>
+      <div class="finance-focus-card">
+        <div class="finance-focus-label">Active focus areas</div>
+        <div class="finance-focus-value">${activeFocusAreas}</div>
+        <div class="finance-focus-sub">Objectives with work</div>
+      </div>
+    `;
+    card.appendChild(grid);
     return card;
   },
 
@@ -3484,11 +3649,16 @@ const FinancePage = {
 
     const form = DOM.create('form', 'finance-form');
 
+    const dateGroup = DOM.create('div', 'form-group');
+    dateGroup.appendChild(DOM.create('label', 'form-label', 'Date'));
     const dateInput = DOM.create('input', 'form-input');
     dateInput.type = 'date';
     dateInput.required = true;
     dateInput.value = this.formatDateInput(new Date());
+    dateGroup.appendChild(dateInput);
 
+    const typeGroup = DOM.create('div', 'form-group');
+    typeGroup.appendChild(DOM.create('label', 'form-label', 'Type'));
     const typeSelect = DOM.create('select', 'form-input');
     ['expense', 'income'].forEach(type => {
       const option = document.createElement('option');
@@ -3496,13 +3666,17 @@ const FinancePage = {
       option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
       typeSelect.appendChild(option);
     });
+    typeGroup.appendChild(typeSelect);
 
+    const amountGroup = DOM.create('div', 'form-group');
+    amountGroup.appendChild(DOM.create('label', 'form-label', 'Amount'));
     const amountInput = DOM.create('input', 'form-input');
     amountInput.type = 'number';
     amountInput.min = '0';
     amountInput.step = '0.01';
-    amountInput.placeholder = 'Amount';
+    amountInput.placeholder = '0.00';
     amountInput.required = true;
+    amountGroup.appendChild(amountInput);
 
     const categoryGroup = DOM.create('div', 'form-group');
     categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
@@ -3518,11 +3692,17 @@ const FinancePage = {
       option.textContent = cat.name;
       categorySelect.appendChild(option);
     });
+    SelectUtils.addCreateOption(categorySelect, 'Category', () => {
+      FinanceCategoryModal.show();
+    });
     categoryGroup.appendChild(categorySelect);
 
+    const noteGroup = DOM.create('div', 'form-group');
+    noteGroup.appendChild(DOM.create('label', 'form-label', 'Note'));
     const noteInput = DOM.create('input', 'form-input');
     noteInput.type = 'text';
-    noteInput.placeholder = 'Note';
+    noteInput.placeholder = 'Optional note';
+    noteGroup.appendChild(noteInput);
 
     const recurringWrapper = DOM.create('label', 'finance-checkbox');
     const recurringInput = DOM.create('input', '');
@@ -3534,12 +3714,14 @@ const FinancePage = {
     submitBtn.type = 'submit';
     submitBtn.textContent = 'Add Transaction';
 
-    form.appendChild(dateInput);
-    form.appendChild(typeSelect);
-    form.appendChild(amountInput);
-    form.appendChild(categoryGroup);
-    form.appendChild(noteInput);
-    form.appendChild(recurringWrapper);
+    const grid = DOM.create('div', 'finance-form-grid');
+    grid.appendChild(dateGroup);
+    grid.appendChild(typeGroup);
+    grid.appendChild(amountGroup);
+    grid.appendChild(categoryGroup);
+    grid.appendChild(noteGroup);
+    grid.appendChild(recurringWrapper);
+    form.appendChild(grid);
     form.appendChild(submitBtn);
 
     form.onsubmit = async (event) => {
@@ -3646,12 +3828,14 @@ const FinancePage = {
   },
 
   renderFinanceFilters(records) {
-    const bar = DOM.create('div', 'filter-bar');
-    bar.appendChild(DOM.create('div', 'filter-title', 'Finance Filters'));
+    const bar = DOM.create('div', 'filter-bar finance-filter-bar');
+    const header = DOM.create('div', 'filter-title');
+    header.textContent = 'Finance Filters';
+    bar.appendChild(header);
 
-    const typeGroup = DOM.create('div', 'filter-group');
+    const typeGroup = DOM.create('div', 'filter-group finance-filter-group');
     typeGroup.appendChild(DOM.create('div', 'filter-label', 'Type'));
-    const typeOptions = DOM.create('div', 'filter-options');
+    const typeOptions = DOM.create('div', 'filter-options finance-filter-options');
     ['income', 'expense'].forEach(type => {
       const option = DOM.create('label', 'filter-option');
       const checkbox = DOM.create('input', '');
@@ -3665,9 +3849,9 @@ const FinancePage = {
     typeGroup.appendChild(typeOptions);
     bar.appendChild(typeGroup);
 
-    const categoryGroup = DOM.create('div', 'filter-group');
+    const categoryGroup = DOM.create('div', 'filter-group finance-filter-group');
     categoryGroup.appendChild(DOM.create('div', 'filter-label', 'Category'));
-    const categoryOptions = DOM.create('div', 'filter-options');
+    const categoryOptions = DOM.create('div', 'filter-options finance-filter-options');
     const categories = Array.from(new Set(records.map(record => record.category).filter(Boolean))).sort();
     categories.forEach(category => {
       const option = DOM.create('label', 'filter-option');
@@ -3685,7 +3869,7 @@ const FinancePage = {
     categoryGroup.appendChild(categoryOptions);
     bar.appendChild(categoryGroup);
 
-    const clearBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    const clearBtn = DOM.create('button', 'btn btn-secondary btn-sm finance-filter-clear');
     clearBtn.textContent = 'Clear Filters';
     clearBtn.onclick = () => this.clearFinanceFilters();
     bar.appendChild(clearBtn);
@@ -3905,6 +4089,12 @@ const FinanceModal = {
       option.textContent = cat.name;
       if (record?.category === cat.name) option.selected = true;
       categorySelect.appendChild(option);
+    });
+    SelectUtils.addCreateOption(categorySelect, 'Category', () => {
+      this.hide();
+      FinanceCategoryModal.show(null, () => {
+        this.show(record);
+      });
     });
     categorySelect.value = record?.category || '';
     categoryGroup.appendChild(categorySelect);
@@ -4136,14 +4326,6 @@ const FinanceCategoryModal = {
     form.appendChild(nameGroup);
 
     // Color
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.name = 'color';
-    colorInput.value = category?.color || '#3b82f6';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
 
     form.onsubmit = (e) => {
       e.preventDefault();
@@ -4177,7 +4359,7 @@ const FinanceCategoryModal = {
   async save(category, formData, callback) {
     const categoryData = {
       name: formData.get('name'),
-      color: formData.get('color')
+      color: category?.color || ColorPalette.getNext(AppState.categories.map(item => item.color))
     };
     const previousName = category?.name || '';
 
@@ -4487,18 +4669,12 @@ const ObjectiveModal = {
     });
     
     categoryGroup.appendChild(categorySelect);
-    
-    const newCategoryBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newCategoryBtn.type = 'button';
-    newCategoryBtn.textContent = '+ New Category';
-    newCategoryBtn.style.marginTop = '0.5rem';
-    newCategoryBtn.onclick = () => {
+    SelectUtils.addCreateOption(categorySelect, 'Category', () => {
       this.hide();
-      CategoryModal.show(null, (newCategory) => {
+      CategoryModal.show(null, () => {
         this.show(objective);
       });
-    };
-    categoryGroup.appendChild(newCategoryBtn);
+    });
     form.appendChild(categoryGroup);
 
     // Due date
@@ -4512,14 +4688,6 @@ const ObjectiveModal = {
     form.appendChild(dueGroup);
 
     // Color
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.name = 'color';
-    colorInput.value = objective?.color || '#3b82f6';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
 
     form.onsubmit = (e) => {
       e.preventDefault();
@@ -4554,7 +4722,7 @@ const ObjectiveModal = {
     const objectiveData = {
       name: formData.get('name'),
       description: formData.get('description'),
-      color: formData.get('color'),
+      color: objective?.color || ColorPalette.getNext(AppState.objectives.map(item => item.color)),
       category: formData.get('category') || '',
       dueDate: formData.get('dueDate') || ''
     };
@@ -5017,14 +5185,6 @@ const StatusModal = {
     form.appendChild(nameGroup);
 
     // Color
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.name = 'color';
-    colorInput.value = status?.color || '#3b82f6';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
 
     form.onsubmit = (e) => {
       e.preventDefault();
@@ -5058,7 +5218,7 @@ const StatusModal = {
   async save(status, formData, callback) {
     const statusData = {
       name: formData.get('name'),
-      color: formData.get('color')
+      color: status?.color || ColorPalette.getNext(AppState.statuses.map(item => item.color))
     };
     const previousName = status?.name || '';
 
@@ -5711,14 +5871,12 @@ const EventModal = {
     categoryGroup.appendChild(categorySelect);
     form.appendChild(categoryGroup);
 
-    const colorGroup = DOM.create('div', 'form-group');
-    colorGroup.appendChild(DOM.create('label', 'form-label', 'Color'));
-    const colorInput = DOM.create('input', 'form-input');
-    colorInput.type = 'color';
-    colorInput.value = event?.color || '#3b82f6';
-    colorInput.name = 'color';
-    colorGroup.appendChild(colorInput);
-    form.appendChild(colorGroup);
+    SelectUtils.addCreateOption(categorySelect, 'Category', () => {
+      this.hide();
+      CategoryModal.show(null, () => {
+        this.show(event);
+      });
+    });
 
     const syncHint = DOM.create('div', 'modal-hint', 'New events sync automatically to Google Calendar.');
     form.appendChild(syncHint);
@@ -5762,7 +5920,7 @@ const EventModal = {
       endDate: formData.get('endDate') || '',
       endTime: formData.get('endTime') || '',
       category: formData.get('category') || '',
-      color: formData.get('color') || '#3b82f6'
+      color: event?.color || ColorPalette.getNext(AppState.events.map(item => item.color))
     };
     const operationId = event ? `update-event-${event.id}` : `create-event-${Date.now()}`;
     
@@ -6178,18 +6336,12 @@ const TaskModal = {
     });
     
     catGroup.appendChild(catSelect);
-    
-    const newCatBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newCatBtn.type = 'button';
-    newCatBtn.textContent = '+ New Category';
-    newCatBtn.style.marginTop = '0.5rem';
-    newCatBtn.onclick = () => {
+    SelectUtils.addCreateOption(catSelect, 'Category', () => {
       this.hide();
-      CategoryModal.show(null, (newCategory) => {
+      CategoryModal.show(null, () => {
         this.show(task);
       });
-    };
-    catGroup.appendChild(newCatBtn);
+    });
     form.appendChild(catGroup);
 
     // Date range
@@ -6281,18 +6433,12 @@ const TaskModal = {
     });
     
     statusGroup.appendChild(statusSelect);
-    
-    const newStatusBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newStatusBtn.type = 'button';
-    newStatusBtn.textContent = '+ New Status';
-    newStatusBtn.style.marginTop = '0.5rem';
-    newStatusBtn.onclick = () => {
+    SelectUtils.addCreateOption(statusSelect, 'Status', () => {
       this.hide();
-      StatusModal.show(null, (newStatus) => {
+      StatusModal.show(null, () => {
         this.show(task);
       });
-    };
-    statusGroup.appendChild(newStatusBtn);
+    });
     form.appendChild(statusGroup);
 
     // Priority
@@ -6368,18 +6514,12 @@ const TaskModal = {
     });
     
     objectiveGroup.appendChild(objectiveSelect);
-    
-    const newObjectiveBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    newObjectiveBtn.type = 'button';
-    newObjectiveBtn.textContent = '+ New Objective';
-    newObjectiveBtn.style.marginTop = '0.5rem';
-    newObjectiveBtn.onclick = () => {
+    SelectUtils.addCreateOption(objectiveSelect, 'Objective', () => {
       this.hide();
-      ObjectiveModal.show(null, (newObjective) => {
+      ObjectiveModal.show(null, () => {
         this.show(task);
       });
-    };
-    objectiveGroup.appendChild(newObjectiveBtn);
+    });
     form.appendChild(objectiveGroup);
 
     form.onsubmit = (e) => {
