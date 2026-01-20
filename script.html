@@ -30,6 +30,7 @@ const AppState = {
   taskFilters: { statuses: [], categories: [], objectives: [] },
   financeFilters: { types: [], categories: [] },
   calendarCurrentDate: new Date(),
+  debtsTab: 'owed',
 };
 
 // Google Apps Script API
@@ -741,7 +742,7 @@ const TaskFilters = {
   },
 
   renderFilterBar(title = 'Task Filters') {
-    const bar = DOM.create('div', 'filter-bar');
+    const bar = DOM.create('div', 'filter-bar finance-filter-bar');
     const heading = DOM.create('div', 'filter-title', title);
     bar.appendChild(heading);
 
@@ -849,32 +850,7 @@ const Sidebar = {
     header.appendChild(toggleBtn);
     sidebar.appendChild(header);
 
-    if (!AppState.sidebarCollapsed) {
-      const searchSection = DOM.create('div', 'sidebar-search');
-      const searchInput = DOM.create('input', 'search-input');
-      searchInput.type = 'search';
-      searchInput.placeholder = 'Search tasks...';
-      searchInput.value = AppState.searchQuery;
-      searchInput.oninput = (event) => {
-        AppState.searchQuery = event.target.value;
-        Router.render();
-      };
-      searchSection.appendChild(searchInput);
-      sidebar.appendChild(searchSection);
 
-      const actions = DOM.create('div', 'sidebar-actions');
-      const taskBtn = DOM.create('button', 'btn btn-primary btn-sm sidebar-action');
-      taskBtn.textContent = '+ New Task';
-      taskBtn.onclick = () => TaskModal.show();
-      const eventBtn = DOM.create('button', 'btn btn-secondary btn-sm sidebar-action');
-      eventBtn.textContent = '+ New Event';
-      eventBtn.onclick = () => EventModal.show();
-      const financeBtn = DOM.create('button', 'btn btn-secondary btn-sm sidebar-action');
-      financeBtn.textContent = '+ Log Expense';
-      financeBtn.onclick = () => FinanceModal.show();
-      actions.append(taskBtn, eventBtn, financeBtn);
-      sidebar.appendChild(actions);
-    }
 
     // Navigation
     const nav = DOM.create('nav', 'sidebar-nav');
@@ -900,9 +876,7 @@ const Sidebar = {
       {
         title: 'Reference',
         items: [
-          { id: 'objectives', label: 'Objectives', icon: 'flag' },
-          { id: 'categories', label: 'Categories', icon: 'tag' },
-          { id: 'statuses', label: 'Statuses', icon: 'check' }
+          { id: 'reference', label: 'Reference', icon: 'flag' }
         ]
       }
     ];
@@ -914,10 +888,8 @@ const Sidebar = {
       }
       group.items.forEach(item => {
         const li = DOM.create('li', 'nav-item');
-        if (AppState.currentPage === item.id || (AppState.currentPage === 'reference' && ['objectives', 'categories', 'statuses'].includes(item.id))) {
-          if (AppState.referenceTab === item.id || AppState.currentPage === item.id) {
-            li.classList.add('active');
-          }
+        if (AppState.currentPage === item.id) {
+          li.classList.add('active');
         }
         li.onclick = () => Router.navigate(item.id);
         li.appendChild(DOM.createIcon(item.icon));
@@ -1063,7 +1035,6 @@ const Router = {
     }
 
     const main = DOM.create('div', 'app-main');
-    main.appendChild(FlowBar.render());
     main.appendChild(pageContent);
 
     content.innerHTML = '';
@@ -1086,59 +1057,8 @@ const FlowBar = {
   render() {
     const bar = DOM.create('div', 'flow-bar');
     const left = DOM.create('div', 'flow-bar-left');
-    const right = DOM.create('div', 'flow-bar-actions');
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const nextWeek = DateUtils.addDays(today, 7);
-    const activeTasks = AppState.tasks.filter(task => task.status !== 'completed');
-    const getDueDate = (task) => DateUtils.parseDate(task.endDate || task.startDate);
-    const overdue = activeTasks.filter(task => {
-      const due = getDueDate(task);
-      return due && due < today;
-    });
-    const dueToday = activeTasks.filter(task => {
-      const due = getDueDate(task);
-      return due && due.getTime() === today.getTime();
-    });
-    const upcoming = activeTasks.filter(task => {
-      const due = getDueDate(task);
-      return due && due > today && due <= nextWeek;
-    });
-
-    const summary = DOM.create('div', 'flow-bar-summary');
-    summary.innerHTML = `
-      <div class="flow-pill danger">${overdue.length} overdue</div>
-      <div class="flow-pill warning">${dueToday.length} due today</div>
-      <div class="flow-pill info">${upcoming.length} next 7 days</div>
-    `;
-    left.appendChild(summary);
-
-    const search = DOM.create('div', 'flow-bar-search');
-    const input = DOM.create('input', 'flow-bar-input');
-    input.type = 'search';
-    input.placeholder = 'Search across tasks, events, money...';
-    input.value = AppState.searchQuery;
-    input.oninput = (event) => {
-      AppState.searchQuery = event.target.value;
-      Router.render();
-    };
-    search.appendChild(input);
-    left.appendChild(search);
-
-    const taskBtn = DOM.create('button', 'btn btn-primary btn-sm');
-    taskBtn.textContent = '+ Task';
-    taskBtn.onclick = () => TaskModal.show();
-    const eventBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    eventBtn.textContent = '+ Event';
-    eventBtn.onclick = () => EventModal.show();
-    const financeBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-    financeBtn.textContent = '+ Expense';
-    financeBtn.onclick = () => FinanceModal.show();
-    right.append(taskBtn, eventBtn, financeBtn);
 
     bar.appendChild(left);
-    bar.appendChild(right);
     return bar;
   }
 };
@@ -3092,12 +3012,8 @@ const FinancePage = {
       const monthRecords = this.getMonthlyRecords();
       const filteredRecords = this.applyFinanceFilters(monthRecords);
       
-      // Charts at the top
-      content.appendChild(this.renderSpendRatioCharts(filteredRecords));
-      
-      // Summary
-      content.appendChild(this.renderSummary(filteredRecords));
-      content.appendChild(this.renderFocusSummary());
+      // Overview
+      content.appendChild(this.renderFinanceDashboard(filteredRecords));
       
       // Filters and transactions
       content.appendChild(this.renderFinanceFilters(monthRecords));
@@ -3150,99 +3066,251 @@ const FinancePage = {
     return summary;
   },
 
-  renderSpendRatioCharts(records) {
-    const card = DOM.create('div', 'finance-card');
-    card.appendChild(DOM.create('h2', 'section-title', 'Income vs Spend Ratio'));
+  renderFinanceDashboard(records) {
+    const wrapper = DOM.create('div', '');
+    wrapper.appendChild(this.renderSummary(records));
+
+    const chartsCard = DOM.create('div', 'finance-card');
+    chartsCard.appendChild(DOM.create('h2', 'section-title', 'Cashflow & Spending'));
+    const grid = DOM.create('div', 'finance-chart-grid');
+
+    const cashflowWrap = DOM.create('div', 'finance-chart-card');
+    cashflowWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Monthly Cashflow'));
+    const cashflowCanvas = DOM.create('canvas', '');
+    cashflowCanvas.id = 'financeCashflowLine';
+    cashflowWrap.appendChild(cashflowCanvas);
+    grid.appendChild(cashflowWrap);
+
+    const categoryWrap = DOM.create('div', 'finance-chart-card');
+    categoryWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Top Categories'));
+    const categoryCanvas = DOM.create('canvas', '');
+    categoryCanvas.id = 'financeCategorySpendBar';
+    categoryWrap.appendChild(categoryCanvas);
+    grid.appendChild(categoryWrap);
+
+    const trendWrap = DOM.create('div', 'finance-chart-card finance-chart-compact');
+    trendWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Daily Spend Trend'));
+    const trendCanvas = DOM.create('canvas', '');
+    trendCanvas.id = 'financeDailySpendSparkline';
+    trendCanvas.height = 120;
+    trendWrap.appendChild(trendCanvas);
+    grid.appendChild(trendWrap);
+
+    const splitWrap = DOM.create('div', 'finance-chart-card finance-chart-compact');
+    splitWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Income vs Expense'));
+    const splitCanvas = DOM.create('canvas', '');
+    splitCanvas.id = 'financeIncomeExpenseDonut';
+    splitCanvas.height = 120;
+    splitWrap.appendChild(splitCanvas);
+    grid.appendChild(splitWrap);
+
+    const budgetWrap = DOM.create('div', 'finance-chart-card');
+    budgetWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Budget vs Actual'));
+    const budgetCanvas = DOM.create('canvas', '');
+    budgetCanvas.id = 'financeBudgetActualBar';
+    budgetWrap.appendChild(budgetCanvas);
+    grid.appendChild(budgetWrap);
+
+    chartsCard.appendChild(grid);
+    wrapper.appendChild(chartsCard);
+    wrapper.appendChild(this.renderHighlights(records));
+
+    requestAnimationFrame(() => this.drawFinanceDashboardCharts(records));
+    return wrapper;
+  },
+
+  drawFinanceDashboardCharts(records) {
+    if (typeof Chart === 'undefined') return;
+
+    const groupedByDate = records.reduce((acc, record) => {
+      if (!record.date) return acc;
+      if (!acc[record.date]) acc[record.date] = { income: 0, expense: 0 };
+      const amount = Number(record.amount) || 0;
+      if (record.type === 'income') acc[record.date].income += amount;
+      else acc[record.date].expense += amount;
+      return acc;
+    }, {});
+    const dates = Object.keys(groupedByDate).sort();
+    const incomeSeries = dates.map(date => groupedByDate[date].income);
+    const expenseSeries = dates.map(date => groupedByDate[date].expense);
+
+    const cashflowCanvas = document.getElementById('financeCashflowLine');
+    if (cashflowCanvas) {
+      if (AppState.dashboardCharts.financeCashflowLine) {
+        AppState.dashboardCharts.financeCashflowLine.destroy();
+      }
+      AppState.dashboardCharts.financeCashflowLine = new Chart(cashflowCanvas, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [
+            { label: 'Income', data: incomeSeries, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.35 },
+            { label: 'Expenses', data: expenseSeries, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.2)', fill: true, tension: 0.35 }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    const categoryTotals = records
+      .filter(record => record.type === 'expense')
+      .reduce((acc, record) => {
+        const key = record.category || 'Uncategorized';
+        acc[key] = (acc[key] || 0) + (Number(record.amount) || 0);
+        return acc;
+      }, {});
+    const categoryEntries = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const categoryLabels = categoryEntries.map(entry => entry[0]);
+    const categoryData = categoryEntries.map(entry => entry[1]);
+
+    const categoryCanvas = document.getElementById('financeCategorySpendBar');
+    if (categoryCanvas) {
+      if (AppState.dashboardCharts.financeCategorySpendBar) {
+        AppState.dashboardCharts.financeCategorySpendBar.destroy();
+      }
+      AppState.dashboardCharts.financeCategorySpendBar = new Chart(categoryCanvas, {
+        type: 'bar',
+        data: {
+          labels: categoryLabels,
+          datasets: [{ label: 'Spend', data: categoryData, backgroundColor: '#3b82f6' }]
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    const dailySpend = dates.map(date => groupedByDate[date].expense);
+    const trendCanvas = document.getElementById('financeDailySpendSparkline');
+    if (trendCanvas) {
+      if (AppState.dashboardCharts.financeDailySpendSparkline) {
+        AppState.dashboardCharts.financeDailySpendSparkline.destroy();
+      }
+      AppState.dashboardCharts.financeDailySpendSparkline = new Chart(trendCanvas, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            data: dailySpend,
+            borderColor: '#0ea5e9',
+            backgroundColor: 'rgba(14, 165, 233, 0.2)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { x: { display: false }, y: { display: false } }
+        }
+      });
+    }
 
     const totals = this.getTotals(records);
-    const percentSpent = totals.income > 0 ? Math.round((totals.expenses / totals.income) * 100) : 0;
-    const percentSaved = totals.income > 0 ? Math.max(0, 100 - percentSpent) : 0;
+    const splitCanvas = document.getElementById('financeIncomeExpenseDonut');
+    if (splitCanvas) {
+      if (AppState.dashboardCharts.financeIncomeExpenseDonut) {
+        AppState.dashboardCharts.financeIncomeExpenseDonut.destroy();
+      }
+      AppState.dashboardCharts.financeIncomeExpenseDonut = new Chart(splitCanvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Income', 'Expenses'],
+          datasets: [{
+            data: [totals.income, totals.expenses],
+            backgroundColor: ['#10b981', '#ef4444']
+          }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } } }
+      });
+    }
 
-    const summary = DOM.create('div', 'finance-percent-summary');
-    summary.innerHTML = `
-      <div>
-        <div class="finance-percent-value">${percentSpent}%</div>
-        <div class="finance-percent-label">Spent of income</div>
+    const budgetCategories = AppState.financeCategories.filter(category => (Number(category.budget) || 0) > 0);
+    const budgetLabels = budgetCategories.map(category => category.name);
+    const budgetValues = budgetCategories.map(category => Number(category.budget) || 0);
+    const actualValues = budgetCategories.map(category => {
+      return records
+        .filter(record => record.type === 'expense' && (record.category || 'Uncategorized') === category.name)
+        .reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+    });
+
+    const budgetCanvas = document.getElementById('financeBudgetActualBar');
+    if (budgetCanvas) {
+      if (AppState.dashboardCharts.financeBudgetActualBar) {
+        AppState.dashboardCharts.financeBudgetActualBar.destroy();
+      }
+      AppState.dashboardCharts.financeBudgetActualBar = new Chart(budgetCanvas, {
+        type: 'bar',
+        data: {
+          labels: budgetLabels,
+          datasets: [
+            { label: 'Budget', data: budgetValues, backgroundColor: '#a855f7' },
+            { label: 'Actual', data: actualValues, backgroundColor: '#f97316' }
+          ]
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+  },
+
+  renderFinanceOverview(records) {
+    const totals = this.getTotals(records);
+    const percentSpent = totals.income > 0 ? Math.round((totals.expenses / totals.income) * 100) : 0;
+
+    const card = DOM.create('div', 'finance-card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Finance Overview'));
+
+    const metrics = DOM.create('div', 'finance-overview-grid');
+    metrics.innerHTML = `
+      <div class="finance-overview-card">
+        <div class="finance-overview-label">Income</div>
+        <div class="finance-overview-value income">${this.formatCurrency(totals.income)}</div>
       </div>
-      <div>
-        <div class="finance-percent-value">${percentSaved}%</div>
-        <div class="finance-percent-label">Left over</div>
+      <div class="finance-overview-card">
+        <div class="finance-overview-label">Expenses</div>
+        <div class="finance-overview-value expense">${this.formatCurrency(totals.expenses)}</div>
       </div>
-      <div>
-        <div class="finance-percent-value">${this.formatCurrency(totals.net)}</div>
-        <div class="finance-percent-label">Net balance</div>
+      <div class="finance-overview-card">
+        <div class="finance-overview-label">Net</div>
+        <div class="finance-overview-value">${this.formatCurrency(totals.net)}</div>
+      </div>
+      <div class="finance-overview-card">
+        <div class="finance-overview-label">Spend rate</div>
+        <div class="finance-overview-value">${percentSpent}%</div>
       </div>
     `;
-    card.appendChild(summary);
+    card.appendChild(metrics);
 
-    const grid = DOM.create('div', 'finance-chart-grid');
-    const ratioWrap = DOM.create('div', 'finance-chart-card');
-    ratioWrap.classList.add('finance-chart-compact');
+    const charts = DOM.create('div', 'finance-overview-charts');
+    const ratioWrap = DOM.create('div', 'finance-chart-card finance-chart-compact');
     ratioWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Spend vs Remaining'));
     const ratioCanvas = DOM.create('canvas', '');
     ratioCanvas.id = 'financeSpendRatioChart';
+    ratioCanvas.height = 120;
     ratioWrap.appendChild(ratioCanvas);
-    grid.appendChild(ratioWrap);
+    charts.appendChild(ratioWrap);
 
     const categoryWrap = DOM.create('div', 'finance-chart-card');
     categoryWrap.appendChild(DOM.create('div', 'finance-chart-title', 'Category Spend (% of Income)'));
     const categoryCanvas = DOM.create('canvas', '');
     categoryCanvas.id = 'financeSpendPercentChart';
+    categoryCanvas.height = 180;
     categoryWrap.appendChild(categoryCanvas);
-    grid.appendChild(categoryWrap);
+    charts.appendChild(categoryWrap);
 
-    card.appendChild(grid);
-    setTimeout(() => this.drawFinancePercentCharts(records), 0);
+    card.appendChild(charts);
+    requestAnimationFrame(() => this.drawFinancePercentCharts(records));
     return card;
   },
 
-  renderFocusSummary() {
-    const card = DOM.create('div', 'finance-card');
-    card.appendChild(DOM.create('h2', 'section-title', 'Focus Snapshot'));
-
-    const activeTasks = AppState.tasks.filter(task => task.status !== 'completed');
-    const objectiveCounts = activeTasks.reduce((acc, task) => {
-      const key = task.objective || 'No objective';
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    const categoryCounts = activeTasks.reduce((acc, task) => {
-      const key = task.category || 'Uncategorized';
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-
-    const topObjective = Object.entries(objectiveCounts).sort((a, b) => b[1] - a[1])[0];
-    const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
-    const objectivesInUse = Object.keys(objectiveCounts).filter(key => key !== 'No objective').length;
-    const activeFocusAreas = Object.keys(objectiveCounts).length;
-
-    const grid = DOM.create('div', 'finance-focus-grid');
-    grid.innerHTML = `
-      <div class="finance-focus-card">
-        <div class="finance-focus-label">Top Objective</div>
-        <div class="finance-focus-value">${topObjective ? topObjective[0] : '—'}</div>
-        <div class="finance-focus-sub">${topObjective ? `${topObjective[1]} task(s)` : 'No active tasks'}</div>
-      </div>
-      <div class="finance-focus-card">
-        <div class="finance-focus-label">Top Category</div>
-        <div class="finance-focus-value">${topCategory ? topCategory[0] : '—'}</div>
-        <div class="finance-focus-sub">${topCategory ? `${topCategory[1]} task(s)` : 'No active tasks'}</div>
-      </div>
-      <div class="finance-focus-card">
-        <div class="finance-focus-label">Objectives in Use</div>
-        <div class="finance-focus-value">${objectivesInUse}</div>
-        <div class="finance-focus-sub">Active objectives</div>
-      </div>
-      <div class="finance-focus-card">
-        <div class="finance-focus-label">Active focus areas</div>
-        <div class="finance-focus-value">${activeFocusAreas}</div>
-        <div class="finance-focus-sub">Objectives with work</div>
-      </div>
-    `;
-    card.appendChild(grid);
-    return card;
-  },
 
   drawFinancePercentCharts(records) {
     if (typeof Chart === 'undefined') return;
@@ -3265,7 +3333,10 @@ const FinancePage = {
           }]
         },
         options: {
-          plugins: { legend: { position: 'bottom' } }
+          cutout: '70%',
+          radius: '80%',
+          plugins: { legend: { position: 'bottom' } },
+          maintainAspectRatio: false
         }
       });
     }
@@ -3405,117 +3476,9 @@ const FinancePage = {
     return card;
   },
 
-  renderAdvice(records) {
-    const card = DOM.create('div', 'finance-card');
-    card.appendChild(DOM.create('h2', 'section-title', 'Smart Forecast & Advice'));
-
-    const totals = this.getTotals(records);
-    const monthKey = this.getMonthKey(AppState.financeMonth);
-    const budget = this.getMonthlyBudget(monthKey);
-    const today = new Date();
-    const year = AppState.financeMonth.getFullYear();
-    const month = AppState.financeMonth.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const isCurrentMonth = this.getMonthKey(today) === monthKey;
-    const daysElapsed = isCurrentMonth ? Math.max(1, Math.min(today.getDate(), daysInMonth)) : daysInMonth;
-    const forecastExpenses = daysElapsed > 0
-      ? (totals.expenses / daysElapsed) * daysInMonth
-      : 0;
-    const budgetGap = budget > 0 ? budget - forecastExpenses : null;
-
-    const prevMonth = new Date(year, month - 1, 1);
-    const prevTotals = this.getTotals(this.getMonthlyRecordsFor(prevMonth));
-    const expenseDelta = totals.expenses - prevTotals.expenses;
-
-    const metrics = DOM.create('div', 'insights-metrics');
-    const metricItems = [
-      { label: 'Forecast Spend', value: this.formatCurrency(forecastExpenses) },
-      { label: 'Budget Gap', value: budget > 0 ? this.formatCurrency(budgetGap) : 'No budget' },
-      { label: 'Vs Last Month', value: prevTotals.expenses > 0 ? this.formatCurrency(expenseDelta) : '—' }
-    ];
-
-    metricItems.forEach(item => {
-      const metric = DOM.create('div', 'insights-metric');
-      metric.appendChild(DOM.create('div', 'insights-metric-value', item.value));
-      metric.appendChild(DOM.create('div', 'insights-metric-label', item.label));
-      metrics.appendChild(metric);
-    });
-    card.appendChild(metrics);
-
-    const advice = [];
-    if (budget > 0) {
-      if (forecastExpenses > budget) {
-        advice.push(`At this pace, you may exceed budget by ${this.formatCurrency(Math.abs(budgetGap))}.`);
-      } else {
-        advice.push(`On track to stay within budget with ${this.formatCurrency(budgetGap)} left.`);
-      }
-    } else {
-      advice.push('Set a monthly budget to track spend pacing.');
-    }
-
-    if (totals.net < 0) {
-      advice.push('Net cashflow is negative this month — review expenses.');
-    }
-
-    if (prevTotals.expenses > 0) {
-      const trendLabel = expenseDelta > 0 ? 'up' : 'down';
-      advice.push(`Spending is ${trendLabel} ${this.formatCurrency(Math.abs(expenseDelta))} vs last month.`);
-    }
-
-    const expenseRecords = records.filter(record => record.type === 'expense');
-    if (expenseRecords.length > 0) {
-      const categoryTotals = expenseRecords.reduce((acc, record) => {
-        const key = record.category || 'Uncategorized';
-        acc[key] = (acc[key] || 0) + (Number(record.amount) || 0);
-        return acc;
-      }, {});
-      const [topCategory, topAmount] = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
-      const share = totals.expenses > 0 ? Math.round((topAmount / totals.expenses) * 100) : 0;
-      advice.push(`Top category: ${topCategory} (${share}% of spend).`);
-    }
-
-    if (records.filter(record => record.type === 'income').length === 0) {
-      advice.push('No income logged yet — add income to track savings rate.');
-    }
-
-    const list = DOM.create('div', 'insights-list');
-    advice.forEach(text => list.appendChild(DOM.create('div', 'insights-item', text)));
-    card.appendChild(list);
-    return card;
-  },
 
   renderTaskValueSnapshot() {
-    const card = DOM.create('div', 'finance-task-snapshot');
-    const objectiveCounts = AppState.tasks.reduce((acc, task) => {
-      const key = task.objective || 'No objective';
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    const categoryCounts = AppState.tasks.reduce((acc, task) => {
-      const key = task.category || 'No category';
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-
-    const topObjective = Object.entries(objectiveCounts).sort((a, b) => b[1] - a[1])[0];
-    const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
-    const objectiveCount = Object.keys(objectiveCounts).filter(key => key !== 'No objective').length;
-
-    const summary = [
-      { label: 'Top Objective', value: topObjective ? topObjective[0] : '—', sub: topObjective ? `${topObjective[1]} task(s)` : 'No objective yet' },
-      { label: 'Top Category', value: topCategory ? topCategory[0] : '—', sub: topCategory ? `${topCategory[1]} task(s)` : 'No category yet' },
-      { label: 'Objectives in Use', value: objectiveCount.toString(), sub: 'Active focus areas' }
-    ];
-
-    summary.forEach((item, index) => {
-      const tile = DOM.create('div', `finance-task-tile tone-${index + 1}`);
-      tile.appendChild(DOM.create('div', 'finance-task-label', item.label));
-      tile.appendChild(DOM.create('div', 'finance-task-value', item.value.toString()));
-      tile.appendChild(DOM.create('div', 'finance-task-sub', item.sub));
-      card.appendChild(tile);
-    });
-
-    return card;
+    return DOM.create('div', '');
   },
 
   renderCharts(records) {
@@ -3697,14 +3660,14 @@ const FinancePage = {
     });
     categoryGroup.appendChild(categorySelect);
 
-    const noteGroup = DOM.create('div', 'form-group');
+    const noteGroup = DOM.create('div', 'form-group span-2');
     noteGroup.appendChild(DOM.create('label', 'form-label', 'Note'));
     const noteInput = DOM.create('input', 'form-input');
     noteInput.type = 'text';
     noteInput.placeholder = 'Optional note';
     noteGroup.appendChild(noteInput);
 
-    const recurringWrapper = DOM.create('label', 'finance-checkbox');
+    const recurringWrapper = DOM.create('label', 'finance-checkbox span-3');
     const recurringInput = DOM.create('input', '');
     recurringInput.type = 'checkbox';
     recurringWrapper.appendChild(recurringInput);
@@ -3828,14 +3791,13 @@ const FinancePage = {
   },
 
   renderFinanceFilters(records) {
-    const bar = DOM.create('div', 'filter-bar finance-filter-bar');
-    const header = DOM.create('div', 'filter-title');
-    header.textContent = 'Finance Filters';
+    const bar = DOM.create('div', 'filter-bar');
+    const header = DOM.create('div', 'filter-title', 'Finance Filters');
     bar.appendChild(header);
 
     const typeGroup = DOM.create('div', 'filter-group finance-filter-group');
     typeGroup.appendChild(DOM.create('div', 'filter-label', 'Type'));
-    const typeOptions = DOM.create('div', 'filter-options finance-filter-options');
+    const typeOptions = DOM.create('div', 'filter-options');
     ['income', 'expense'].forEach(type => {
       const option = DOM.create('label', 'filter-option');
       const checkbox = DOM.create('input', '');
@@ -3851,7 +3813,7 @@ const FinancePage = {
 
     const categoryGroup = DOM.create('div', 'filter-group finance-filter-group');
     categoryGroup.appendChild(DOM.create('div', 'filter-label', 'Category'));
-    const categoryOptions = DOM.create('div', 'filter-options finance-filter-options');
+    const categoryOptions = DOM.create('div', 'filter-options');
     const categories = Array.from(new Set(records.map(record => record.category).filter(Boolean))).sort();
     categories.forEach(category => {
       const option = DOM.create('label', 'filter-option');
@@ -3869,7 +3831,7 @@ const FinancePage = {
     categoryGroup.appendChild(categoryOptions);
     bar.appendChild(categoryGroup);
 
-    const clearBtn = DOM.create('button', 'btn btn-secondary btn-sm finance-filter-clear');
+    const clearBtn = DOM.create('button', 'btn btn-secondary btn-sm');
     clearBtn.textContent = 'Clear Filters';
     clearBtn.onclick = () => this.clearFinanceFilters();
     bar.appendChild(clearBtn);
@@ -4261,6 +4223,20 @@ const FinanceCategoriesPage = {
       card.appendChild(recordsSection);
     }
 
+    if (category.budget) {
+      const monthRecords = FinancePage.getMonthlyRecordsFor(AppState.financeMonth)
+        .filter(record => record.category === category.name && record.type === 'expense');
+      const spent = monthRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+      const percent = Math.min(100, Math.round((spent / category.budget) * 100));
+      const budgetSection = DOM.create('div', 'objective-tasks');
+      budgetSection.appendChild(DOM.create('p', 'objective-tasks-label', `Budget: ${FinancePage.formatCurrency(category.budget)}`));
+      budgetSection.appendChild(DOM.create('p', 'objective-tasks-label', `Spent: ${FinancePage.formatCurrency(spent)} (${percent}%)`));
+      const bar = DOM.create('div', 'finance-budget-progress');
+      bar.innerHTML = `<span style="width: ${percent}%;" class="${percent >= 100 ? 'danger' : ''}"></span>`;
+      budgetSection.appendChild(bar);
+      card.appendChild(budgetSection);
+    }
+
     return card;
   },
 
@@ -4325,6 +4301,18 @@ const FinanceCategoryModal = {
     nameGroup.appendChild(nameInput);
     form.appendChild(nameGroup);
 
+    const budgetGroup = DOM.create('div', 'form-group');
+    budgetGroup.appendChild(DOM.create('label', 'form-label', 'Monthly Budget'));
+    const budgetInput = DOM.create('input', 'form-input');
+    budgetInput.type = 'number';
+    budgetInput.min = '0';
+    budgetInput.step = '0.01';
+    budgetInput.name = 'budget';
+    budgetInput.value = category?.budget || '';
+    budgetInput.placeholder = 'Optional limit';
+    budgetGroup.appendChild(budgetInput);
+    form.appendChild(budgetGroup);
+
     // Color
 
     form.onsubmit = (e) => {
@@ -4359,6 +4347,7 @@ const FinanceCategoryModal = {
   async save(category, formData, callback) {
     const categoryData = {
       name: formData.get('name'),
+      budget: parseFloat(formData.get('budget') || '0') || 0,
       color: category?.color || ColorPalette.getNext(AppState.categories.map(item => item.color))
     };
     const previousName = category?.name || '';
@@ -6011,6 +6000,23 @@ const DebtsPage = {
     header.appendChild(addBtn);
     container.appendChild(header);
 
+    const tabs = DOM.create('div', 'reference-tabs');
+    const tabList = [
+      { id: 'owed', label: 'Owed to Me' },
+      { id: 'owe', label: 'I Owe' }
+    ];
+    tabList.forEach(tab => {
+      const tabBtn = DOM.create('button', 'reference-tab');
+      tabBtn.textContent = tab.label;
+      if (AppState.debtsTab === tab.id) tabBtn.classList.add('active');
+      tabBtn.onclick = () => {
+        AppState.debtsTab = tab.id;
+        Router.render();
+      };
+      tabs.appendChild(tabBtn);
+    });
+    container.appendChild(tabs);
+
     const summaryCard = DOM.create('div', 'card');
     const summaryTitle = DOM.create('h3', 'section-title', 'Summary');
     summaryCard.appendChild(summaryTitle);
@@ -6056,21 +6062,26 @@ const DebtsPage = {
     listCard.appendChild(DOM.create('h3', 'section-title', 'All Debts'));
     
     const debtsList = DOM.create('div', 'finance-daily-list');
-    if (AppState.debts.length === 0) {
+    const filteredDebts = AppState.debts.filter(debt => debt.direction === AppState.debtsTab);
+    if (filteredDebts.length === 0) {
       const empty = DOM.create('div', 'empty-state');
-      empty.textContent = 'No debts tracked yet.';
+      empty.textContent = AppState.debtsTab === 'owed' ? 'No one owes you yet.' : 'You are not owing anyone.';
       debtsList.appendChild(empty);
     } else {
-      AppState.debts.forEach(debt => {
+      filteredDebts.forEach(debt => {
         const debtRow = DOM.create('div', 'finance-record');
         const details = DOM.create('div', 'finance-record-details');
         const title = DOM.create('div', 'finance-record-title', 
-          `${debt.person} - ${debt.direction === 'owed' ? 'Owed to me' : 'I owe'}`
+          `${debt.person} • ${debt.direction === 'owed' ? 'Owes me' : 'I owe'}`
         );
         const meta = DOM.create('div', 'finance-record-meta', 
           `${debt.date || 'No date'} | ${debt.description || 'No description'}`
         );
-        const status = DOM.create('span', 'finance-record-tag', debt.status);
+        if (debt.beneficiary) {
+          details.appendChild(DOM.create('div', 'finance-record-meta', `Beneficiary: ${debt.beneficiary}`));
+        }
+        const statusLabel = debt.status === 'paid' ? 'Paid' : debt.status === 'cancelled' ? 'Cancelled' : 'Pending';
+        const status = DOM.create('span', 'finance-record-tag', statusLabel);
         details.appendChild(title);
         details.appendChild(meta);
         details.appendChild(status);
@@ -6154,6 +6165,16 @@ const DebtModal = {
     personInput.name = 'person';
     personGroup.appendChild(personInput);
     form.appendChild(personGroup);
+
+    const beneficiaryGroup = DOM.create('div', 'form-group');
+    beneficiaryGroup.appendChild(DOM.create('label', 'form-label', 'Beneficiary'));
+    const beneficiaryInput = DOM.create('input', 'form-input');
+    beneficiaryInput.type = 'text';
+    beneficiaryInput.value = debt?.beneficiary || '';
+    beneficiaryInput.name = 'beneficiary';
+    beneficiaryInput.placeholder = 'Optional recipient';
+    beneficiaryGroup.appendChild(beneficiaryInput);
+    form.appendChild(beneficiaryGroup);
 
     const amountGroup = DOM.create('div', 'form-group');
     amountGroup.appendChild(DOM.create('label', 'form-label', 'Amount *'));
@@ -6239,6 +6260,7 @@ const DebtModal = {
     const formData = new FormData(form);
     const debtData = {
       person: formData.get('person'),
+      beneficiary: formData.get('beneficiary') || '',
       amount: parseFloat(formData.get('amount')) || 0,
       direction: formData.get('direction'),
       description: formData.get('description') || '',
