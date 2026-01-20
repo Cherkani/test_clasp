@@ -65,56 +65,7 @@ function getDatags() {
   }
 
  
-  const sampleData = [
-    {
-      id: 1,
-      task: "Thank you for using this product",
-      category: "Work",
-      startDate: "2025-11-22",
-      startTime: "09:00",
-      endDate: "2025-11-24",
-      endTime: "17:00",
-      color: "#5470c6",
-      status: "completed",
-      priority: "medium",
-      repeatType: "none",
-      repeatUntil: "",
-      impactType: "long-term",
-      estimatedValue: 1200
-    },
-    {
-      id: 2,
-      task: "Create new tasks then delete Sample tasks",
-      category: "Health",
-      startDate: "2025-11-25",
-      startTime: "10:00",
-      endDate: "2025-11-29",
-      endTime: "16:00",
-      color: "#73c0de",
-      status: "completed",
-      priority: "high",
-      repeatType: "none",
-      repeatUntil: "",
-      impactType: "money",
-      estimatedValue: 2500
-    },
-    {
-      id: 3,
-      task: "Match Sheet TimeZone with your Computer",
-      category: "Learning",
-      startDate: "2025-10-30",
-      startTime: "08:30",
-      endDate: "2025-11-02",
-      endTime: "12:00",
-      color: "#91cc75",
-      status: "pending",
-      priority: "low",
-      repeatType: "none",
-      repeatUntil: "",
-      impactType: "non-monetary",
-      estimatedValue: 0
-    }
-  ];
+  const sampleData = [];
 
 
   if (values.length <= 1 || values.slice(1).every(row => row.join('') === '')) {

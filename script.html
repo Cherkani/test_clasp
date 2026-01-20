@@ -2295,6 +2295,12 @@ const TimelinePage = {
     const rightSection = DOM.create('div', '');
     rightSection.style.display = 'flex';
     rightSection.style.gap = '0.5rem';
+    rightSection.className = 'timeline-view-toggle';
+
+    // On mobile, force day view and hide toggle buttons
+    if (window.innerWidth <= 768) {
+      AppState.timelineView = 'day';
+    }
 
     const currentView = AppState.timelineView || 'month';
 
@@ -2324,7 +2330,9 @@ const TimelinePage = {
     const timelineWrapper = DOM.create('div', 'timeline-wrapper');
     timelineWrapper.style.overflowX = 'auto';
     timelineWrapper.style.marginTop = '1rem';
-    timelineWrapper.setAttribute('data-view', AppState.timelineView || 'month');
+    // On mobile, always use day view
+    const viewToUse = window.innerWidth <= 768 ? 'day' : (AppState.timelineView || 'month');
+    timelineWrapper.setAttribute('data-view', viewToUse);
 
     const timeline = DOM.create('div', 'timeline-container');
     this.renderTimeline(timeline);
@@ -2336,7 +2344,9 @@ const TimelinePage = {
   },
 
   setView(view) {
-    AppState.timelineView = view;
+    // On mobile, always use day view
+    const isMobile = window.innerWidth <= 768;
+    AppState.timelineView = isMobile ? 'day' : view;
     Router.render();
   },
 
@@ -2591,7 +2601,8 @@ const TimelinePage = {
   },
 
   renderTimeline(container) {
-    const view = AppState.timelineView || 'month';
+    // On mobile, always use day view
+    const view = window.innerWidth <= 768 ? 'day' : (AppState.timelineView || 'month');
     const currentDate = AppState.timelineCurrentDate;
     let startDate, endDate, days = [];
 
@@ -5327,6 +5338,12 @@ const EventsTimelinePage = {
     rightSection.style.display = 'flex';
     rightSection.style.gap = '0.5rem';
     rightSection.style.alignItems = 'center';
+    rightSection.className = 'events-timeline-view-toggle';
+
+    // On mobile, force day view and hide toggle buttons
+    if (window.innerWidth <= 768) {
+      AppState.eventsTimelineView = 'day';
+    }
 
     const currentView = AppState.eventsTimelineView || 'month';
 
@@ -5357,7 +5374,9 @@ const EventsTimelinePage = {
     const timelineWrapper = DOM.create('div', 'timeline-wrapper');
     timelineWrapper.style.overflowX = 'auto';
     timelineWrapper.style.marginTop = '1rem';
-    timelineWrapper.setAttribute('data-view', AppState.eventsTimelineView || 'month');
+    // On mobile, always use day view
+    const viewToUse = window.innerWidth <= 768 ? 'day' : (AppState.eventsTimelineView || 'month');
+    timelineWrapper.setAttribute('data-view', viewToUse);
 
     const timeline = DOM.create('div', 'timeline-container');
     this.renderTimeline(timeline);
@@ -5369,8 +5388,10 @@ const EventsTimelinePage = {
   },
 
   setView(view) {
+    // On mobile, always use day view
+    const isMobile = window.innerWidth <= 768;
     if (!AppState.eventsTimelineView) AppState.eventsTimelineView = {};
-    AppState.eventsTimelineView = view;
+    AppState.eventsTimelineView = isMobile ? 'day' : view;
     if (!AppState.eventsTimelineCurrentDate) AppState.eventsTimelineCurrentDate = new Date();
     Router.render();
   },
@@ -5424,7 +5445,8 @@ const EventsTimelinePage = {
   },
 
   renderTimeline(container) {
-    const view = AppState.eventsTimelineView || 'month';
+    // On mobile, always use day view
+    const view = window.innerWidth <= 768 ? 'day' : (AppState.eventsTimelineView || 'month');
     const currentDate = AppState.eventsTimelineCurrentDate || new Date();
     let startDate, endDate, days = [];
 

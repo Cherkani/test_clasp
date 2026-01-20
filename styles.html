@@ -47,6 +47,18 @@ body {
   color: var(--ink-900);
   background-color: var(--surface-muted);
   letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden; /* Prevent horizontal scroll on mobile */
+}
+
+/* Touch-friendly improvements */
+* {
+  -webkit-tap-highlight-color: rgba(99, 102, 241, 0.1);
+}
+
+button, a, [role="button"] {
+  touch-action: manipulation; /* Improve touch responsiveness */
 }
 
 /* Layout */
@@ -186,15 +198,23 @@ body {
   top: 1rem;
   left: 1rem;
   z-index: 2100;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 9999px;
   border: 1px solid #e5e7eb;
   background: #ffffff;
   color: #111827;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.mobile-menu-toggle:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .mobile-menu-toggle svg {
@@ -478,6 +498,12 @@ body {
   gap: 0.75rem;
   flex: 1;
   min-width: 240px;
+}
+
+@media (max-width: 768px) {
+  .flow-bar-left {
+    min-width: 100%;
+  }
 }
 
 .flow-bar-summary {
@@ -1424,6 +1450,7 @@ body {
   overflow-y: auto;
   transform: scale(0.95);
   transition: transform 0.2s;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-overlay.active .modal {
@@ -2648,9 +2675,12 @@ textarea.form-input {
 
 /* Responsive */
 @media (max-width: 768px) {
+  /* Sidebar Mobile */
   .sidebar {
     transform: translateX(-100%);
     z-index: 2000;
+    width: 280px;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
   }
   
   .sidebar.open {
@@ -2662,12 +2692,101 @@ textarea.form-input {
   }
   
   .content-wrapper {
-    padding: 1rem;
+    padding: 0.75rem;
   }
-  
+
+  /* Typography */
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .page-subtitle {
+    font-size: 0.875rem;
+  }
+
+  /* Cards */
+  .card {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    min-height: 44px; /* Touch-friendly */
+  }
+
+  .btn-sm {
+    padding: 0.5rem 0.875rem;
+    min-height: 40px;
+  }
+
+  /* Forms */
+  .form-input,
+  .form-select {
+    padding: 0.75rem;
+    font-size: 16px; /* Prevents zoom on iOS */
+    min-height: 44px;
+  }
+
+  /* Flow Bar */
+  .flow-bar {
+    padding: 0.75rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .flow-bar-left {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .flow-bar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Filter Bar */
+  .filter-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .filter-group {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .finance-filter-bar {
+    flex-wrap: wrap;
+  }
+
+  .finance-filter-group {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  /* Dashboard */
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .dashboard-finance-summary,
+  .dashboard-insights-grid,
+  .dashboard-chart-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  /* Timeline */
   .timeline-header,
   .timeline-body {
-    grid-template-columns: repeat(7, minmax(100px, 1fr));
+    grid-template-columns: repeat(7, minmax(80px, 1fr));
+    gap: 0.25rem;
   }
   
   .timeline-task-title {
@@ -2678,24 +2797,996 @@ textarea.form-input {
     font-size: 0.625rem;
   }
 
+  .timeline-day-header {
+    padding: 0.5rem 0.25rem;
+  }
+
+  .timeline-day-number {
+    font-size: 1rem;
+  }
+
+  /* Task List */
+  .task-list {
+    gap: 0.75rem;
+  }
+
+  .task-item {
+    padding: 0.875rem;
+  }
+
+  .task-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* Finance */
+  .finance-summary {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .finance-summary-card {
+    padding: 1rem;
+  }
+
+  .finance-overview-grid,
+  .finance-focus-grid,
+  .finance-chart-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  /* Calendar */
+  .calendar {
+    gap: 0.25rem;
+  }
+
+  .calendar-day {
+    padding: 0.375rem;
+    font-size: 0.75rem;
+  }
+
+  /* Modal */
+  .modal {
+    max-width: 95%;
+    padding: 1.5rem;
+    margin: 1rem;
+    max-height: 90vh;
+  }
+
+  .modal-title {
+    font-size: 1.25rem;
+  }
+
+  /* Navigation */
+  .nav-item {
+    padding: 0.875rem 1.25rem;
+    min-height: 48px; /* Touch-friendly */
+  }
+
+  /* Mobile Menu Toggle */
   .mobile-menu-toggle {
     display: inline-flex;
+    top: 0.75rem;
+    left: 0.75rem;
+    width: 48px;
+    height: 48px;
+  }
+
+  /* Hide decorative stars on mobile for performance */
+  .sidebar-decorations {
+    display: none;
+  }
+
+  .sidebar-logo::before {
+    display: none;
+  }
+
+  .nav-section-title::before {
+    display: none;
+  }
+
+  /* Improve scroll performance */
+  .sidebar-nav {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better touch targets */
+  .nav-item {
+    min-height: 48px;
+  }
+
+  .filter-option {
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* Improve timeline on mobile */
+  .timeline-wrapper {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+  }
+
+  .timeline-filter-bar {
+    flex-direction: column;
+    padding: 0.75rem;
+  }
+
+  /* Better finance filters on mobile */
+  .finance-filter-bar .filter-title {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Improve dashboard cards */
+  .dashboard-finance-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .dashboard-finance-item-amount {
+    text-align: left;
+    width: 100%;
+  }
+
+  /* Stack form groups on mobile */
+  .finance-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* Better spacing for mobile */
+  .insights-metrics {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .insights-metric {
+    padding: 0.75rem;
+  }
+
+  /* Objectives List */
+  .objectives-list {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .objective-card {
+    padding: 1rem;
+  }
+
+  .objective-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .objective-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Finance Category List */
+  .finance-category-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* Finance Daily List */
+  .finance-day {
+    padding: 0.75rem;
+  }
+
+  .finance-day-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .finance-record {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .finance-record-amount {
+    text-align: left;
+    width: 100%;
+  }
+
+  .finance-record-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Finance Recurring List */
+  .finance-recurring-list {
+    gap: 0.5rem;
+  }
+
+  /* Charts */
+  .dashboard-chart-card canvas,
+  .finance-chart-card canvas {
+    height: 180px;
+  }
+
+  .finance-chart-card.finance-chart-compact canvas {
+    height: 80px;
+  }
+
+  /* Task Meta Grid */
+  .task-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  /* Task Header Badges */
+  .task-header-badges {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+  }
+
+  /* Calendar Navigation */
+  .calendar-nav {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .calendar-month-label {
+    min-width: auto;
+    font-size: 0.95rem;
+  }
+
+  /* Timeline Day Items */
+  .timeline-day-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .timeline-day-item-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+  }
+
+  /* Time Range Row */
+  .time-range-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Finance Form */
+  .finance-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* Finance Percent Summary */
+  .finance-percent-summary {
+    grid-template-columns: 1fr;
+  }
+
+  /* Finance Highlights */
+  .finance-highlights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Finance Task Snapshot */
+  .finance-task-snapshot {
+    grid-template-columns: 1fr;
+  }
+
+  /* Finance Ratio Badge */
+  .finance-ratio-badge {
+    min-width: 100%;
+  }
+
+  /* Section Title */
+  .section-title {
+    font-size: 1rem;
+  }
+
+  /* Empty State */
+  .empty-state {
+    padding: 2rem 1rem;
+  }
+
+  /* Reference Content */
+  .reference-content {
+    margin-top: 1rem;
+  }
+
+  /* Task Badges */
+  .task-badges {
+    flex-wrap: wrap;
+  }
+
+  /* Flow Bar Summary */
+  .flow-bar-summary {
+    flex-wrap: wrap;
+  }
+
+  /* Dashboard Finance List */
+  .dashboard-finance-list {
+    gap: 0.5rem;
+  }
+
+  /* Dashboard Insights List */
+  .dashboard-insights-list {
+    gap: 0.375rem;
+  }
+
+  .dashboard-insights-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  /* Timeline Hour Row */
+  .timeline-hour-row {
+    grid-template-columns: 50px 1fr;
+    gap: 0.5rem;
+  }
+
+  .timeline-hour-label {
+    font-size: 0.7rem;
+  }
+
+  .timeline-hour-tasks {
+    grid-template-columns: 1fr;
+  }
+
+  /* Timeline Task Bar */
+  .timeline-task-bar {
+    padding: 0.5rem;
+  }
+
+  .timeline-task-title {
+    font-size: 0.75rem;
+    white-space: normal;
+  }
+
+  .timeline-task-meta {
+    font-size: 0.65rem;
+  }
+
+  /* Sync Button */
+  .sync-button-compact {
+    width: 100%;
+  }
+
+  /* Finance Controls */
+  .finance-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .finance-label {
+    width: 100%;
+  }
+
+  /* Finance Budget Progress */
+  .finance-budget-progress {
+    margin-top: 0.75rem;
+  }
+
+  /* Finance Focus Grid */
+  .finance-focus-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Finance Overview Charts */
+  .finance-overview-charts {
+    grid-template-columns: 1fr;
+  }
+
+  /* Fix fixed widths for mobile */
+  .filter-group {
+    min-width: 100% !important;
+  }
+
+  .finance-filter-group {
+    min-width: 100% !important;
+  }
+
+  .dashboard-finance-item-amount,
+  .finance-record-amount {
+    min-width: auto !important;
+    width: 100% !important;
+  }
+
+  /* Timeline wrapper responsive */
+  .timeline-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Calendar responsive */
+  .calendar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modal responsive improvements */
+  .modal {
+    width: calc(100% - 1rem);
+    max-height: calc(100vh - 2rem);
+  }
+
+  /* Form responsive */
+  .form-group {
+    width: 100%;
+  }
+
+  /* Reference tabs responsive */
+  .reference-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    padding-bottom: 0.5rem;
+  }
+
+  .reference-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Task item responsive */
+  .task-item {
+    width: 100%;
+  }
+
+  /* Finance card responsive */
+  .finance-card {
+    width: 100%;
+  }
+
+  /* Dashboard layout responsive */
+  .dashboard-main,
+  .dashboard-side {
+    width: 100%;
+  }
+
+  /* Chart containers responsive */
+  .dashboard-chart-card,
+  .finance-chart-card {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Ensure all grids are responsive */
+  .dashboard-finance-summary,
+  .dashboard-insights-grid,
+  .dashboard-chart-grid,
+  .finance-summary,
+  .finance-overview-grid,
+  .finance-focus-grid,
+  .finance-chart-grid,
+  .finance-highlights-grid,
+  .finance-task-snapshot,
+  .insights-metrics,
+  .task-summary-grid {
+    width: 100%;
+  }
+
+  /* Prevent text overflow */
+  .nav-item-text,
+  .task-title,
+  .finance-record-title,
+  .timeline-task-title {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* Improve button groups */
+  .btn-group,
+  .task-actions,
+  .finance-record-actions,
+  .timeline-day-item-actions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Better spacing for mobile */
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .card {
+    margin-bottom: 1rem;
+  }
+
+  /* Improve list items */
+  .task-item,
+  .finance-record,
+  .finance-category-row,
+  .dashboard-finance-item {
+    word-break: break-word;
+  }
+
+  /* Chart responsive containers */
+  .dashboard-chart-card,
+  .finance-chart-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .dashboard-chart-card canvas,
+  .finance-chart-card canvas {
+    max-width: 100%;
+    height: auto !important;
+    min-height: 150px;
+  }
+
+  /* Timeline improvements */
+  .timeline-wrapper {
+    padding: 0.5rem;
+  }
+
+  .timeline-day-column {
+    min-height: 300px;
+  }
+
+  /* Hide view toggle buttons on mobile - force day view */
+  .timeline-view-toggle button:nth-child(1),
+  .timeline-view-toggle button:nth-child(2),
+  .events-timeline-view-toggle button:nth-child(1),
+  .events-timeline-view-toggle button:nth-child(2) {
+    display: none !important;
+  }
+
+  /* Show only Day button on mobile for tasks */
+  .timeline-view-toggle button:nth-child(3) {
+    display: inline-flex !important;
+  }
+
+  /* For events, show Day button and Add Event button */
+  .events-timeline-view-toggle button:nth-child(3),
+  .events-timeline-view-toggle button:nth-child(4) {
+    display: inline-flex !important;
+  }
+
+  /* Calendar improvements */
+  .calendar-day {
+    min-height: 60px;
+  }
+
+  .calendar-day-number {
+    font-size: 0.875rem;
+  }
+
+  /* Form improvements */
+  .form-input[type="textarea"],
+  textarea.form-input {
+    min-height: 100px;
+  }
+
+  /* Sync section mobile */
+  .sync-section {
+    padding: 0.75rem;
+  }
+
+  /* Sidebar nav mobile */
+  .sidebar-nav {
+    padding: 0.5rem 0;
+  }
+
+  .nav-item {
+    margin: 0 0.25rem;
+    border-radius: 0.5rem;
+  }
+
+  /* Filter options mobile */
+  .filter-options {
+    gap: 0.375rem;
+  }
+
+  /* Finance filter clear button */
+  .finance-filter-clear {
+    margin-top: 0.5rem;
+  }
+
+  /* Objective task list */
+  .objective-task-list {
+    gap: 0.375rem;
+  }
+
+  .objective-task-item {
+    padding: 0.375rem;
+    font-size: 0.8rem;
+  }
+
+  /* Dashboard finance progress */
+  .dashboard-finance-progress {
+    margin-top: 0.75rem;
+  }
+
+  /* Finance budget text */
+  .finance-budget-text {
+    font-size: 0.65rem;
+  }
+
+  /* Timeline filter bar */
+  .timeline-filter-bar {
+    margin-bottom: 0.75rem;
+  }
+
+  /* Reference content spacing */
+  .reference-content {
+    margin-top: 1rem;
+  }
+
+  /* Task badges mobile */
+  .task-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.5rem;
+  }
+
+  /* Flow pill mobile */
+  .flow-pill {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+  }
+
+  /* Ensure no horizontal scroll */
+  .app-main,
+  .content-wrapper,
+  .main-content {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Improve touch targets for small interactive elements */
+  .sidebar-toggle,
+  .timeline-day-add,
+  .timeline-day-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Better modal footer on mobile */
+  .modal-footer {
+    padding-top: 1rem;
+    margin-top: 1rem;
+  }
+
+  /* Improve checkbox and radio touch targets */
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+  }
+
+  /* Finance checkbox */
+  .finance-checkbox {
+    min-height: 44px;
+    padding: 0.5rem 0;
+  }
+
+  /* Page Header */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* Reference Tabs */
+  .reference-tabs {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .reference-tab {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
   }
 }
 
 @media (max-width: 900px) {
+  /* Tablet */
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
   .finance-form-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .finance-overview-grid,
+  .finance-focus-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dashboard-chart-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 640px) {
+  /* Extra Small Screens */
+  .content-wrapper {
+    padding: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .card {
+    padding: 0.875rem;
+  }
+
   .finance-form-grid {
     grid-template-columns: 1fr;
   }
+  
   .finance-form-grid .span-2,
   .finance-form-grid .span-3 {
     grid-column: span 1;
+  }
+
+  .task-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-finance-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .flow-bar-summary {
+    flex-wrap: wrap;
+  }
+
+  .flow-pill {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .timeline-header,
+  .timeline-body {
+    grid-template-columns: repeat(7, minmax(60px, 1fr));
+    gap: 0.2rem;
+  }
+
+  .timeline-day-header {
+    padding: 0.375rem 0.2rem;
+  }
+
+  .timeline-day-number {
+    font-size: 0.875rem;
+  }
+
+  .timeline-day-name {
+    font-size: 0.65rem;
+  }
+
+  .calendar-day {
+    padding: 0.25rem;
+    font-size: 0.7rem;
+  }
+
+  .modal {
+    padding: 1rem;
+    margin: 0.5rem;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .btn-sm {
+    width: auto;
+  }
+
+  .finance-filter-bar {
+    flex-direction: column;
+  }
+
+  .finance-filter-clear {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Very Small Screens */
+  .sidebar {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .sidebar-header {
+    padding: 1rem;
+  }
+
+  .nav-item {
+    padding: 0.75rem 1rem;
+  }
+
+  .content-wrapper {
+    padding: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.125rem;
+  }
+
+  .card {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+  }
+
+  .task-item {
+    padding: 0.75rem;
+  }
+
+  .task-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .task-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .finance-summary-card {
+    padding: 0.75rem;
+  }
+
+  .finance-summary-value {
+    font-size: 1.25rem;
+  }
+
+  .timeline-header,
+  .timeline-body {
+    grid-template-columns: repeat(7, minmax(50px, 1fr));
+  }
+
+  .timeline-day-header {
+    padding: 0.25rem 0.15rem;
+  }
+
+  .timeline-day-number {
+    font-size: 0.75rem;
+  }
+
+  .timeline-task-bar {
+    padding: 0.5rem;
+  }
+
+  .timeline-task-title {
+    font-size: 0.7rem;
+  }
+
+  .calendar {
+    gap: 0.2rem;
+  }
+
+  .calendar-day {
+    padding: 0.2rem;
+    font-size: 0.65rem;
+  }
+
+  .modal {
+    padding: 0.875rem;
+    margin: 0.25rem;
+    border-radius: 0.75rem;
+  }
+
+  .modal-title {
+    font-size: 1.125rem;
+  }
+
+  .form-group {
+    margin-bottom: 0.75rem;
+  }
+
+  .reference-tab {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .dashboard-finance-summary {
+    grid-template-columns: 1fr;
+  }
+
+  /* Objectives List */
+  .objectives-list {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .objective-card {
+    padding: 0.875rem;
+  }
+
+  /* Finance Lists */
+  .finance-category-row,
+  .finance-record {
+    padding: 0.625rem;
+  }
+
+  /* Charts */
+  .dashboard-chart-card canvas,
+  .finance-chart-card canvas {
+    height: 160px;
+  }
+
+  /* Timeline */
+  .timeline-header,
+  .timeline-body {
+    grid-template-columns: repeat(7, minmax(45px, 1fr));
+  }
+
+  .timeline-day-header {
+    padding: 0.2rem 0.1rem;
+  }
+
+  .timeline-day-number {
+    font-size: 0.7rem;
+  }
+
+  .timeline-day-name {
+    font-size: 0.6rem;
+  }
+
+  /* Stack action buttons vertically on very small screens */
+  .task-actions,
+  .flow-bar-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .task-actions .btn,
+  .flow-bar-actions .btn {
+    width: 100%;
+  }
+
+  /* Improve table/list layouts */
+  .finance-record {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .finance-record-amount {
+    text-align: left;
+    width: 100%;
+  }
+
+  .finance-record-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Better calendar on small screens */
+  .calendar-nav {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .calendar-month-label {
+    min-width: auto;
+    font-size: 1rem;
+  }
+
+  /* Improve modal on small screens */
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
   }
 }
 
