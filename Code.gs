@@ -683,11 +683,13 @@ function getAppData() {
   const financeCategories = getFinanceCategories();
   const events = getEvents();
   const debts = getDebts();
+  const persons = getPersons();
   const stats = getDerivedStats(tasks, financeRecords, objectives, categories, statuses, events, debts);
 
   return {
     tasks,
     objectives,
+    persons,
     categories,
     statuses,
     financeRecords,
@@ -1014,6 +1016,80 @@ function updateDebt(debt) {
     return true;
   }
   return false;
+}
+
+// Persons Functions
+function getPersons() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Persons");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Persons");
+    sheet.getRange(1, 1, 1, 2).setValues([["id", "name"]]);
+    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+    return [];
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  return values.slice(1)
+    .filter(row => row.join('') !== '')
+    .map(row => ({
+      id: row[0],
+      name: row[1] || ''
+    }));
+}
+
+function addPerson(person) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Persons");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Persons");
+    sheet.getRange(1, 1, 1, 2).setValues([["id", "name"]]);
+    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+  }
+
+  let newId = 1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    if (existingIds.length > 0) {
+      newId = Math.max(...existingIds.filter(id => id !== '' && id != null)) + 1;
+    }
+  }
+  
+  sheet.appendRow([newId, person.name || '']);
+  return newId;
+}
+
+function updatePerson(person) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Persons");
+  if (!sheet) return;
+
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] == person.id) {
+      sheet.getRange(i + 1, 2).setValue(person.name || '');
+      return;
+    }
+  }
+}
+
+function deletePerson(personId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Persons");
+  if (!sheet) return;
+
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] == personId) {
+      sheet.deleteRow(i + 1);
+      return;
+    }
+  }
 }
 
 function deleteDebt(debtId) {

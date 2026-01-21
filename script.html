@@ -8,6 +8,7 @@ const AppState = {
   statuses: [],
   events: [],
   debts: [],
+  persons: [],
   isSyncing: false,
   sidebarCollapsed: false,
   timelineView: 'month',
@@ -30,7 +31,7 @@ const AppState = {
   taskFilters: { statuses: [], categories: [], objectives: [] },
   financeFilters: { types: [], categories: [] },
   calendarCurrentDate: new Date(),
-  debtsTab: 'owed',
+  debtsPersonTab: 'list',
 };
 
 // Google Apps Script API
@@ -328,6 +329,45 @@ const API = {
     });
   },
 
+  async getPersons() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching persons:', error);
+          resolve([]);
+        })
+        .getPersons();
+    });
+  },
+
+  async addPerson(person) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addPerson(person);
+    });
+  },
+
+  async updatePerson(person) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updatePerson(person);
+    });
+  },
+
+  async deletePerson(personId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deletePerson(personId);
+    });
+  },
+
   async addDebt(debt) {
     return new Promise((resolve, reject) => {
       google.script.run
@@ -379,6 +419,7 @@ const DataStore = {
     AppState.financeCategories = data.financeCategories || [];
     AppState.events = data.events || [];
     AppState.debts = data.debts || [];
+    AppState.persons = data.persons || [];
     AppState.stats = data.stats || null;
   },
 
@@ -423,6 +464,7 @@ const SaveManager = {
     if (snapshot.financeSettings) AppState.financeSettings = snapshot.financeSettings;
     if (snapshot.events) AppState.events = snapshot.events;
     if (snapshot.debts) AppState.debts = snapshot.debts;
+    if (snapshot.persons) AppState.persons = snapshot.persons;
     Router.render();
     Sidebar.render();
   },
@@ -436,7 +478,8 @@ const SaveManager = {
       financeRecords: JSON.parse(JSON.stringify(AppState.financeRecords)),
       financeSettings: JSON.parse(JSON.stringify(AppState.financeSettings)),
       events: JSON.parse(JSON.stringify(AppState.events)),
-      debts: JSON.parse(JSON.stringify(AppState.debts))
+      debts: JSON.parse(JSON.stringify(AppState.debts)),
+      persons: JSON.parse(JSON.stringify(AppState.persons))
     };
   },
 
@@ -1235,16 +1278,16 @@ const Dashboard = {
     summary.innerHTML = `
       <div>
         <div class="dashboard-finance-label">Owed to Me</div>
-        <div class="dashboard-finance-value income">$${totals.owedToMe.toFixed(2)}</div>
+        <div class="dashboard-finance-value income">${totals.owedToMe.toFixed(2)} MAD</div>
       </div>
       <div>
         <div class="dashboard-finance-label">I Owe</div>
-        <div class="dashboard-finance-value expense">$${totals.iOwe.toFixed(2)}</div>
+        <div class="dashboard-finance-value expense">${totals.iOwe.toFixed(2)} MAD</div>
       </div>
       <div>
         <div class="dashboard-finance-label">Net</div>
         <div class="dashboard-finance-value ${totals.owedToMe - totals.iOwe >= 0 ? 'income' : 'expense'}">
-          $${(totals.owedToMe - totals.iOwe).toFixed(2)}
+          ${(totals.owedToMe - totals.iOwe).toFixed(2)} MAD
         </div>
       </div>
     `;
@@ -3994,11 +4037,8 @@ const FinancePage = {
   },
 
   formatCurrency(value) {
-    const formatter = new Intl.NumberFormat('fr-MA', {
-      style: 'currency',
-      currency: 'MAD'
-    });
-    return formatter.format(Number(value) || 0);
+    const num = Number(value) || 0;
+    return `${num.toFixed(2)} MAD`;
   },
 
   getMonthlyBudget(monthKey) {
@@ -6037,23 +6077,33 @@ const DebtsPage = {
     addBtn.onclick = () => DebtModal.show();
     header.appendChild(addBtn);
     container.appendChild(header);
-
-    const tabs = DOM.create('div', 'reference-tabs');
-    const tabList = [
-      { id: 'owed', label: 'Owed to Me' },
-      { id: 'owe', label: 'I Owe' }
+    
+    // Secondary tabs for managing persons (shown first)
+    const personTabs = DOM.create('div', 'reference-tabs');
+    personTabs.style.marginBottom = '1rem';
+    const personTabList = [
+      { id: 'list', label: 'Debts List' },
+      { id: 'persons', label: 'Manage Persons' }
     ];
-    tabList.forEach(tab => {
+    const currentPersonTab = AppState.debtsPersonTab || 'list';
+    personTabList.forEach(tab => {
       const tabBtn = DOM.create('button', 'reference-tab');
       tabBtn.textContent = tab.label;
-      if (AppState.debtsTab === tab.id) tabBtn.classList.add('active');
+      if (currentPersonTab === tab.id) tabBtn.classList.add('active');
       tabBtn.onclick = () => {
-        AppState.debtsTab = tab.id;
+        AppState.debtsPersonTab = tab.id;
         Router.render();
       };
-      tabs.appendChild(tabBtn);
+      personTabs.appendChild(tabBtn);
     });
-    container.appendChild(tabs);
+    container.appendChild(personTabs);
+    
+    // Show persons management or debts list based on tab
+    if (currentPersonTab === 'persons') {
+      container.appendChild(this.renderPersonsManagement());
+      return container;
+    }
+
 
     const summaryCard = DOM.create('div', 'card');
     const summaryTitle = DOM.create('h3', 'section-title', 'Summary');
@@ -6072,14 +6122,14 @@ const DebtsPage = {
     owedCard.innerHTML = `
       <div>
         <div class="dashboard-finance-label">Owed to Me</div>
-        <div class="dashboard-finance-value income">$${totals.owedToMe.toFixed(2)}</div>
+        <div class="dashboard-finance-value income">${totals.owedToMe.toFixed(2)} MAD</div>
       </div>
     `;
     const oweCard = DOM.create('div', 'dashboard-finance-item');
     oweCard.innerHTML = `
       <div>
         <div class="dashboard-finance-label">I Owe</div>
-        <div class="dashboard-finance-value expense">$${totals.iOwe.toFixed(2)}</div>
+        <div class="dashboard-finance-value expense">${totals.iOwe.toFixed(2)} MAD</div>
       </div>
     `;
     const netCard = DOM.create('div', 'dashboard-finance-item');
@@ -6087,7 +6137,7 @@ const DebtsPage = {
     netCard.innerHTML = `
       <div>
         <div class="dashboard-finance-label">Net</div>
-        <div class="dashboard-finance-value ${net >= 0 ? 'income' : 'expense'}">$${net.toFixed(2)}</div>
+        <div class="dashboard-finance-value ${net >= 0 ? 'income' : 'expense'}">${net.toFixed(2)} MAD</div>
       </div>
     `;
     summaryGrid.appendChild(owedCard);
@@ -6100,13 +6150,19 @@ const DebtsPage = {
     listCard.appendChild(DOM.create('h3', 'section-title', 'All Debts'));
     
     const debtsList = DOM.create('div', 'finance-daily-list');
-    const filteredDebts = AppState.debts.filter(debt => debt.direction === AppState.debtsTab);
-    if (filteredDebts.length === 0) {
+    // Show all debts, sorted by date (newest first)
+    const sortedDebts = [...AppState.debts].sort((a, b) => {
+      const dateA = a.date ? new Date(a.date) : new Date(0);
+      const dateB = b.date ? new Date(b.date) : new Date(0);
+      return dateB - dateA;
+    });
+    
+    if (sortedDebts.length === 0) {
       const empty = DOM.create('div', 'empty-state');
-      empty.textContent = AppState.debtsTab === 'owed' ? 'No one owes you yet.' : 'You are not owing anyone.';
+      empty.textContent = 'No debts yet. Click "+ New Debt" to create one.';
       debtsList.appendChild(empty);
     } else {
-      filteredDebts.forEach(debt => {
+      sortedDebts.forEach(debt => {
         const debtRow = DOM.create('div', 'finance-record');
         const details = DOM.create('div', 'finance-record-details');
         const title = DOM.create('div', 'finance-record-title', 
@@ -6115,9 +6171,6 @@ const DebtsPage = {
         const meta = DOM.create('div', 'finance-record-meta', 
           `${debt.date || 'No date'} | ${debt.description || 'No description'}`
         );
-        if (debt.beneficiary) {
-          details.appendChild(DOM.create('div', 'finance-record-meta', `Beneficiary: ${debt.beneficiary}`));
-        }
         const statusLabel = debt.status === 'paid' ? 'Paid' : debt.status === 'cancelled' ? 'Cancelled' : 'Pending';
         const status = DOM.create('span', 'finance-record-tag', statusLabel);
         details.appendChild(title);
@@ -6125,7 +6178,7 @@ const DebtsPage = {
         details.appendChild(status);
         
         const amount = DOM.create('div', `finance-record-amount ${debt.direction === 'owed' ? 'income' : 'expense'}`);
-        amount.textContent = `$${debt.amount.toFixed(2)}`;
+        amount.textContent = `${debt.amount.toFixed(2)} MAD`;
         
         const actions = DOM.create('div', 'finance-record-actions');
         const editBtn = DOM.create('button', 'btn btn-xs btn-secondary');
@@ -6149,6 +6202,107 @@ const DebtsPage = {
     return container;
   },
 
+  renderPersonsManagement() {
+    const container = DOM.create('div', '');
+    
+    const card = DOM.create('div', 'card');
+    const header = DOM.create('div', '');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '1.5rem';
+    header.appendChild(DOM.create('h3', 'section-title', 'Manage Persons'));
+    
+    const addBtn = DOM.create('button', 'btn btn-primary btn-sm');
+    addBtn.textContent = '+ Add Person';
+    addBtn.onclick = () => PersonModal.show();
+    header.appendChild(addBtn);
+    card.appendChild(header);
+    
+    const personsList = DOM.create('div', 'finance-category-list');
+    personsList.style.marginTop = '1rem';
+    
+    if (AppState.persons.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No persons yet. Click "Add Person" to create one.';
+      personsList.appendChild(empty);
+    } else {
+      AppState.persons.sort((a, b) => a.name.localeCompare(b.name)).forEach(person => {
+        const personRow = DOM.create('div', 'finance-category-row');
+        personRow.style.display = 'flex';
+        personRow.style.justifyContent = 'space-between';
+        personRow.style.alignItems = 'center';
+        
+        const personInfo = DOM.create('div', '');
+        personInfo.innerHTML = `
+          <div style="font-weight: 600;">${person.name}</div>
+          <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+            ${AppState.debts.filter(d => d.person === person.name).length} debt(s)
+          </div>
+        `;
+        
+        const actions = DOM.create('div', '');
+        actions.style.display = 'flex';
+        actions.style.gap = '0.5rem';
+        
+        const editBtn = DOM.create('button', 'btn btn-xs btn-secondary');
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => PersonModal.show(person);
+        
+        const deleteBtn = DOM.create('button', 'btn btn-xs btn-danger');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.onclick = () => this.deletePerson(person.id);
+        
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        
+        personRow.appendChild(personInfo);
+        personRow.appendChild(actions);
+        personsList.appendChild(personRow);
+      });
+    }
+    
+    card.appendChild(personsList);
+    container.appendChild(card);
+    
+    return container;
+  },
+
+  async deletePerson(personId) {
+    const person = AppState.persons.find(p => p.id === personId);
+    if (!person) return;
+    
+    // Check if person is used in any debts
+    const debtsUsingPerson = AppState.debts.filter(d => d.person === person.name);
+    if (debtsUsingPerson.length > 0) {
+      if (!confirm(`This person is used in ${debtsUsingPerson.length} debt(s). Are you sure you want to delete?`)) {
+        return;
+      }
+    } else {
+      if (!confirm('Delete this person?')) return;
+    }
+    
+    const operationId = `delete-person-${personId}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.persons = AppState.persons.filter(p => p.id !== personId);
+      },
+      async () => {
+        await API.deletePerson(personId);
+        await DataStore.refresh();
+      },
+      () => {
+        Toast.success('Person deleted');
+        Router.render();
+      },
+      (error) => {
+        Toast.error('Error deleting person');
+        Router.render();
+      }
+    );
+  },
+
   async deleteDebt(debtId) {
     if (!confirm('Delete this debt record?')) return;
     
@@ -6166,6 +6320,147 @@ const DebtsPage = {
       },
       (error) => {
         Toast.error('Error deleting debt');
+      }
+    );
+  }
+};
+
+// Person Modal
+const PersonModal = {
+  show(person = null, onSaveCallback = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    
+    const modalHeader = DOM.create('div', 'modal-header');
+    modalHeader.appendChild(DOM.create('h2', 'modal-title', person ? 'Edit Person' : 'New Person'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    modalHeader.appendChild(closeBtn);
+    modal.appendChild(modalHeader);
+
+    const form = DOM.create('form', '');
+    
+    // Person name
+    const nameGroup = DOM.create('div', 'form-group');
+    nameGroup.appendChild(DOM.create('label', 'form-label', 'Person Name *'));
+    const nameInput = DOM.create('input', 'form-input');
+    nameInput.type = 'text';
+    nameInput.name = 'name';
+    nameInput.value = person?.name || '';
+    nameInput.required = true;
+    nameInput.placeholder = 'e.g., John Doe, Company Name';
+    nameGroup.appendChild(nameInput);
+    form.appendChild(nameGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(person, new FormData(form), onSaveCallback);
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(person, formData, onSaveCallback) {
+    const personData = {
+      id: person?.id || Date.now(),
+      name: formData.get('name').trim()
+    };
+
+    if (!personData.name) {
+      Toast.error('Person name is required');
+      return;
+    }
+
+    // Check for duplicate names
+    const existing = AppState.persons.find(p => p.name.toLowerCase() === personData.name.toLowerCase() && p.id !== personData.id);
+    if (existing) {
+      Toast.error('A person with this name already exists');
+      return;
+    }
+
+    const operationId = person ? `update-person-${person.id}` : `create-person-${Date.now()}`;
+    const saveButton = document.querySelector('.modal-footer .btn-primary');
+    
+    if (saveButton) {
+      saveButton.classList.add('loading');
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving...';
+    }
+
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (person) {
+          const index = AppState.persons.findIndex(p => p.id === person.id);
+          if (index >= 0) {
+            AppState.persons[index] = personData;
+          }
+        } else {
+          AppState.persons.push(personData);
+        }
+      },
+      async () => {
+        if (person) {
+          const oldName = person.name;
+          await API.updatePerson(personData);
+          // Update debts that reference this person
+          const debtsToUpdate = AppState.debts.filter(d => d.person === oldName);
+          if (debtsToUpdate.length > 0) {
+            await Promise.all(debtsToUpdate.map(debt => {
+              const updatedDebt = { ...debt, person: personData.name };
+              return API.updateDebt(updatedDebt);
+            }));
+          }
+        } else {
+          const newId = await API.addPerson(personData);
+          personData.id = newId;
+        }
+        await DataStore.refresh();
+      },
+      () => {
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+        this.hide();
+        Toast.success(person ? 'Person updated' : 'Person created');
+        if (onSaveCallback) onSaveCallback();
+        Router.render();
+      },
+      (error) => {
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+        Toast.error('Error saving person');
       }
     );
   }
@@ -6196,23 +6491,32 @@ const DebtModal = {
 
     const personGroup = DOM.create('div', 'form-group');
     personGroup.appendChild(DOM.create('label', 'form-label', 'Person *'));
-    const personInput = DOM.create('input', 'form-input');
-    personInput.type = 'text';
-    personInput.required = true;
-    personInput.value = debt?.person || '';
-    personInput.name = 'person';
-    personGroup.appendChild(personInput);
+    const personSelect = DOM.create('select', 'form-select');
+    personSelect.name = 'person';
+    personSelect.required = true;
+    
+    const nonePersonOption = DOM.create('option', '');
+    nonePersonOption.value = '';
+    nonePersonOption.textContent = 'Select a person...';
+    if (!debt?.person) nonePersonOption.selected = true;
+    personSelect.appendChild(nonePersonOption);
+    
+    AppState.persons.sort((a, b) => a.name.localeCompare(b.name)).forEach(person => {
+      const option = DOM.create('option', '');
+      option.value = person.name;
+      option.textContent = person.name;
+      if (debt?.person === person.name) option.selected = true;
+      personSelect.appendChild(option);
+    });
+    
+    personGroup.appendChild(personSelect);
+    SelectUtils.addCreateOption(personSelect, 'Person', () => {
+      this.hide();
+      PersonModal.show(null, () => {
+        this.show(debt);
+      });
+    });
     form.appendChild(personGroup);
-
-    const beneficiaryGroup = DOM.create('div', 'form-group');
-    beneficiaryGroup.appendChild(DOM.create('label', 'form-label', 'Beneficiary'));
-    const beneficiaryInput = DOM.create('input', 'form-input');
-    beneficiaryInput.type = 'text';
-    beneficiaryInput.value = debt?.beneficiary || '';
-    beneficiaryInput.name = 'beneficiary';
-    beneficiaryInput.placeholder = 'Optional recipient';
-    beneficiaryGroup.appendChild(beneficiaryInput);
-    form.appendChild(beneficiaryGroup);
 
     const amountGroup = DOM.create('div', 'form-group');
     amountGroup.appendChild(DOM.create('label', 'form-label', 'Amount *'));
@@ -6255,19 +6559,35 @@ const DebtModal = {
     dateInput.type = 'date';
     dateInput.value = debt?.date || '';
     dateInput.name = 'date';
+    dateInput.placeholder = 'dd/mm/yyyy';
+    const dateHint = DOM.create('div', 'form-hint');
+    dateHint.style.fontSize = '0.75rem';
+    dateHint.style.color = '#6b7280';
+    dateHint.style.marginTop = '0.25rem';
+    dateHint.textContent = 'dd/mm/yyyy';
     dateGroup.appendChild(dateInput);
+    dateGroup.appendChild(dateHint);
     form.appendChild(dateGroup);
 
     const statusGroup = DOM.create('div', 'form-group');
     statusGroup.appendChild(DOM.create('label', 'form-label', 'Status'));
     const statusSelect = DOM.create('select', 'form-select');
     statusSelect.name = 'status';
-    ['pending', 'paid', 'cancelled'].forEach(status => {
-      const option = DOM.create('option', '', status);
-      option.value = status;
-      if (debt?.status === status) option.selected = true;
-      statusSelect.appendChild(option);
-    });
+    const pendingOption = DOM.create('option', '', 'pending');
+    pendingOption.value = 'pending';
+    pendingOption.selected = !debt || debt.status === 'pending';
+    statusSelect.appendChild(pendingOption);
+    
+    const paidOption = DOM.create('option', '', 'paid');
+    paidOption.value = 'paid';
+    if (debt?.status === 'paid') paidOption.selected = true;
+    statusSelect.appendChild(paidOption);
+    
+    const cancelledOption = DOM.create('option', '', 'cancelled');
+    cancelledOption.value = 'cancelled';
+    if (debt?.status === 'cancelled') cancelledOption.selected = true;
+    statusSelect.appendChild(cancelledOption);
+    
     statusGroup.appendChild(statusSelect);
     form.appendChild(statusGroup);
 
@@ -6298,7 +6618,6 @@ const DebtModal = {
     const formData = new FormData(form);
     const debtData = {
       person: formData.get('person'),
-      beneficiary: formData.get('beneficiary') || '',
       amount: parseFloat(formData.get('amount')) || 0,
       direction: formData.get('direction'),
       description: formData.get('description') || '',
@@ -6374,35 +6693,6 @@ const TaskModal = {
     taskInput.required = true;
     taskGroup.appendChild(taskInput);
     form.appendChild(taskGroup);
-
-    // Category
-    const catGroup = DOM.create('div', 'form-group');
-    catGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
-    const catSelect = DOM.create('select', 'form-select');
-    catSelect.name = 'category';
-    
-    const noneCatOption = DOM.create('option', '');
-    noneCatOption.value = '';
-    noneCatOption.textContent = 'None';
-    if (!task?.category) noneCatOption.selected = true;
-    catSelect.appendChild(noneCatOption);
-    
-    AppState.categories.forEach(cat => {
-      const option = DOM.create('option', '');
-      option.value = cat.name;
-      option.textContent = cat.name;
-      if (task?.category === cat.name) option.selected = true;
-      catSelect.appendChild(option);
-    });
-    
-    catGroup.appendChild(catSelect);
-    SelectUtils.addCreateOption(catSelect, 'Category', () => {
-      this.hide();
-      CategoryModal.show(null, () => {
-        this.show(task);
-      });
-    });
-    form.appendChild(catGroup);
 
     // Date range
     const startDateGroup = DOM.create('div', 'form-group');
@@ -6522,53 +6812,24 @@ const TaskModal = {
     form.appendChild(priorityGroup);
 
     // Impact Type
-    const impactGroup = DOM.create('div', 'form-group');
-    impactGroup.appendChild(DOM.create('label', 'form-label', 'Task Impact'));
-    const impactSelect = DOM.create('select', 'form-select');
-    impactSelect.name = 'impactType';
-    const impactOptions = [
-      { value: 'money', label: 'Makes money' },
-      { value: 'long-term', label: 'Long-term value' },
-      { value: 'non-monetary', label: 'Non-monetary' }
-    ];
-    impactOptions.forEach(optionData => {
-      const option = DOM.create('option', '');
-      option.value = optionData.value;
-      option.textContent = optionData.label;
-      if ((task?.impactType || 'non-monetary') === optionData.value) option.selected = true;
-      impactSelect.appendChild(option);
-    });
-    impactGroup.appendChild(impactSelect);
-    form.appendChild(impactGroup);
-
-    const valueGroup = DOM.create('div', 'form-group');
-    valueGroup.appendChild(DOM.create('label', 'form-label', 'Estimated Value'));
-    const valueInput = DOM.create('input', 'form-input');
-    valueInput.type = 'number';
-    valueInput.min = '0';
-    valueInput.step = '0.01';
-    valueInput.name = 'estimatedValue';
-    valueInput.placeholder = 'Optional estimated value';
-    valueInput.value = task?.estimatedValue || '';
-    valueGroup.appendChild(valueInput);
-    form.appendChild(valueGroup);
-
-    // Objective
+    // Objective (Category is automatically derived from objective)
     const objectiveGroup = DOM.create('div', 'form-group');
     objectiveGroup.appendChild(DOM.create('label', 'form-label', 'Objective'));
     const objectiveSelect = DOM.create('select', 'form-select');
     objectiveSelect.name = 'objective';
+    objectiveSelect.required = true;
     
     const noneOption = DOM.create('option', '');
     noneOption.value = '';
-    noneOption.textContent = 'None';
+    noneOption.textContent = 'Select an objective...';
     if (!task?.objective) noneOption.selected = true;
     objectiveSelect.appendChild(noneOption);
     
     AppState.objectives.forEach(obj => {
       const option = DOM.create('option', '');
       option.value = obj.name;
-      option.textContent = obj.name;
+      const categoryLabel = obj.category ? ` (${obj.category})` : '';
+      option.textContent = obj.name + categoryLabel;
       if (task?.objective === obj.name) option.selected = true;
       objectiveSelect.appendChild(option);
     });
@@ -6580,6 +6841,38 @@ const TaskModal = {
         this.show(task);
       });
     });
+    
+    // Show category info based on selected objective
+    const categoryInfo = DOM.create('div', 'form-hint');
+    categoryInfo.style.fontSize = '0.75rem';
+    categoryInfo.style.color = '#6b7280';
+    categoryInfo.style.marginTop = '0.25rem';
+    categoryInfo.textContent = 'Category will be automatically set from the selected objective';
+    objectiveGroup.appendChild(categoryInfo);
+    
+    // Update category info when objective changes
+    objectiveSelect.onchange = () => {
+      const selectedObjectiveName = objectiveSelect.value;
+      if (selectedObjectiveName) {
+        const selectedObjective = AppState.objectives.find(obj => obj.name === selectedObjectiveName);
+        if (selectedObjective?.category) {
+          categoryInfo.textContent = `Category: ${selectedObjective.category}`;
+          categoryInfo.style.color = '#10b981';
+        } else {
+          categoryInfo.textContent = 'No category assigned to this objective';
+          categoryInfo.style.color = '#f59e0b';
+        }
+      } else {
+        categoryInfo.textContent = 'Category will be automatically set from the selected objective';
+        categoryInfo.style.color = '#6b7280';
+      }
+    };
+    
+    // Set initial category info if editing existing task
+    if (task?.objective) {
+      objectiveSelect.onchange();
+    }
+    
     form.appendChild(objectiveGroup);
 
     form.onsubmit = (e) => {
@@ -6616,22 +6909,29 @@ const TaskModal = {
     const rawEndDate = formData.get('endDate') || '';
     const startDate = rawStartDate || rawEndDate;
     const endDate = rawEndDate || startDate;
+    
+    // Get category from selected objective
+    const objectiveName = formData.get('objective') || '';
+    let category = '';
+    if (objectiveName) {
+      const selectedObjective = AppState.objectives.find(obj => obj.name === objectiveName);
+      category = selectedObjective?.category || '';
+    }
+    
     const taskData = {
       id: task?.id || Date.now(),
       task: formData.get('task'),
-      category: formData.get('category'),
+      category: category, // Automatically derived from objective
       startDate,
       endDate,
       startTime: formData.get('startTime') || '',
       endTime: formData.get('endTime') || '',
-      color: getObjectiveColor(formData.get('objective')),
+      color: getObjectiveColor(objectiveName),
       status: formData.get('status') || 'pending',
-      objective: formData.get('objective') || '',
+      objective: objectiveName,
       priority: formData.get('priority') || 'medium',
       repeatType: formData.get('repeatType') || 'none',
-      repeatUntil: formData.get('repeatUntil') || '',
-      impactType: formData.get('impactType') || 'non-monetary',
-      estimatedValue: parseFloat(formData.get('estimatedValue') || '0') || 0
+      repeatUntil: formData.get('repeatUntil') || ''
     };
 
     const operationId = task ? `update-task-${task.id}` : `create-task-${Date.now()}`;
