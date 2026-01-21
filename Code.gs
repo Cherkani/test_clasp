@@ -1221,19 +1221,24 @@ function getNotes() {
   const values = sheet.getDataRange().getValues();
   if (values.length <= 1) return [];
 
+  const tz = Session.getScriptTimeZone();
+  const formatDate = (value) => {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd");
+    }
+    return String(value);
+  };
+
   return values.slice(1)
-    .filter(row => row.join('') !== '')
+    .filter(row => row.some(cell => cell !== '' && cell != null))
     .map(row => ({
       id: row[0],
-      title: row[1] || '',
-      subject: row[2] || '',
-      date: row[3] || '',
-      docLink: row[4]
-        ? (String(row[4]).startsWith('http')
-          ? row[4]
-          : `https://docs.google.com/document/d/${row[4]}`)
-        : '',
-      description: row[5] || ''
+      title: row[1] ? String(row[1]) : '',
+      subject: row[2] ? String(row[2]) : '',
+      date: formatDate(row[3]),
+      docLink: row[4] ? String(row[4]) : '',
+      description: row[5] ? String(row[5]) : ''
     }));
 }
 

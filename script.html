@@ -9413,11 +9413,11 @@ const CategoryPerformancePage = {
       form.appendChild(dateGroup);
   
       const docLinkGroup = DOM.create('div', 'form-group');
-      docLinkGroup.appendChild(DOM.create('label', 'form-label', 'Doc Link'));
+      docLinkGroup.appendChild(DOM.create('label', 'form-label', 'Link (URL)'));
       const docLinkInput = DOM.create('input', 'form-input');
       docLinkInput.type = 'url';
       docLinkInput.name = 'docLink';
-      docLinkInput.placeholder = 'https://docs.google.com/...';
+      docLinkInput.placeholder = 'https://example.com';
       docLinkInput.value = note?.docLink || '';
       docLinkGroup.appendChild(docLinkInput);
       form.appendChild(docLinkGroup);
