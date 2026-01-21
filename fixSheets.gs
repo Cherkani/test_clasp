@@ -1,4 +1,4 @@
-// Standalone script to fix all sheet structures
+// Standalone script to fix all sheet structures with enhanced analytics
 // Run this function from the Apps Script editor to fix column structures
 // Usage: Open Apps Script editor, select fixAllSheetStructures function, and click Run
 
@@ -7,15 +7,15 @@ function fixAllSheetStructures() {
   const fixes = [];
   const logs = [];
 
-  // Expected column structures
+  // Expected column structures with enhanced analytics
   const expectedStructures = {
     'Tasks': {
-      columns: ['id', 'task', 'category', 'startDate', 'startTime', 'endDate', 'endTime', 'color', 'status', 'objective', 'priority', 'repeatType', 'repeatUntil', 'impactType', 'estimatedValue'],
-      count: 15
+      columns: ['id', 'task', 'category', 'startDate', 'startTime', 'endDate', 'endTime', 'color', 'status', 'objective', 'priority', 'repeatType', 'repeatUntil', 'impactType', 'estimatedValue', 'actualValue', 'valueRealizedDate'],
+      count: 17
     },
     'Objectives': {
-      columns: ['id', 'name', 'description', 'color', 'category', 'dueDate'],
-      count: 6
+      columns: ['id', 'name', 'description', 'color', 'category', 'dueDate', 'budget', 'actualSpending', 'targetValue', 'currentValue', 'healthScore', 'lastUpdated'],
+      count: 12
     },
     'Categories': {
       columns: ['id', 'name', 'color'],
@@ -26,8 +26,8 @@ function fixAllSheetStructures() {
       count: 3
     },
     'Finance': {
-      columns: ['id', 'date', 'type', 'amount', 'category', 'note', 'recurringMonthly', 'recurringFrequency', 'recurringNextDueDate', 'recurringBillType', 'recurringStatus', 'recurringBillId'],
-      count: 12
+      columns: ['id', 'date', 'type', 'amount', 'category', 'note', 'recurringMonthly', 'recurringFrequency', 'recurringNextDueDate', 'recurringBillType', 'recurringStatus', 'recurringBillId', 'relatedTaskId', 'relatedObjective', 'isValueRealization'],
+      count: 15
     },
     'FinanceSettings': {
       columns: ['monthKey', 'budget'],
@@ -38,20 +38,20 @@ function fixAllSheetStructures() {
       count: 3
     },
     'Events': {
-      columns: ['id', 'title', 'description', 'startDate', 'startTime', 'endDate', 'endTime', 'category', 'color'],
-      count: 9
+      columns: ['id', 'title', 'description', 'startDate', 'startTime', 'endDate', 'endTime', 'category', 'color', 'relatedTaskIds', 'attended', 'attendanceDate', 'generatedTasks'],
+      count: 13
     },
     'Debts': {
-      columns: ['id', 'person', 'amount', 'direction', 'description', 'date', 'status', 'relatedTaskId'],
-      count: 8
+      columns: ['id', 'person', 'amount', 'direction', 'description', 'date', 'status', 'relatedTaskId', 'resolvedByTaskId', 'resolvedDate'],
+      count: 10
     },
     'Persons': {
       columns: ['id', 'name'],
       count: 2
     },
     'Notes': {
-      columns: ['id', 'title', 'subject', 'date', 'googleDocId'],
-      count: 5
+      columns: ['id', 'title', 'subject', 'date', 'docLink', 'description'],
+      count: 6
     }
   };
 
@@ -131,6 +131,145 @@ function fixAllSheetStructures() {
   return {
     success: true,
     fixedSheets: fixes,
+    logs: logs
+  };
+}
+
+// Function to add new columns to existing sheets without breaking data
+function addEnhancedColumns() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logs = [];
+
+  // Column additions needed for enhanced analytics
+  const columnAdditions = {
+    'Tasks': {
+      additions: [
+        { position: 15, name: 'actualValue', defaultValue: '' },
+        { position: 16, name: 'valueRealizedDate', defaultValue: '' }
+      ]
+    },
+    'Objectives': {
+      additions: [
+        { position: 6, name: 'budget', defaultValue: 0 },
+        { position: 7, name: 'actualSpending', defaultValue: 0 },
+        { position: 8, name: 'targetValue', defaultValue: 0 },
+        { position: 9, name: 'currentValue', defaultValue: 0 },
+        { position: 10, name: 'healthScore', defaultValue: 0 },
+        { position: 11, name: 'lastUpdated', defaultValue: '' }
+      ]
+    },
+    'Finance': {
+      additions: [
+        { position: 12, name: 'relatedTaskId', defaultValue: '' },
+        { position: 13, name: 'relatedObjective', defaultValue: '' },
+        { position: 14, name: 'isValueRealization', defaultValue: false }
+      ]
+    },
+    'Events': {
+      additions: [
+        { position: 9, name: 'relatedTaskIds', defaultValue: '' },
+        { position: 10, name: 'attended', defaultValue: false },
+        { position: 11, name: 'attendanceDate', defaultValue: '' },
+        { position: 12, name: 'generatedTasks', defaultValue: 0 }
+      ]
+    },
+    'Debts': {
+      additions: [
+        { position: 8, name: 'resolvedByTaskId', defaultValue: '' },
+        { position: 9, name: 'resolvedDate', defaultValue: '' }
+      ]
+    }
+  };
+
+  Object.entries(columnAdditions).forEach(([sheetName, config]) => {
+    try {
+      const sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        logs.push(`Sheet "${sheetName}" does not exist - skipping`);
+        return;
+      }
+
+      const currentCols = sheet.getLastColumn();
+      logs.push(`Processing "${sheetName}" - current columns: ${currentCols}`);
+
+      config.additions.forEach(addition => {
+        if (addition.position > currentCols) {
+          // Insert new column
+          sheet.insertColumnAfter(currentCols);
+          sheet.getRange(1, currentCols + 1).setValue(addition.name);
+          sheet.getRange(1, currentCols + 1).setFontWeight("bold");
+
+          // Fill default values for existing rows
+          const lastRow = sheet.getLastRow();
+          if (lastRow > 1) {
+            const range = sheet.getRange(2, currentCols + 1, lastRow - 1, 1);
+            if (typeof addition.defaultValue === 'boolean') {
+              range.setValue(addition.defaultValue);
+            } else if (typeof addition.defaultValue === 'number') {
+              range.setValue(addition.defaultValue);
+            } else {
+              range.setValue(addition.defaultValue || '');
+            }
+          }
+
+          logs.push(`  ✓ Added column "${addition.name}" at position ${currentCols + 1}`);
+        } else {
+          logs.push(`  - Column at position ${addition.position} already exists`);
+        }
+      });
+
+    } catch (error) {
+      logs.push(`Error processing "${sheetName}": ${error.toString()}`);
+    }
+  });
+
+  Logger.log('=== ENHANCED COLUMNS ADDITION COMPLETE ===');
+  logs.forEach(log => Logger.log(log));
+
+  return {
+    success: true,
+    logs: logs
+  };
+}
+
+// Function to check if sheets have the correct columns
+function checkSheetColumns() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logs = [];
+
+  // Expected column structures
+  const expectedStructures = {
+    'Tasks': 17, // id, task, category, startDate, startTime, endDate, endTime, color, status, objective, priority, repeatType, repeatUntil, impactType, estimatedValue, actualValue, valueRealizedDate
+    'Objectives': 12, // id, name, description, color, category, dueDate, budget, actualSpending, targetValue, currentValue, healthScore, lastUpdated
+    'Finance': 15, // id, date, type, amount, category, note, recurringMonthly, recurringFrequency, recurringNextDueDate, recurringBillType, recurringStatus, recurringBillId, relatedTaskId, relatedObjective, isValueRealization
+    'Events': 13, // id, title, description, startDate, startTime, endDate, endTime, category, color, relatedTaskIds, attended, attendanceDate, generatedTasks
+    'Debts': 10 // id, person, amount, direction, description, date, status, relatedTaskId, resolvedByTaskId, resolvedDate
+  };
+
+  Object.entries(expectedStructures).forEach(([sheetName, expectedCount]) => {
+    try {
+      const sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        logs.push(`❌ Sheet "${sheetName}" does not exist`);
+        return;
+      }
+
+      const currentCols = sheet.getLastColumn();
+      if (currentCols === expectedCount) {
+        logs.push(`✅ "${sheetName}" has correct number of columns (${currentCols})`);
+      } else {
+        logs.push(`❌ "${sheetName}" has ${currentCols} columns, expected ${expectedCount}`);
+      }
+    } catch (error) {
+      logs.push(`Error checking "${sheetName}": ${error.toString()}`);
+    }
+  });
+
+  Logger.log('=== SHEET COLUMN CHECK ===');
+  logs.forEach(log => Logger.log(log));
+
+  return {
+    success: true,
     logs: logs
   };
 }

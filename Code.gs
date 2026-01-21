@@ -105,7 +105,9 @@ function getDatags() {
       repeatType: row[11] || 'none',
       repeatUntil: formatDateTime(row[12], "date") || '',
       impactType: row[13] || 'non-monetary',
-      estimatedValue: Number(row[14]) || 0
+      estimatedValue: Number(row[14]) || 0,
+      actualValue: Number(row[15] || 0) || 0,
+      valueRealizedDate: formatDateTime(row[16] || '', "date") || ''
     };
     return addDerivedFields(task, startDateTime, dueDateTime, newStatus);
   });
@@ -141,7 +143,9 @@ function addDatags(taskbase) {
       item.repeatType || 'none',
       item.repeatUntil || '',
       item.impactType || 'non-monetary',
-      item.estimatedValue || 0
+      item.estimatedValue || 0,
+      item.actualValue || 0,
+      item.valueRealizedDate || ''
     ]);
 
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
@@ -160,8 +164,11 @@ function getObjectives() {
   if (!sheet) {
     // Create Objectives sheet if it doesn't exist
     sheet = ss.insertSheet("Objectives");
-    sheet.getRange(1, 1, 1, 6).setValues([["id", "name", "description", "color", "category", "dueDate"]]);
-    sheet.getRange(1, 1, 1, 6).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 12).setValues([[
+      "id", "name", "description", "color", "category", "dueDate",
+      "budget", "actualSpending", "targetValue", "currentValue", "healthScore", "lastUpdated"
+    ]]);
+    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
     
     // Add sample objectives
     const sampleObjectives = [
@@ -192,7 +199,13 @@ function getObjectives() {
     description: row[2] || '',
     color: row[3] || '#3b82f6',
     category: row[4] || '',
-    dueDate: formatDate(row[5])
+    dueDate: formatDate(row[5] || ''),
+    budget: Number(row[6] || 0) || 0,
+    actualSpending: Number(row[7] || 0) || 0,
+    targetValue: Number(row[8] || 0) || 0,
+    currentValue: Number(row[9] || 0) || 0,
+    healthScore: Number(row[10] || 0) || 0,
+    lastUpdated: row[11] || ''
   }));
 }
 
@@ -202,8 +215,11 @@ function addObjective(objective) {
   
   if (!sheet) {
     sheet = ss.insertSheet("Objectives");
-    sheet.getRange(1, 1, 1, 6).setValues([["id", "name", "description", "color", "category", "dueDate"]]);
-    sheet.getRange(1, 1, 1, 6).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 12).setValues([[
+      "id", "name", "description", "color", "category", "dueDate",
+      "budget", "actualSpending", "targetValue", "currentValue", "healthScore", "lastUpdated"
+    ]]);
+    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
   }
 
   // Calculate new ID
@@ -216,13 +232,23 @@ function addObjective(objective) {
     }
   }
   
+  const now = new Date();
+  const tz = Session.getScriptTimeZone();
+  const timestamp = Utilities.formatDate(now, tz, "yyyy-MM-dd HH:mm:ss");
+
   sheet.appendRow([
     newId,
     objective.name,
     objective.description || '',
     objective.color || '#3b82f6',
     objective.category || '',
-    objective.dueDate || ''
+    objective.dueDate || '',
+    objective.budget || 0,
+    0, // actualSpending - will be calculated
+    objective.targetValue || 0,
+    0, // currentValue - will be calculated
+    0, // healthScore - will be calculated
+    timestamp
   ]);
 
   return newId;
@@ -237,12 +263,22 @@ function updateObjective(objective) {
   const rowIndex = values.findIndex(row => row[0] === objective.id);
   
   if (rowIndex > 0) {
-    sheet.getRange(rowIndex + 1, 2, 1, 5).setValues([[
+    const now = new Date();
+    const tz = Session.getScriptTimeZone();
+    const timestamp = Utilities.formatDate(now, tz, "yyyy-MM-dd HH:mm:ss");
+
+    sheet.getRange(rowIndex + 1, 2, 1, 11).setValues([[
       objective.name,
       objective.description || '',
       objective.color || '#3b82f6',
       objective.category || '',
-      objective.dueDate || ''
+      objective.dueDate || '',
+      objective.budget || 0,
+      0, // actualSpending - will be calculated
+      objective.targetValue || 0,
+      0, // currentValue - will be calculated
+      0, // healthScore - will be calculated
+      timestamp
     ]]);
     return true;
   }
@@ -494,17 +530,20 @@ function getFinanceRecords() {
     .filter(row => row.join('') !== '')
     .map(row => ({
       id: row[0],
-      date: formatDate(row[1]),
+      date: formatDate(row[1] || ''),
       type: row[2] || "expense",
       amount: Number(row[3]) || 0,
       category: row[4] || "",
       note: row[5] || "",
       recurringMonthly: row[6] === true || row[6] === "TRUE",
       recurringFrequency: row[7] || "",
-      recurringNextDueDate: formatDate(row[8]),
+      recurringNextDueDate: formatDate(row[8] || ''),
       recurringBillType: row[9] || "",
       recurringStatus: row[10] || "",
-      recurringBillId: row[11] || ""
+      recurringBillId: row[11] || "",
+      relatedTaskId: row[12] || "",
+      relatedObjective: row[13] || "",
+      isValueRealization: row[14] === true || row[14] === "TRUE"
     }));
 }
 
@@ -514,7 +553,7 @@ function saveFinanceRecords(records) {
 
   if (!sheet) {
     sheet = ss.insertSheet("Finance");
-    sheet.getRange(1, 1, 1, 12).setValues([[
+    sheet.getRange(1, 1, 1, 15).setValues([[
       "id",
       "date",
       "type",
@@ -526,9 +565,12 @@ function saveFinanceRecords(records) {
       "recurringNextDueDate",
       "recurringBillType",
       "recurringStatus",
-      "recurringBillId"
+      "recurringBillId",
+      "relatedTaskId",
+      "relatedObjective",
+      "isValueRealization"
     ]]);
-    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 15).setFontWeight("bold");
   }
 
   if (sheet.getLastRow() > 1) {
@@ -548,7 +590,10 @@ function saveFinanceRecords(records) {
       record.recurringNextDueDate || "",
       record.recurringBillType || "",
       record.recurringStatus || "",
-      record.recurringBillId || ""
+      record.recurringBillId || "",
+      record.relatedTaskId || "",
+      record.relatedObjective || "",
+      record.isValueRealization ? true : false
     ]);
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
     sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
@@ -733,7 +778,7 @@ function getEvents() {
   
   if (!sheet) {
     sheet = ss.insertSheet("Events");
-    sheet.getRange(1, 1, 1, 9).setValues([[
+    sheet.getRange(1, 1, 1, 13).setValues([[
       "id",
       "title",
       "description",
@@ -742,9 +787,13 @@ function getEvents() {
       "endDate",
       "endTime",
       "category",
-      "color"
+      "color",
+      "relatedTaskIds",
+      "attended",
+      "attendanceDate",
+      "generatedTasks"
     ]]);
-    sheet.getRange(1, 1, 1, 9).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 13).setFontWeight("bold");
   }
 
   const values = sheet.getDataRange().getValues();
@@ -773,12 +822,16 @@ function getEvents() {
       id: row[0],
       title: row[1] || '',
       description: row[2] || '',
-      startDate: formatDate(row[3]),
-      startTime: formatTime(row[4]),
-      endDate: formatDate(row[5]),
-      endTime: formatTime(row[6]),
+      startDate: formatDate(row[3] || ''),
+      startTime: formatTime(row[4] || ''),
+      endDate: formatDate(row[5] || ''),
+      endTime: formatTime(row[6] || ''),
       category: row[7] || '',
-      color: row[8] || '#3b82f6'
+      color: row[8] || '#3b82f6',
+      relatedTaskIds: row[9] || '',
+      attended: row[10] === true || row[10] === "TRUE",
+      attendanceDate: formatDate(row[11] || ''),
+      generatedTasks: Number(row[12] || 0) || 0
     }));
 }
 
@@ -812,7 +865,11 @@ function addEvent(event) {
     event.endDate || '',
     event.endTime || '',
     event.category || '',
-    event.color || '#3b82f6'
+    event.color || '#3b82f6',
+    event.relatedTaskIds || '',
+    event.attended || false,
+    event.attendanceDate || '',
+    event.generatedTasks || 0
   ]);
 
   return newId;
@@ -827,7 +884,7 @@ function updateEvent(event) {
   const rowIndex = values.findIndex(row => row[0] === event.id);
   
   if (rowIndex > 0) {
-    sheet.getRange(rowIndex + 1, 2, 1, 8).setValues([[
+    sheet.getRange(rowIndex + 1, 2, 1, 12).setValues([[
       event.title || '',
       event.description || '',
       event.startDate || '',
@@ -835,7 +892,11 @@ function updateEvent(event) {
       event.endDate || '',
       event.endTime || '',
       event.category || '',
-      event.color || '#3b82f6'
+      event.color || '#3b82f6',
+      event.relatedTaskIds || '',
+      event.attended || false,
+      event.attendanceDate || '',
+      event.generatedTasks || 0
     ]]);
     return true;
   }
@@ -946,7 +1007,7 @@ function getDebts() {
   
   if (!sheet) {
     sheet = ss.insertSheet("Debts");
-    sheet.getRange(1, 1, 1, 8).setValues([[
+    sheet.getRange(1, 1, 1, 10).setValues([[
       "id",
       "person",
       "amount",
@@ -954,9 +1015,11 @@ function getDebts() {
       "description",
       "date",
       "status",
-      "relatedTaskId"
+      "relatedTaskId",
+      "resolvedByTaskId",
+      "resolvedDate"
     ]]);
-    sheet.getRange(1, 1, 1, 8).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 10).setFontWeight("bold");
   }
 
   const values = sheet.getDataRange().getValues();
@@ -979,9 +1042,11 @@ function getDebts() {
       amount: Number(row[2]) || 0,
       direction: row[3] || 'owed', // 'owed' = they owe me, 'owe' = I owe them
       description: row[4] || '',
-      date: formatDate(row[5]),
+      date: formatDate(row[5] || ''),
       status: row[6] || 'pending', // 'pending', 'paid', 'cancelled'
-      relatedTaskId: row[7] || null
+      relatedTaskId: row[7] || null,
+      resolvedByTaskId: row[8] || '',
+      resolvedDate: formatDate(row[9] || '')
     }));
 }
 
@@ -1014,7 +1079,9 @@ function addDebt(debt) {
     debt.description || '',
     debt.date || '',
     debt.status || 'pending',
-    debt.relatedTaskId || ''
+    debt.relatedTaskId || '',
+    debt.resolvedByTaskId || '',
+    debt.resolvedDate || ''
   ]);
 
   return newId;
@@ -1029,14 +1096,16 @@ function updateDebt(debt) {
   const rowIndex = values.findIndex(row => row[0] === debt.id);
   
   if (rowIndex > 0) {
-    sheet.getRange(rowIndex + 1, 2, 1, 7).setValues([[
+    sheet.getRange(rowIndex + 1, 2, 1, 9).setValues([[
       debt.person || '',
       debt.amount || 0,
       debt.direction || 'owed',
       debt.description || '',
       debt.date || '',
       debt.status || 'pending',
-      debt.relatedTaskId || ''
+      debt.relatedTaskId || '',
+      debt.resolvedByTaskId || '',
+      debt.resolvedDate || ''
     ]]);
     return true;
   }
@@ -1118,16 +1187,22 @@ function deletePerson(personId) {
 }
 
 // Notes Functions
-function getNotes() {
+function ensureNotesSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName("Notes");
-  
+  const headers = ["id", "title", "subject", "date", "docLink", "description"];
+
   if (!sheet) {
     sheet = ss.insertSheet("Notes");
-    sheet.getRange(1, 1, 1, 5).setValues([["id", "title", "subject", "date", "googleDocId"]]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight("bold");
-    return [];
   }
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  return sheet;
+}
+
+function getNotes() {
+  const sheet = ensureNotesSheet();
 
   const values = sheet.getDataRange().getValues();
   if (values.length <= 1) return [];
@@ -1139,19 +1214,17 @@ function getNotes() {
       title: row[1] || '',
       subject: row[2] || '',
       date: row[3] || '',
-      googleDocId: row[4] || ''
+      docLink: row[4]
+        ? (String(row[4]).startsWith('http')
+          ? row[4]
+          : `https://docs.google.com/document/d/${row[4]}`)
+        : '',
+      description: row[5] || ''
     }));
 }
 
 function addNote(note) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Notes");
-  
-  if (!sheet) {
-    sheet = ss.insertSheet("Notes");
-    sheet.getRange(1, 1, 1, 5).setValues([["id", "title", "subject", "date", "googleDocId"]]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight("bold");
-  }
+  const sheet = ensureNotesSheet();
 
   let newId = 1;
   const lastRow = sheet.getLastRow();
@@ -1162,57 +1235,16 @@ function addNote(note) {
     }
   }
 
-  // Create Google Doc if needed
-  let docId = '';
-  if (note.createGoogleDoc) {
-    try {
-      const docTitle = note.title || 'Untitled Note';
-      const doc = DocumentApp.create(docTitle);
-      docId = doc.getId();
-      const body = doc.getBody();
-      
-      // Clear default content
-      body.clear();
-      
-      // Add title
-      const titlePara = body.appendParagraph(docTitle);
-      titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1);
-      titlePara.setSpacingAfter(12);
-      
-      // Add subject if provided
-      if (note.subject) {
-        const subjectPara = body.appendParagraph(`Subject: ${note.subject}`);
-        subjectPara.setSpacingAfter(12);
-      }
-      
-      // Add date if provided
-      if (note.date) {
-        body.appendParagraph(`Date: ${note.date}`);
-      }
-      
-      // Add a separator
-      body.appendParagraph('').setSpacingAfter(12);
-      body.appendHorizontalRule();
-      body.appendParagraph('').setSpacingAfter(12);
-      
-      doc.saveAndClose();
-    } catch (e) {
-      // Log error but don't fail the note creation
-      Logger.log('Error creating Google Doc: ' + e.toString());
-      // Continue without docId - note will still be created
-      docId = '';
-    }
-  }
-  
   sheet.appendRow([
     newId,
     note.title || '',
     note.subject || '',
     note.date || '',
-    docId
+    note.docLink || '',
+    note.description || ''
   ]);
 
-  return { id: newId, googleDocId: docId };
+  return { id: newId, docLink: note.docLink || '' };
 }
 
 function updateNote(note) {
@@ -1223,10 +1255,12 @@ function updateNote(note) {
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] == note.id) {
-      sheet.getRange(i + 1, 2, 1, 3).setValues([[
+      sheet.getRange(i + 1, 2, 1, 5).setValues([[
         note.title || '',
         note.subject || '',
-        note.date || ''
+        note.date || '',
+        note.docLink || '',
+        note.description || ''
       ]]);
       return;
     }
@@ -1373,8 +1407,8 @@ function processRecurringBills() {
   
   if (!financeSheet) {
     financeSheet = ss.insertSheet("Finance");
-    financeSheet.getRange(1, 1, 1, 12).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus", "recurringBillId"]]);
-    financeSheet.getRange(1, 1, 1, 12).setFontWeight("bold");
+    financeSheet.getRange(1, 1, 1, 15).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus", "recurringBillId", "relatedTaskId", "relatedObjective", "isValueRealization"]]);
+    financeSheet.getRange(1, 1, 1, 15).setFontWeight("bold");
   }
   
   bills.forEach(bill => {
@@ -1404,7 +1438,10 @@ function processRecurringBills() {
         '', // No next due date
         bill.type || 'bill', // recurringBillType - preserve subscription/bill type
         '', // No status for payment records
-        bill.id // recurringBillId - link to the source recurring bill
+        bill.id, // recurringBillId - link to the source recurring bill
+        '', // relatedTaskId - empty for bill payments
+        '', // relatedObjective - empty for bill payments
+        false // isValueRealization - false for bill payments
       ]);
       
       // Update next due date on the recurring bill record
@@ -1454,7 +1491,7 @@ function getDerivedStats(tasks, financeRecords, objectives, categories, statuses
     if (record.recurringFrequency && record.recurringStatus && !record.recurringBillId) {
       return acc; // Skip recurring bill template records
     }
-    
+
     const amount = Number(record.amount) || 0;
     if (record.type === "income") {
       acc.income += amount;
@@ -1482,15 +1519,447 @@ function getDerivedStats(tasks, financeRecords, objectives, categories, statuses
 
   debtTotals.net = debtTotals.owedToMe - debtTotals.iOwe;
 
+  // Calculate objective health scores and progress
+  let objectivesStats = { total: 0, onTrack: 0, atRisk: 0, completed: 0, totalValue: 0, totalSpending: 0, averageProgress: 0, averageHealthScore: 0 };
+  try {
+    objectivesStats = calculateObjectivesStats(tasks, financeRecords, objectives);
+  } catch (error) {
+    console.error('Error calculating objectives stats:', error);
+  }
+
+  // Calculate category performance analytics
+  let categoriesStats = {};
+  try {
+    categoriesStats = calculateCategoriesStats(tasks, financeRecords, categories);
+  } catch (error) {
+    console.error('Error calculating categories stats:', error);
+  }
+
+  // Calculate cross-entity relationships
+  let relationshipsStats = { taskToObjective: {}, taskToFinance: { estimatedValue: 0, realizedValue: 0, accuracy: 0 }, debtToTask: { resolvedCount: 0, resolvedAmount: 0, pendingCount: 0 }, eventToTask: { conversionRate: 0, tasksGenerated: 0 } };
+  try {
+    relationshipsStats = calculateRelationshipsStats(tasks, financeRecords, objectives, events, debts);
+  } catch (error) {
+    console.error('Error calculating relationships stats:', error);
+  }
+
+  // Generate actionable insights
+  let insights = [];
+  try {
+    insights = generateInsights(objectivesStats, categoriesStats, relationshipsStats, tasks, financeRecords);
+  } catch (error) {
+    console.error('Error generating insights:', error);
+  }
+
   return {
     tasks: taskTotals,
     finance: financeTotals,
     debts: debtTotals,
     events: { total: events.length },
+    objectives: objectivesStats,
+    categories: categoriesStats,
+    relationships: relationshipsStats,
+    insights: insights,
     reference: {
       objectives: objectives.length,
       categories: categories.length,
       statuses: statuses.length
     }
   };
+}
+
+function calculateObjectivesStats(tasks, financeRecords, objectives) {
+  const now = new Date();
+  const objectiveStats = {
+    total: objectives.length,
+    onTrack: 0,
+    atRisk: 0,
+    completed: 0,
+    totalValue: 0,
+    totalSpending: 0,
+    averageProgress: 0,
+    averageHealthScore: 0
+  };
+
+  const objectivesWithProgress = objectives.map(objective => {
+    // Get tasks for this objective
+    const objectiveTasks = tasks.filter(task => task.objective === objective.name);
+    const totalTasks = objectiveTasks.length;
+    const completedTasks = objectiveTasks.filter(task => task.status === 'completed').length;
+    const overdueTasks = objectiveTasks.filter(task => task.status === 'overdue').length;
+
+    // Calculate progress percentage
+    const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Calculate value delivered from completed tasks
+    const completedTaskValue = objectiveTasks
+      .filter(task => task.status === 'completed')
+      .reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
+
+    // Calculate spending related to this objective (tasks with this objective)
+    const objectiveSpending = financeRecords
+      .filter(record => record.type === 'expense' && objectiveTasks.some(task => task.id == record.relatedTaskId))
+      .reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+
+    // Calculate health score (0-100)
+    let healthScore = 50; // Base score
+
+    // Progress factor (0-40 points)
+    healthScore += Math.min(progressPercent, 40);
+
+    // Overdue penalty (-30 points max)
+    const overduePenalty = Math.min(overdueTasks * 10, 30);
+    healthScore -= overduePenalty;
+
+    // Deadline proximity factor
+    if (objective.dueDate) {
+      const dueDate = new Date(objective.dueDate);
+      const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+
+      if (daysUntilDue < 0) {
+        // Overdue
+        healthScore -= 20;
+      } else if (daysUntilDue <= 7) {
+        // Due soon - bonus for urgency
+        healthScore += Math.max(0, 10 - (daysUntilDue / 2));
+      } else if (daysUntilDue <= 30) {
+        // Medium term - slight bonus
+        healthScore += 5;
+      }
+    }
+
+    // Task completion rate bonus
+    const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) : 0;
+    healthScore += Math.round(completionRate * 10);
+
+    // Clamp between 0-100
+    healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
+
+    // Determine status
+    let status = 'pending';
+    if (progressPercent >= 100) {
+      status = 'completed';
+      objectiveStats.completed++;
+    } else if (healthScore < 40 || overdueTasks > 2) {
+      status = 'atRisk';
+      objectiveStats.atRisk++;
+    } else {
+      status = 'onTrack';
+      objectiveStats.onTrack++;
+    }
+
+    return {
+      ...objective,
+      totalTasks,
+      completedTasks,
+      overdueTasks,
+      progressPercent,
+      completedTaskValue,
+      spending: objectiveSpending,
+      healthScore,
+      status,
+      daysUntilDue: objective.dueDate ? Math.ceil((new Date(objective.dueDate) - now) / (1000 * 60 * 60 * 24)) : null
+    };
+  });
+
+  // Calculate aggregate stats
+  const totalProgress = objectivesWithProgress.reduce((sum, obj) => sum + obj.progressPercent, 0);
+  objectiveStats.averageProgress = objectives.length > 0 ? Math.round(totalProgress / objectives.length) : 0;
+
+  const totalHealthScore = objectivesWithProgress.reduce((sum, obj) => sum + obj.healthScore, 0);
+  objectiveStats.averageHealthScore = objectives.length > 0 ? Math.round(totalHealthScore / objectives.length) : 0;
+
+  objectiveStats.totalValue = objectivesWithProgress.reduce((sum, obj) => sum + obj.completedTaskValue, 0);
+  objectiveStats.totalSpending = objectivesWithProgress.reduce((sum, obj) => sum + obj.spending, 0);
+
+  return objectiveStats;
+}
+
+function calculateCategoriesStats(tasks, financeRecords, categories) {
+  const categoriesStats = {};
+
+  categories.forEach(category => {
+    const categoryTasks = tasks.filter(task => task.category === category.name);
+    const completedTasks = categoryTasks.filter(task => task.status === 'completed');
+    const overdueTasks = categoryTasks.filter(task => task.status === 'overdue');
+
+    // Calculate completion rate
+    const completionRate = categoryTasks.length > 0 ?
+      Math.round((completedTasks.length / categoryTasks.length) * 100) : 0;
+
+    // Calculate total value from completed tasks
+    const totalValue = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
+
+    // Calculate spending in this category
+    const categoryFinance = financeRecords.filter(record => record.category === category.name && record.type === 'expense');
+    const totalSpending = categoryFinance.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+
+    // Calculate ROI (Value delivered vs spending)
+    const roi = totalSpending > 0 ? Math.round((totalValue / totalSpending) * 100) / 100 : (totalValue > 0 ? '∞' : 0);
+
+    // Calculate average duration for completed tasks
+    const durations = completedTasks.map(task => {
+      if (task.startDate && task.endDate) {
+        const start = new Date(task.startDate);
+        const end = new Date(task.endDate);
+        return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      }
+      return 0;
+    }).filter(d => d > 0);
+
+    const averageDuration = durations.length > 0 ?
+      Math.round(durations.reduce((sum, d) => sum + d, 0) / durations.length) : 0;
+
+    categoriesStats[category.name] = {
+      taskCount: categoryTasks.length,
+      completedCount: completedTasks.length,
+      overdueCount: overdueTasks.length,
+      completionRate,
+      totalValue,
+      totalSpending,
+      roi,
+      averageDuration,
+      color: category.color
+    };
+  });
+
+  return categoriesStats;
+}
+
+function calculateRelationshipsStats(tasks, financeRecords, objectives, events, debts) {
+  // Task to Objective relationships
+  const taskToObjective = {};
+  objectives.forEach(objective => {
+    const objectiveTasks = tasks.filter(task => task.objective === objective.name);
+    const completedTasks = objectiveTasks.filter(task => task.status === 'completed');
+    const totalValue = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
+
+    taskToObjective[objective.name] = {
+      taskCount: objectiveTasks.length,
+      completedCount: completedTasks.length,
+      totalValue
+    };
+  });
+
+  // Task to Finance relationships (estimated vs actual value)
+  const estimatedValue = tasks.reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
+  const realizedValue = financeRecords
+    .filter(record => record.isValueRealization)
+    .reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+  const valueAccuracy = estimatedValue > 0 ? Math.round((realizedValue / estimatedValue) * 100) : 0;
+
+  // Debt to Task relationships
+  const resolvedDebts = debts.filter(debt => debt.status === 'paid' && debt.resolvedByTaskId);
+  const resolvedAmount = resolvedDebts.reduce((sum, debt) => sum + (Number(debt.amount) || 0), 0);
+  const pendingDebts = debts.filter(debt => debt.status === 'pending');
+
+  // Event to Task relationships
+  const eventsWithTasks = events.filter(event => event.relatedTaskIds && event.relatedTaskIds.trim() !== '');
+  const totalTasksFromEvents = eventsWithTasks.reduce((sum, event) => {
+    return sum + (event.relatedTaskIds ? event.relatedTaskIds.split(',').length : 0);
+  }, 0);
+  const eventConversionRate = events.length > 0 ? Math.round((eventsWithTasks.length / events.length) * 100) : 0;
+
+  return {
+    taskToObjective,
+    taskToFinance: {
+      estimatedValue,
+      realizedValue,
+      accuracy: valueAccuracy
+    },
+    debtToTask: {
+      resolvedCount: resolvedDebts.length,
+      resolvedAmount,
+      pendingCount: pendingDebts.length
+    },
+    eventToTask: {
+      conversionRate: eventConversionRate,
+      tasksGenerated: totalTasksFromEvents
+    }
+  };
+}
+
+function generateInsights(objectivesStats, categoriesStats, relationshipsStats, tasks, financeRecords) {
+  const insights = [];
+
+  // Objective risk insights
+  if (objectivesStats.atRisk > 0) {
+    insights.push({
+      type: 'objective_risk',
+      message: `${objectivesStats.atRisk} objective${objectivesStats.atRisk > 1 ? 's' : ''} at risk - review overdue tasks`,
+      severity: 'high',
+      action: 'Review objectives with overdue tasks'
+    });
+  }
+
+  // High ROI category insights
+  const highRoiCategories = Object.entries(categoriesStats)
+    .filter(([name, stats]) => typeof stats.roi === 'number' && stats.roi > 2)
+    .sort((a, b) => b[1].roi - a[1].roi)
+    .slice(0, 2);
+
+  highRoiCategories.forEach(([category, stats]) => {
+    insights.push({
+      type: 'high_roi',
+      message: `${category}: ${stats.roi}x ROI - consider investing more time`,
+      severity: 'info',
+      category,
+      action: `Focus on ${category} category for higher returns`
+    });
+  });
+
+  // Value delivery insights
+  if (relationshipsStats.taskToFinance.estimatedValue > 0) {
+    const valueMessage = relationshipsStats.taskToFinance.realizedValue > 0
+      ? `Tasks delivered $${relationshipsStats.taskToFinance.estimatedValue} estimated value`
+      : `Tasks have $${relationshipsStats.taskToFinance.estimatedValue} potential value - track actual delivery`;
+
+    insights.push({
+      type: 'value_delivery',
+      message: valueMessage,
+      severity: 'info',
+      action: 'Monitor task value realization'
+    });
+  }
+
+  // Debt resolution insights
+  if (relationshipsStats.debtToTask.resolvedCount > 0) {
+    insights.push({
+      type: 'debt_resolution',
+      message: `${relationshipsStats.debtToTask.resolvedCount} debts resolved through task completion ($${relationshipsStats.debtToTask.resolvedAmount})`,
+      severity: 'success',
+      action: 'Continue tracking debt resolution through tasks'
+    });
+  }
+
+  // Low completion rate insights
+  const lowCompletionCategories = Object.entries(categoriesStats)
+    .filter(([name, stats]) => stats.taskCount > 5 && stats.completionRate < 50)
+    .sort((a, b) => a[1].completionRate - b[1].completionRate);
+
+  lowCompletionCategories.forEach(([category, stats]) => {
+    insights.push({
+      type: 'low_completion',
+      message: `${category}: ${stats.completionRate}% completion rate - ${stats.overdueCount} overdue tasks`,
+      severity: 'warning',
+      category,
+      action: `Review and reprioritize ${category} tasks`
+    });
+  });
+
+  // Predictive Analytics Insights
+  const predictiveInsights = generatePredictiveInsights(tasks, objectivesStats, categoriesStats);
+  insights.push(...predictiveInsights);
+
+  return insights;
+}
+
+function generatePredictiveInsights(tasks, objectivesStats, categoriesStats) {
+  const insights = [];
+  const now = new Date();
+
+  // Calculate overall task completion velocity (tasks per week)
+  const completedTasks = tasks.filter(task => task.status === 'completed' && task.endDate);
+  const recentCompletedTasks = completedTasks.filter(task => {
+    const completionDate = new Date(task.endDate);
+    const daysSince = (now - completionDate) / (1000 * 60 * 60 * 24);
+    return daysSince <= 30; // Last 30 days
+  });
+
+  const velocity = recentCompletedTasks.length / 4.3; // Tasks per week (30/7 ≈ 4.3)
+
+  // Forecast value delivery
+  const pendingTasks = tasks.filter(task => task.status !== 'completed');
+  const forecastedValue = pendingTasks.reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
+
+  if (forecastedValue > 0) {
+    const weeksToComplete = pendingTasks.length / Math.max(velocity, 0.1);
+    insights.push({
+      type: 'predictive',
+      message: `$${forecastedValue} potential value in pipeline - ${weeksToComplete.toFixed(1)} weeks at current velocity`,
+      severity: 'info',
+      action: 'Monitor task completion velocity'
+    });
+  }
+
+  // Objective completion forecasts
+  const objectives = getObjectives();
+  objectives.forEach(objective => {
+    const objectiveTasks = tasks.filter(task => task.objective === objective.name);
+    const totalTasks = objectiveTasks.length;
+    const completedTasks = objectiveTasks.filter(task => task.status === 'completed').length;
+
+    if (totalTasks > 0 && objective.dueDate) {
+      const progressPercent = (completedTasks / totalTasks) * 100;
+      const remainingTasks = totalTasks - completedTasks;
+
+      if (remainingTasks > 0) {
+        const weeksRemaining = remainingTasks / Math.max(velocity, 0.1);
+        const dueDate = new Date(objective.dueDate);
+        const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+
+        if (daysUntilDue > 0) {
+          const weeksUntilDue = daysUntilDue / 7;
+          const isOnTrack = weeksRemaining <= weeksUntilDue;
+
+          if (!isOnTrack) {
+            insights.push({
+              type: 'predictive',
+              message: `${objective.name}: ${weeksRemaining.toFixed(1)} weeks needed vs ${weeksUntilDue.toFixed(1)} weeks available`,
+              severity: 'warning',
+              action: `Review ${objective.name} timeline`
+            });
+          } else {
+            const confidence = Math.min(95, Math.max(50, progressPercent + (weeksUntilDue - weeksRemaining) * 10));
+            insights.push({
+              type: 'predictive',
+              message: `${objective.name}: ${confidence.toFixed(0)}% chance of completion on time`,
+              severity: 'info',
+              action: `Monitor ${objective.name} progress`
+            });
+          }
+        }
+      }
+    }
+  });
+
+  // Category velocity insights
+  Object.entries(categoriesStats).forEach(([categoryName, stats]) => {
+    if (stats.taskCount > 10) {
+      const categoryVelocity = (stats.completedCount / stats.taskCount) * velocity;
+
+      if (categoryVelocity < velocity * 0.5) {
+        insights.push({
+          type: 'predictive',
+          message: `${categoryName}: Slower completion velocity than average - review blockers`,
+          severity: 'warning',
+          category: categoryName,
+          action: `Analyze ${categoryName} task completion patterns`
+        });
+      } else if (categoryVelocity > velocity * 1.5) {
+        insights.push({
+          type: 'predictive',
+          message: `${categoryName}: High completion velocity - consider adding more tasks`,
+          severity: 'success',
+          category: categoryName,
+          action: `Capitalize on ${categoryName} momentum`
+        });
+      }
+    }
+  });
+
+  // Risk alerts for overdue tasks approaching deadlines
+  const overdueTasks = tasks.filter(task => task.status === 'overdue');
+  const highPriorityOverdue = overdueTasks.filter(task => task.priority === 'high');
+
+  if (highPriorityOverdue.length > 0) {
+    insights.push({
+      type: 'predictive',
+      message: `${highPriorityOverdue.length} high-priority overdue tasks - immediate attention needed`,
+      severity: 'high',
+      action: 'Address high-priority overdue tasks'
+    });
+  }
+
+  return insights;
 }
