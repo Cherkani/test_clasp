@@ -494,7 +494,11 @@ function getFinanceRecords() {
       amount: Number(row[3]) || 0,
       category: row[4] || "",
       note: row[5] || "",
-      recurringMonthly: row[6] === true || row[6] === "TRUE"
+      recurringMonthly: row[6] === true || row[6] === "TRUE",
+      recurringFrequency: row[7] || "",
+      recurringNextDueDate: formatDate(row[8]),
+      recurringBillType: row[9] || "",
+      recurringStatus: row[10] || ""
     }));
 }
 
@@ -504,16 +508,20 @@ function saveFinanceRecords(records) {
 
   if (!sheet) {
     sheet = ss.insertSheet("Finance");
-    sheet.getRange(1, 1, 1, 7).setValues([[
+    sheet.getRange(1, 1, 1, 11).setValues([[
       "id",
       "date",
       "type",
       "amount",
       "category",
       "note",
-      "recurringMonthly"
+      "recurringMonthly",
+      "recurringFrequency",
+      "recurringNextDueDate",
+      "recurringBillType",
+      "recurringStatus"
     ]]);
-    sheet.getRange(1, 1, 1, 7).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 11).setFontWeight("bold");
   }
 
   if (sheet.getLastRow() > 1) {
@@ -528,7 +536,11 @@ function saveFinanceRecords(records) {
       record.amount,
       record.category || "",
       record.note || "",
-      record.recurringMonthly ? true : false
+      record.recurringMonthly ? true : false,
+      record.recurringFrequency || "",
+      record.recurringNextDueDate || "",
+      record.recurringBillType || "",
+      record.recurringStatus || ""
     ]);
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
     sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
@@ -595,7 +607,8 @@ function getFinanceCategories() {
       [4, "Bills", "#f59e0b"],
       [5, "Entertainment", "#8b5cf6"],
       [6, "Salary", "#10b981"],
-      [7, "Freelance", "#3b82f6"]
+      [7, "Freelance", "#3b82f6"],
+      [8, "Subscription", "#8b5cf6"]
     ];
     if (sampleCategories.length > 0) {
       sheet.getRange(2, 1, sampleCategories.length, 3).setValues(sampleCategories);
@@ -684,12 +697,16 @@ function getAppData() {
   const events = getEvents();
   const debts = getDebts();
   const persons = getPersons();
+  const notes = getNotes();
+  const recurringBills = getRecurringBills();
   const stats = getDerivedStats(tasks, financeRecords, objectives, categories, statuses, events, debts);
 
   return {
     tasks,
     objectives,
     persons,
+    notes,
+    recurringBills,
     categories,
     statuses,
     financeRecords,
@@ -1090,6 +1107,310 @@ function deletePerson(personId) {
       return;
     }
   }
+}
+
+// Notes Functions
+function getNotes() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Notes");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Notes");
+    sheet.getRange(1, 1, 1, 5).setValues([["id", "title", "subject", "date", "googleDocId"]]);
+    sheet.getRange(1, 1, 1, 5).setFontWeight("bold");
+    return [];
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  return values.slice(1)
+    .filter(row => row.join('') !== '')
+    .map(row => ({
+      id: row[0],
+      title: row[1] || '',
+      subject: row[2] || '',
+      date: row[3] || '',
+      googleDocId: row[4] || ''
+    }));
+}
+
+function addNote(note) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Notes");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Notes");
+    sheet.getRange(1, 1, 1, 5).setValues([["id", "title", "subject", "date", "googleDocId"]]);
+    sheet.getRange(1, 1, 1, 5).setFontWeight("bold");
+  }
+
+  let newId = 1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    if (existingIds.length > 0) {
+      newId = Math.max(...existingIds.filter(id => id !== '' && id != null)) + 1;
+    }
+  }
+
+  // Create Google Doc if needed
+  let docId = '';
+  if (note.createGoogleDoc) {
+    try {
+      const docTitle = note.title || 'Untitled Note';
+      const doc = DocumentApp.create(docTitle);
+      docId = doc.getId();
+      const body = doc.getBody();
+      
+      // Clear default content
+      body.clear();
+      
+      // Add title
+      const titlePara = body.appendParagraph(docTitle);
+      titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      titlePara.setSpacingAfter(12);
+      
+      // Add subject if provided
+      if (note.subject) {
+        const subjectPara = body.appendParagraph(`Subject: ${note.subject}`);
+        subjectPara.setSpacingAfter(12);
+      }
+      
+      // Add date if provided
+      if (note.date) {
+        body.appendParagraph(`Date: ${note.date}`);
+      }
+      
+      // Add a separator
+      body.appendParagraph('').setSpacingAfter(12);
+      body.appendHorizontalRule();
+      body.appendParagraph('').setSpacingAfter(12);
+      
+      doc.saveAndClose();
+    } catch (e) {
+      // Log error but don't fail the note creation
+      Logger.log('Error creating Google Doc: ' + e.toString());
+      // Continue without docId - note will still be created
+      docId = '';
+    }
+  }
+  
+  sheet.appendRow([
+    newId,
+    note.title || '',
+    note.subject || '',
+    note.date || '',
+    docId
+  ]);
+
+  return { id: newId, googleDocId: docId };
+}
+
+function updateNote(note) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Notes");
+  if (!sheet) return;
+
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] == note.id) {
+      sheet.getRange(i + 1, 2, 1, 3).setValues([[
+        note.title || '',
+        note.subject || '',
+        note.date || ''
+      ]]);
+      return;
+    }
+  }
+}
+
+function deleteNote(noteId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Notes");
+  if (!sheet) return;
+
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] == noteId) {
+      sheet.deleteRow(i + 1);
+      return;
+    }
+  }
+}
+
+// Recurring Bills Functions - now using Finance sheet
+function getRecurringBills() {
+  const financeRecords = getFinanceRecords();
+  const tz = Session.getScriptTimeZone();
+  const formatDate = (value) => {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd");
+    }
+    return String(value);
+  };
+
+  // Filter records that have recurring information
+  return financeRecords
+    .filter(record => record.recurringFrequency && record.recurringStatus)
+    .map(record => ({
+      id: record.id,
+      name: record.note || '',
+      amount: record.amount || 0,
+      type: record.recurringBillType || 'bill', // 'bill' or 'subscription'
+      frequency: record.recurringFrequency || 'monthly',
+      nextDueDate: formatDate(record.recurringNextDueDate),
+      category: record.category || '',
+      status: record.recurringStatus || 'active',
+      description: record.note || ''
+    }));
+}
+
+function addRecurringBill(bill) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Finance");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Finance");
+    sheet.getRange(1, 1, 1, 11).setValues([[
+      "id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus"
+    ]]);
+    sheet.getRange(1, 1, 1, 11).setFontWeight("bold");
+  }
+
+  let newId = 1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    if (existingIds.length > 0) {
+      newId = Math.max(...existingIds.filter(id => id !== '' && id != null)) + 1;
+    }
+  }
+  
+  // Ensure Subscription category exists
+  const categories = getFinanceCategories();
+  if (!categories.find(c => c.name === 'Subscription')) {
+    addFinanceCategory({ name: 'Subscription', color: '#8b5cf6' });
+  }
+  
+  // Use Subscription as default category if not specified
+  const category = bill.category || 'Subscription';
+  
+  sheet.appendRow([
+    newId,
+    bill.nextDueDate || '', // Use nextDueDate as initial date
+    'expense',
+    bill.amount || 0,
+    category,
+    bill.name || bill.description || '',
+    true, // recurringMonthly
+    bill.frequency || 'monthly',
+    bill.nextDueDate || '',
+    bill.type || 'bill',
+    bill.status || 'active'
+  ]);
+
+  return newId;
+}
+
+function updateRecurringBill(bill) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Finance");
+  if (!sheet) return;
+
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] == bill.id) {
+      // Update the finance record with recurring bill data
+      sheet.getRange(i + 1, 2, 1, 10).setValues([[
+        bill.nextDueDate || '', // date
+        'expense', // type
+        bill.amount || 0, // amount
+        bill.category || 'Subscription', // category
+        bill.name || bill.description || '', // note
+        true, // recurringMonthly
+        bill.frequency || 'monthly', // recurringFrequency
+        bill.nextDueDate || '', // recurringNextDueDate
+        bill.type || 'bill', // recurringBillType
+        bill.status || 'active' // recurringStatus
+      ]]);
+      return;
+    }
+  }
+}
+
+function deleteRecurringBill(billId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Finance");
+  if (!sheet) return;
+
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] == billId) {
+      sheet.deleteRow(i + 1);
+      return;
+    }
+  }
+}
+
+// Auto-create finance records from recurring bills
+function processRecurringBills() {
+  const bills = getRecurringBills();
+  const today = new Date();
+  const todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let financeSheet = ss.getSheetByName("Finance");
+  
+  if (!financeSheet) {
+    financeSheet = ss.insertSheet("Finance");
+    financeSheet.getRange(1, 1, 1, 11).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus"]]);
+    financeSheet.getRange(1, 1, 1, 11).setFontWeight("bold");
+  }
+  
+  bills.forEach(bill => {
+    if (bill.status !== 'active' || !bill.nextDueDate) return;
+    
+    const dueDate = new Date(bill.nextDueDate);
+    if (dueDate <= today) {
+      // Create finance record for this payment
+      const lastRow = financeSheet.getLastRow();
+      let newId = 1;
+      if (lastRow > 1) {
+        const existingIds = financeSheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+        if (existingIds.length > 0) {
+          newId = Math.max(...existingIds.filter(id => id !== '' && id != null)) + 1;
+        }
+      }
+      
+      financeSheet.appendRow([
+        newId,
+        todayStr,
+        'expense',
+        bill.amount || 0,
+        bill.category || 'Subscription',
+        bill.name || '',
+        false, // This is a payment record, not the recurring template
+        '', // No frequency for payment records
+        '', // No next due date
+        '', // No bill type for payment records
+        '' // No status for payment records
+      ]);
+      
+      // Update next due date on the recurring bill record
+      const nextDate = new Date(dueDate);
+      if (bill.frequency === 'monthly') {
+        nextDate.setMonth(nextDate.getMonth() + 1);
+      } else if (bill.frequency === 'yearly') {
+        nextDate.setFullYear(nextDate.getFullYear() + 1);
+      } else if (bill.frequency === 'weekly') {
+        nextDate.setDate(nextDate.getDate() + 7);
+      }
+      
+      bill.nextDueDate = Utilities.formatDate(nextDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      updateRecurringBill(bill);
+    }
+  });
 }
 
 function deleteDebt(debtId) {

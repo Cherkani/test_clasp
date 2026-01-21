@@ -32,6 +32,11 @@ const AppState = {
   financeFilters: { types: [], categories: [] },
   calendarCurrentDate: new Date(),
   debtsPersonTab: 'list',
+  reportsPeriod: 'month',
+  notes: [],
+  notesSubjects: [],
+  notesSubject: 'all',
+  recurringBills: [],
 };
 
 // Google Apps Script API
@@ -271,6 +276,9 @@ const API = {
             financeCategories: [],
             events: [],
             debts: [],
+            persons: [],
+            notes: [],
+            recurringBills: [],
             stats: null
           });
         })
@@ -368,6 +376,93 @@ const API = {
     });
   },
 
+  async getNotes() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching notes:', error);
+          resolve([]);
+        })
+        .getNotes();
+    });
+  },
+
+  async addNote(note) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addNote(note);
+    });
+  },
+
+  async updateNote(note) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateNote(note);
+    });
+  },
+
+  async deleteNote(noteId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteNote(noteId);
+    });
+  },
+
+  async getRecurringBills() {
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((error) => {
+          console.error('Error fetching recurring bills:', error);
+          resolve([]);
+        })
+        .getRecurringBills();
+    });
+  },
+
+  async addRecurringBill(bill) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .addRecurringBill(bill);
+    });
+  },
+
+  async updateRecurringBill(bill) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .updateRecurringBill(bill);
+    });
+  },
+
+  async deleteRecurringBill(billId) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .deleteRecurringBill(billId);
+    });
+  },
+
+  async processRecurringBills() {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .processRecurringBills();
+    });
+  },
+
   async addDebt(debt) {
     return new Promise((resolve, reject) => {
       google.script.run
@@ -410,6 +505,10 @@ const API = {
 
 const DataStore = {
   apply(data) {
+    if (!data) {
+      console.error('DataStore.apply: data is null or undefined');
+      return;
+    }
     AppState.tasks = data.tasks || [];
     AppState.objectives = data.objectives || [];
     AppState.categories = data.categories || [];
@@ -420,12 +519,22 @@ const DataStore = {
     AppState.events = data.events || [];
     AppState.debts = data.debts || [];
     AppState.persons = data.persons || [];
+    AppState.notes = data.notes || [];
+    AppState.recurringBills = data.recurringBills || [];
     AppState.stats = data.stats || null;
   },
 
   async refresh() {
-    const data = await API.getAppData();
-    this.apply(data);
+    try {
+      const data = await API.getAppData();
+      if (data) {
+        this.apply(data);
+      } else {
+        console.error('DataStore.refresh: getAppData returned null');
+      }
+    } catch (error) {
+      console.error('DataStore.refresh error:', error);
+    }
   }
 };
 
@@ -465,6 +574,8 @@ const SaveManager = {
     if (snapshot.events) AppState.events = snapshot.events;
     if (snapshot.debts) AppState.debts = snapshot.debts;
     if (snapshot.persons) AppState.persons = snapshot.persons;
+    if (snapshot.notes) AppState.notes = snapshot.notes;
+    if (snapshot.recurringBills) AppState.recurringBills = snapshot.recurringBills;
     Router.render();
     Sidebar.render();
   },
@@ -479,7 +590,9 @@ const SaveManager = {
       financeSettings: JSON.parse(JSON.stringify(AppState.financeSettings)),
       events: JSON.parse(JSON.stringify(AppState.events)),
       debts: JSON.parse(JSON.stringify(AppState.debts)),
-      persons: JSON.parse(JSON.stringify(AppState.persons))
+      persons: JSON.parse(JSON.stringify(AppState.persons)),
+      notes: JSON.parse(JSON.stringify(AppState.notes)),
+      recurringBills: JSON.parse(JSON.stringify(AppState.recurringBills))
     };
   },
 
@@ -702,7 +815,10 @@ const DOM = {
       tag: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>',
       plus: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>',
       menu: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>',
-      event: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>'
+      event: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>',
+      reports: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>',
+      notes: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>',
+      recurring: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>'
     };
     return icons[name] || '';
   }
@@ -905,12 +1021,19 @@ const Sidebar = {
 
     const navGroups = [
       {
-        title: 'Workspace',
+        title: 'Overview',
         items: [
           { id: 'dashboard', label: 'Dashboard', icon: 'home' },
+          { id: 'reports', label: 'Reports & Analytics', icon: 'reports' }
+        ]
+      },
+      {
+        title: 'Workspace',
+        items: [
           { id: 'timeline', label: 'Tasks', icon: 'tasks' },
           { id: 'events', label: 'Events', icon: 'event' },
-          { id: 'calendar', label: 'Calendar', icon: 'calendar' }
+          { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+          { id: 'reference', label: 'Reference', icon: 'flag' }
         ]
       },
       {
@@ -921,9 +1044,9 @@ const Sidebar = {
         ]
       },
       {
-        title: 'Reference',
+        title: 'Tools',
         items: [
-          { id: 'reference', label: 'Reference', icon: 'flag' }
+          { id: 'notes', label: 'Notes & Journal', icon: 'notes' }
         ]
       }
     ];
@@ -1076,6 +1199,17 @@ const Router = {
         break;
       case 'reference':
         pageContent = ReferencePage.render();
+        break;
+      case 'reports':
+        pageContent = ReportsPage.render();
+        break;
+      case 'notes':
+        pageContent = NotesPage.render();
+        break;
+      case 'recurring':
+        AppState.financeTab = 'recurring';
+        AppState.currentPage = 'finance';
+        pageContent = FinancePage.render();
         break;
       case 'objectives':
         AppState.referenceTab = 'objectives';
@@ -3033,7 +3167,9 @@ const FinancePage = {
     const tabs = DOM.create('div', 'reference-tabs');
     const tabList = [
       { id: 'transactions', label: 'Transactions' },
+      { id: 'recurring', label: 'Recurring Bills' },
       { id: 'categories', label: 'Categories' }
+     
     ];
 
     tabList.forEach(tab => {
@@ -3052,6 +3188,8 @@ const FinancePage = {
     const content = DOM.create('div', 'reference-content');
     if (AppState.financeTab === 'categories') {
       content.appendChild(FinanceCategoriesPage.render());
+    } else if (AppState.financeTab === 'recurring') {
+      content.appendChild(RecurringBillsPage.render());
     } else {
       // Transactions tab
       const controls = DOM.create('div', 'finance-controls');
@@ -3995,11 +4133,35 @@ const FinancePage = {
     const month = date.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const records = [];
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
 
     AppState.financeRecords.forEach(record => {
+      // Handle recurring bills (new structure with recurringFrequency)
+      if (record.recurringFrequency && record.recurringStatus === 'active' && record.recurringNextDueDate) {
+        const nextDueDate = new Date(record.recurringNextDueDate);
+        // Check if this recurring bill should appear in this month
+        if (nextDueDate >= monthStart && nextDueDate <= monthEnd) {
+          records.push({
+            ...record,
+            date: this.formatDateInput(nextDueDate),
+            id: `recurring-bill-${record.id}-${monthKey}`,
+            recurrenceSourceId: record.id,
+            isRecurringBill: true
+          });
+        }
+        return;
+      }
+
+      // Skip recurring bill template records when processing regular records
+      if (record.recurringFrequency && record.recurringStatus) {
+        return; // This is a recurring bill template, skip it from regular processing
+      }
+
+      // Handle old recurringMonthly records
       if (!record.date) return;
       const recordDate = new Date(record.date);
-      if (record.recurringMonthly) {
+      if (record.recurringMonthly && !record.recurringFrequency) {
         const day = Math.min(recordDate.getDate(), daysInMonth);
         const instanceDate = new Date(year, month, day);
         records.push({
@@ -4505,11 +4667,6 @@ const ReferencePage = {
     });
 
     container.appendChild(tabs);
-
-    // Charts at the top
-    const analytics = FinancePage.renderCharts(FinancePage.getMonthlyRecords());
-    analytics.querySelector('.section-title').textContent = 'Reference Analytics';
-    container.appendChild(analytics);
 
     const content = DOM.create('div', 'reference-content');
     if (AppState.referenceTab === 'categories') {
@@ -6995,6 +7152,1119 @@ async function init() {
     }, 500);
   }
 }
+
+// Reports & Analytics Page
+const ReportsPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.appendChild(DOM.create('h1', 'page-title', 'Reports & Analytics'));
+    header.appendChild(DOM.create('p', 'page-subtitle', 'Insights into your spending, tasks, and productivity'));
+    container.appendChild(header);
+
+    // Time period selector
+    const periodSelector = DOM.create('div', 'reference-tabs');
+    periodSelector.style.marginBottom = '1.5rem';
+    const periods = [
+      { id: 'month', label: 'This Month' },
+      { id: 'year', label: 'This Year' },
+      { id: 'all', label: 'All Time' }
+    ];
+    const currentPeriod = AppState.reportsPeriod || 'month';
+    periods.forEach(period => {
+      const btn = DOM.create('button', 'reference-tab');
+      btn.textContent = period.label;
+      if (currentPeriod === period.id) btn.classList.add('active');
+      btn.onclick = () => {
+        AppState.reportsPeriod = period.id;
+        Router.render();
+      };
+      periodSelector.appendChild(btn);
+    });
+    container.appendChild(periodSelector);
+
+    // Spending Trends
+    container.appendChild(this.renderSpendingTrends());
+    
+    // Category Breakdown
+    container.appendChild(this.renderCategoryBreakdown());
+    
+    // Task Completion Rates
+    container.appendChild(this.renderTaskCompletion());
+    
+    // Productivity Trends
+    container.appendChild(this.renderProductivityTrends());
+
+    requestAnimationFrame(() => this.drawCharts());
+    return container;
+  },
+
+  getDateRange() {
+    const now = new Date();
+    const period = AppState.reportsPeriod || 'month';
+    
+    if (period === 'month') {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        end: new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      };
+    } else if (period === 'year') {
+      return {
+        start: new Date(now.getFullYear(), 0, 1),
+        end: new Date(now.getFullYear(), 11, 31)
+      };
+    } else {
+      return {
+        start: new Date(2000, 0, 1),
+        end: new Date(2100, 11, 31)
+      };
+    }
+  },
+
+  renderSpendingTrends() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Spending Trends'));
+    
+    const { start, end } = this.getDateRange();
+    const records = AppState.financeRecords.filter(r => {
+      if (!r.date) return false;
+      const recordDate = new Date(r.date);
+      return recordDate >= start && recordDate <= end;
+    });
+
+    const monthlyData = {};
+    records.forEach(record => {
+      if (!record.date) return;
+      const date = new Date(record.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = { income: 0, expenses: 0 };
+      }
+      const amount = Number(record.amount) || 0;
+      if (record.type === 'income') {
+        monthlyData[monthKey].income += amount;
+      } else {
+        monthlyData[monthKey].expenses += amount;
+      }
+    });
+
+    const months = Object.keys(monthlyData).sort();
+    const incomeData = months.map(m => monthlyData[m].income);
+    const expenseData = months.map(m => monthlyData[m].expenses);
+
+    const chartCard = DOM.create('div', 'finance-chart-card');
+    chartCard.style.width = '100%';
+    const canvas = DOM.create('canvas', '');
+    canvas.id = 'reportsSpendingTrend';
+    canvas.height = 300;
+    chartCard.appendChild(canvas);
+    card.appendChild(chartCard);
+
+    // Store data for chart rendering
+    card.dataset.months = JSON.stringify(months);
+    card.dataset.income = JSON.stringify(incomeData);
+    card.dataset.expenses = JSON.stringify(expenseData);
+
+    return card;
+  },
+
+  renderCategoryBreakdown() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Category Spending Breakdown'));
+    
+    const { start, end } = this.getDateRange();
+    const records = AppState.financeRecords.filter(r => {
+      if (!r.date || r.type !== 'expense') return false;
+      const recordDate = new Date(r.date);
+      return recordDate >= start && recordDate <= end;
+    });
+
+    const categoryTotals = {};
+    records.forEach(record => {
+      const category = record.category || 'Uncategorized';
+      categoryTotals[category] = (categoryTotals[category] || 0) + (Number(record.amount) || 0);
+    });
+
+    const sortedCategories = Object.entries(categoryTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const chartCard = DOM.create('div', 'finance-chart-card');
+    chartCard.style.width = '100%';
+    const canvas = DOM.create('canvas', '');
+    canvas.id = 'reportsCategoryBreakdown';
+    canvas.height = 300;
+    chartCard.appendChild(canvas);
+    card.appendChild(chartCard);
+
+    // Store data
+    card.dataset.categories = JSON.stringify(sortedCategories.map(c => c[0]));
+    card.dataset.amounts = JSON.stringify(sortedCategories.map(c => c[1]));
+
+    // Also show table
+    const table = DOM.create('div', 'finance-category-list');
+    table.style.marginTop = '1rem';
+    sortedCategories.forEach(([category, amount]) => {
+      const row = DOM.create('div', 'finance-category-row');
+      row.innerHTML = `
+        <div>
+          <div style="font-weight: 600;">${category}</div>
+        </div>
+        <div style="font-weight: 600; color: #ef4444;">
+          ${amount.toFixed(2)} MAD
+        </div>
+      `;
+      table.appendChild(row);
+    });
+    card.appendChild(table);
+
+    return card;
+  },
+
+  renderTaskCompletion() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Task Completion Rates'));
+    
+    const { start, end } = this.getDateRange();
+    const tasks = AppState.tasks.filter(t => {
+      if (!t.endDate) return false;
+      const taskDate = new Date(t.endDate);
+      return taskDate >= start && taskDate <= end;
+    });
+
+    const statusCounts = {
+      completed: tasks.filter(t => t.status === 'completed').length,
+      pending: tasks.filter(t => t.status === 'pending').length,
+      overdue: tasks.filter(t => t.status === 'overdue').length
+    };
+
+    const total = tasks.length;
+    const completionRate = total > 0 ? Math.round((statusCounts.completed / total) * 100) : 0;
+
+    const metrics = DOM.create('div', 'dashboard-finance-summary');
+    metrics.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Total Tasks</div>
+        <div class="dashboard-finance-value">${total}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Completed</div>
+        <div class="dashboard-finance-value income">${statusCounts.completed}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Pending</div>
+        <div class="dashboard-finance-value">${statusCounts.pending}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Completion Rate</div>
+        <div class="dashboard-finance-value ${completionRate >= 80 ? 'income' : completionRate >= 50 ? '' : 'expense'}">${completionRate}%</div>
+      </div>
+    `;
+    card.appendChild(metrics);
+
+    // Monthly completion trend
+    const monthlyCompletion = {};
+    tasks.forEach(task => {
+      if (task.status === 'completed' && task.endDate) {
+        const date = new Date(task.endDate);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!monthlyCompletion[monthKey]) {
+          monthlyCompletion[monthKey] = { completed: 0, total: 0 };
+        }
+        monthlyCompletion[monthKey].completed++;
+      }
+      if (task.endDate) {
+        const date = new Date(task.endDate);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!monthlyCompletion[monthKey]) {
+          monthlyCompletion[monthKey] = { completed: 0, total: 0 };
+        }
+        monthlyCompletion[monthKey].total++;
+      }
+    });
+
+    const months = Object.keys(monthlyCompletion).sort();
+    const completionRates = months.map(m => 
+      monthlyCompletion[m].total > 0 
+        ? Math.round((monthlyCompletion[m].completed / monthlyCompletion[m].total) * 100)
+        : 0
+    );
+
+    const chartCard = DOM.create('div', 'finance-chart-card');
+    chartCard.style.width = '100%';
+    chartCard.style.marginTop = '1rem';
+    const canvas = DOM.create('canvas', '');
+    canvas.id = 'reportsTaskCompletion';
+    canvas.height = 250;
+    chartCard.appendChild(canvas);
+    card.appendChild(chartCard);
+
+    card.dataset.months = JSON.stringify(months);
+    card.dataset.rates = JSON.stringify(completionRates);
+
+    return card;
+  },
+
+  renderProductivityTrends() {
+    const card = DOM.create('div', 'card');
+    card.appendChild(DOM.create('h2', 'section-title', 'Productivity Trends'));
+    
+    const { start, end } = this.getDateRange();
+    const tasks = AppState.tasks.filter(t => {
+      if (!t.endDate) return false;
+      const taskDate = new Date(t.endDate);
+      return taskDate >= start && taskDate <= end;
+    });
+
+    // Group by week
+    const weeklyData = {};
+    tasks.forEach(task => {
+      if (!task.endDate) return;
+      const date = new Date(task.endDate);
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay());
+      const weekKey = `${weekStart.getFullYear()}-W${String(Math.ceil((weekStart.getDate() + (7 - weekStart.getDay())) / 7)).padStart(2, '0')}`;
+      
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = { completed: 0, created: 0 };
+      }
+      if (task.status === 'completed') {
+        weeklyData[weekKey].completed++;
+      }
+      weeklyData[weekKey].created++;
+    });
+
+    const weeks = Object.keys(weeklyData).sort();
+    const completed = weeks.map(w => weeklyData[w].completed);
+    const created = weeks.map(w => weeklyData[w].created);
+
+    const chartCard = DOM.create('div', 'finance-chart-card');
+    chartCard.style.width = '100%';
+    const canvas = DOM.create('canvas', '');
+    canvas.id = 'reportsProductivity';
+    canvas.height = 250;
+    chartCard.appendChild(canvas);
+    card.appendChild(chartCard);
+
+    card.dataset.weeks = JSON.stringify(weeks);
+    card.dataset.completed = JSON.stringify(completed);
+    card.dataset.created = JSON.stringify(created);
+
+    return card;
+  },
+
+  drawCharts() {
+    requestAnimationFrame(async () => {
+      if (typeof Chart === 'undefined') return;
+      
+      // Spending Trends Chart
+      const spendingCard = document.querySelector('#reportsSpendingTrend')?.closest('.card');
+      if (spendingCard) {
+        const months = JSON.parse(spendingCard.dataset.months || '[]');
+        const income = JSON.parse(spendingCard.dataset.income || '[]');
+        const expenses = JSON.parse(spendingCard.dataset.expenses || '[]');
+        const canvas = document.getElementById('reportsSpendingTrend');
+        if (canvas && months.length > 0) {
+          new Chart(canvas, {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: [
+                { label: 'Income', data: income, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4 },
+                { label: 'Expenses', data: expenses, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.2)', fill: true, tension: 0.4 }
+              ]
+            },
+            options: {
+              responsive: true,
+              plugins: { legend: { position: 'bottom' } },
+              scales: { y: { beginAtZero: true } }
+            }
+          });
+        }
+      }
+
+      // Category Breakdown Chart
+      const categoryCard = document.querySelector('#reportsCategoryBreakdown')?.closest('.card');
+      if (categoryCard) {
+        const categories = JSON.parse(categoryCard.dataset.categories || '[]');
+        const amounts = JSON.parse(categoryCard.dataset.amounts || '[]');
+        const canvas = document.getElementById('reportsCategoryBreakdown');
+        if (canvas && categories.length > 0) {
+          new Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels: categories,
+              datasets: [{
+                label: 'Amount (MAD)',
+                data: amounts,
+                backgroundColor: '#6366f1'
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: { legend: { display: false } },
+              scales: { y: { beginAtZero: true } }
+            }
+          });
+        }
+      }
+
+      // Task Completion Chart
+      const taskCard = document.querySelector('#reportsTaskCompletion')?.closest('.card');
+      if (taskCard) {
+        const months = JSON.parse(taskCard.dataset.months || '[]');
+        const rates = JSON.parse(taskCard.dataset.rates || '[]');
+        const canvas = document.getElementById('reportsTaskCompletion');
+        if (canvas && months.length > 0) {
+          new Chart(canvas, {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: [{
+                label: 'Completion Rate %',
+                data: rates,
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                fill: true,
+                tension: 0.4
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: { legend: { position: 'bottom' } },
+              scales: { y: { beginAtZero: true, max: 100 } }
+            }
+          });
+        }
+      }
+
+      // Productivity Chart
+      const productivityCard = document.querySelector('#reportsProductivity')?.closest('.card');
+      if (productivityCard) {
+        const weeks = JSON.parse(productivityCard.dataset.weeks || '[]');
+        const completed = JSON.parse(productivityCard.dataset.completed || '[]');
+        const created = JSON.parse(productivityCard.dataset.created || '[]');
+        const canvas = document.getElementById('reportsProductivity');
+        if (canvas && weeks.length > 0) {
+          new Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels: weeks,
+              datasets: [
+                { label: 'Completed', data: completed, backgroundColor: '#10b981' },
+                { label: 'Created', data: created, backgroundColor: '#6366f1' }
+              ]
+            },
+            options: {
+              responsive: true,
+              plugins: { legend: { position: 'bottom' } },
+              scales: { y: { beginAtZero: true } }
+            }
+          });
+        }
+      }
+    });
+  }
+};
+
+// Notes & Journal Page
+const NotesPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    const header = DOM.create('div', 'page-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.appendChild(DOM.create('h1', 'page-title', 'Notes & Journal'));
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ New Note';
+    addBtn.onclick = () => NoteModal.show();
+    header.appendChild(addBtn);
+    container.appendChild(header);
+
+    // Subject/Topic tabs
+    const subjectTabs = DOM.create('div', 'reference-tabs');
+    subjectTabs.style.marginBottom = '1.5rem';
+    const subjects = this.getSubjects();
+    const currentSubject = AppState.notesSubject || 'all';
+    
+    const allTab = DOM.create('button', 'reference-tab');
+    allTab.textContent = 'All Notes';
+    if (currentSubject === 'all') allTab.classList.add('active');
+    allTab.onclick = () => {
+      AppState.notesSubject = 'all';
+      Router.render();
+    };
+    subjectTabs.appendChild(allTab);
+
+    subjects.forEach(subject => {
+      const tab = DOM.create('button', 'reference-tab');
+      tab.textContent = subject;
+      if (currentSubject === subject) tab.classList.add('active');
+      tab.onclick = () => {
+        AppState.notesSubject = subject;
+        Router.render();
+      };
+      subjectTabs.appendChild(tab);
+    });
+
+    const addSubjectBtn = DOM.create('button', 'reference-tab');
+    addSubjectBtn.textContent = '+ Add Subject';
+    addSubjectBtn.style.borderStyle = 'dashed';
+    addSubjectBtn.onclick = () => {
+      const subject = prompt('Enter subject/topic name:');
+      if (subject && subject.trim()) {
+        if (!AppState.notesSubjects) AppState.notesSubjects = [];
+        if (!AppState.notesSubjects.includes(subject.trim())) {
+          AppState.notesSubjects.push(subject.trim());
+          Router.render();
+        }
+      }
+    };
+    subjectTabs.appendChild(addSubjectBtn);
+    container.appendChild(subjectTabs);
+
+    // Notes list
+    const notesCard = DOM.create('div', 'card');
+    const filteredNotes = this.getFilteredNotes();
+    
+    if (filteredNotes.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No notes yet. Click "+ New Note" to create one.';
+      notesCard.appendChild(empty);
+    } else {
+      const notesList = DOM.create('div', 'finance-daily-list');
+      filteredNotes.forEach(note => {
+        const noteRow = DOM.create('div', 'finance-record');
+        const details = DOM.create('div', 'finance-record-details');
+        const title = DOM.create('div', 'finance-record-title', note.title);
+        const meta = DOM.create('div', 'finance-record-meta', 
+          `${note.subject || 'Uncategorized'} • ${note.date || 'No date'}`
+        );
+        details.appendChild(title);
+        details.appendChild(meta);
+        
+        const actions = DOM.create('div', 'finance-record-actions');
+        if (note.googleDocId) {
+          const openBtn = DOM.create('button', 'btn btn-xs btn-primary');
+          openBtn.textContent = 'Open in Docs';
+          openBtn.onclick = () => window.open(`https://docs.google.com/document/d/${note.googleDocId}`, '_blank');
+          actions.appendChild(openBtn);
+        }
+        const editBtn = DOM.create('button', 'btn btn-xs btn-secondary');
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => NoteModal.show(note);
+        const deleteBtn = DOM.create('button', 'btn btn-xs btn-danger');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.onclick = () => this.deleteNote(note.id);
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        
+        noteRow.appendChild(details);
+        noteRow.appendChild(actions);
+        notesList.appendChild(noteRow);
+      });
+      notesCard.appendChild(notesList);
+    }
+    container.appendChild(notesCard);
+
+    return container;
+  },
+
+  getSubjects() {
+    if (!AppState.notesSubjects) AppState.notesSubjects = [];
+    return AppState.notesSubjects;
+  },
+
+  getFilteredNotes() {
+    const notes = AppState.notes || [];
+    const subject = AppState.notesSubject || 'all';
+    if (subject === 'all') return notes;
+    return notes.filter(n => n.subject === subject);
+  },
+
+  async deleteNote(noteId) {
+    if (!confirm('Delete this note?')) return;
+    
+    const operationId = `delete-note-${noteId}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.notes = AppState.notes.filter(n => n.id !== noteId);
+      },
+      async () => {
+        await API.deleteNote(noteId);
+        await DataStore.refresh();
+      },
+      () => {
+        Toast.success('Note deleted');
+        Router.render();
+      },
+      (error) => {
+        Toast.error('Error deleting note');
+        Router.render();
+      }
+    );
+  }
+};
+
+// Recurring Bills & Subscriptions Page
+const RecurringBillsPage = {
+  render() {
+    const container = DOM.create('div', '');
+    
+    // Header with add button
+    const header = DOM.create('div', '');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '1.5rem';
+    
+    const addBtn = DOM.create('button', 'btn btn-primary');
+    addBtn.textContent = '+ New Recurring Bill';
+    addBtn.onclick = () => RecurringBillModal.show();
+    header.appendChild(addBtn);
+    container.appendChild(header);
+
+    // Summary
+    const summaryCard = DOM.create('div', 'card');
+    summaryCard.appendChild(DOM.create('h3', 'section-title', 'Monthly Recurring Expenses'));
+    const totals = AppState.recurringBills?.reduce((acc, bill) => {
+      if (bill.status === 'active') {
+        acc.total += Number(bill.amount) || 0;
+        if (bill.type === 'subscription') acc.subscriptions += Number(bill.amount) || 0;
+        else acc.bills += Number(bill.amount) || 0;
+      }
+      return acc;
+    }, { total: 0, bills: 0, subscriptions: 0 }) || { total: 0, bills: 0, subscriptions: 0 };
+
+    const summaryGrid = DOM.create('div', 'dashboard-finance-summary');
+    summaryGrid.innerHTML = `
+      <div>
+        <div class="dashboard-finance-label">Total Monthly</div>
+        <div class="dashboard-finance-value expense">${totals.total.toFixed(2)} MAD</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Bills</div>
+        <div class="dashboard-finance-value">${totals.bills.toFixed(2)} MAD</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Subscriptions</div>
+        <div class="dashboard-finance-value">${totals.subscriptions.toFixed(2)} MAD</div>
+      </div>
+    `;
+    summaryCard.appendChild(summaryGrid);
+    container.appendChild(summaryCard);
+
+    // Bills list
+    const listCard = DOM.create('div', 'card');
+    listCard.appendChild(DOM.create('h3', 'section-title', 'All Recurring Bills'));
+    
+    const billsList = DOM.create('div', 'finance-daily-list');
+    const bills = AppState.recurringBills || [];
+    
+    if (bills.length === 0) {
+      const empty = DOM.create('div', 'empty-state');
+      empty.textContent = 'No recurring bills yet. Click "+ New Recurring Bill" to create one.';
+      billsList.appendChild(empty);
+    } else {
+      bills.sort((a, b) => {
+        const dateA = a.nextDueDate ? new Date(a.nextDueDate) : new Date(0);
+        const dateB = b.nextDueDate ? new Date(b.nextDueDate) : new Date(0);
+        return dateA - dateB;
+      }).forEach(bill => {
+        const billRow = DOM.create('div', 'finance-record');
+        const details = DOM.create('div', 'finance-record-details');
+        const title = DOM.create('div', 'finance-record-title', bill.name);
+        const meta = DOM.create('div', 'finance-record-meta', 
+          `${bill.type === 'subscription' ? 'Subscription' : 'Bill'} • ${bill.frequency} • Next: ${bill.nextDueDate || 'Not set'}`
+        );
+        if (bill.description) {
+          details.appendChild(DOM.create('div', 'finance-record-meta', bill.description));
+        }
+        const statusLabel = bill.status === 'active' ? 'Active' : 'Inactive';
+        const status = DOM.create('span', 'finance-record-tag', statusLabel);
+        details.appendChild(title);
+        details.appendChild(meta);
+        details.appendChild(status);
+        
+        const amount = DOM.create('div', 'finance-record-amount expense');
+        amount.textContent = `${bill.amount.toFixed(2)} MAD`;
+        
+        const actions = DOM.create('div', 'finance-record-actions');
+        const editBtn = DOM.create('button', 'btn btn-xs btn-secondary');
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => RecurringBillModal.show(bill);
+        const deleteBtn = DOM.create('button', 'btn btn-xs btn-danger');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.onclick = () => this.deleteBill(bill.id);
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        
+        billRow.appendChild(details);
+        billRow.appendChild(amount);
+        billRow.appendChild(actions);
+        billsList.appendChild(billRow);
+      });
+    }
+    listCard.appendChild(billsList);
+    container.appendChild(listCard);
+
+    return container;
+  },
+
+  async deleteBill(billId) {
+    if (!confirm('Delete this recurring bill?')) return;
+    
+    const operationId = `delete-recurring-bill-${billId}`;
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        AppState.recurringBills = AppState.recurringBills.filter(b => b.id !== billId);
+      },
+      async () => {
+        await API.deleteRecurringBill(billId);
+        await DataStore.refresh();
+      },
+      () => {
+        Toast.success('Recurring bill deleted');
+        Router.render();
+      },
+      (error) => {
+        Toast.error('Error deleting recurring bill');
+        Router.render();
+      }
+    );
+  }
+};
+
+// Note Modal
+const NoteModal = {
+  show(note = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    const header = DOM.create('div', 'modal-header');
+    header.appendChild(DOM.create('h2', 'modal-title', note ? 'Edit Note' : 'New Note'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    const form = DOM.create('form', '');
+    
+    const titleGroup = DOM.create('div', 'form-group');
+    titleGroup.appendChild(DOM.create('label', 'form-label', 'Title *'));
+    const titleInput = DOM.create('input', 'form-input');
+    titleInput.type = 'text';
+    titleInput.name = 'title';
+    titleInput.value = note?.title || '';
+    titleInput.required = true;
+    titleInput.placeholder = 'Note title';
+    titleGroup.appendChild(titleInput);
+    form.appendChild(titleGroup);
+
+    const subjectGroup = DOM.create('div', 'form-group');
+    subjectGroup.appendChild(DOM.create('label', 'form-label', 'Subject/Topic'));
+    const subjectInput = DOM.create('input', 'form-input');
+    subjectInput.type = 'text';
+    subjectInput.name = 'subject';
+    subjectInput.value = note?.subject || '';
+    subjectInput.placeholder = 'e.g., Work, Personal, Ideas';
+    subjectInput.list = 'subjects-list';
+    subjectGroup.appendChild(subjectInput);
+    
+    const datalist = DOM.create('datalist', '');
+    datalist.id = 'subjects-list';
+    (AppState.notesSubjects || []).forEach(subject => {
+      const option = DOM.create('option', '');
+      option.value = subject;
+      datalist.appendChild(option);
+    });
+    subjectGroup.appendChild(datalist);
+    form.appendChild(subjectGroup);
+
+    const dateGroup = DOM.create('div', 'form-group');
+    dateGroup.appendChild(DOM.create('label', 'form-label', 'Date'));
+    const dateInput = DOM.create('input', 'form-input');
+    dateInput.type = 'date';
+    dateInput.name = 'date';
+    dateInput.value = note?.date || new Date().toISOString().split('T')[0];
+    dateGroup.appendChild(dateInput);
+    form.appendChild(dateGroup);
+
+    const googleDocGroup = DOM.create('div', 'form-group');
+    const docWrapper = DOM.create('label', 'finance-checkbox');
+    const docCheckbox = DOM.create('input', '');
+    docCheckbox.type = 'checkbox';
+    docCheckbox.name = 'createGoogleDoc';
+    docCheckbox.checked = note?.googleDocId ? true : false;
+    docCheckbox.disabled = !!note?.googleDocId;
+    docWrapper.appendChild(docCheckbox);
+    docWrapper.appendChild(DOM.create('span', '', 'Create Google Doc for this note'));
+    if (note?.googleDocId) {
+      const link = DOM.create('a', '');
+      link.href = `https://docs.google.com/document/d/${note.googleDocId}`;
+      link.target = '_blank';
+      link.textContent = 'Open existing doc';
+      link.style.marginLeft = '0.5rem';
+      link.style.color = '#6366f1';
+      docWrapper.appendChild(link);
+    }
+    googleDocGroup.appendChild(docWrapper);
+    form.appendChild(googleDocGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(note, new FormData(form));
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(note, formData) {
+    const noteData = {
+      id: note?.id || Date.now(),
+      title: formData.get('title').trim(),
+      subject: formData.get('subject').trim() || '',
+      date: formData.get('date') || '',
+      createGoogleDoc: formData.get('createGoogleDoc') === 'on'
+    };
+
+    if (!noteData.title) {
+      Toast.error('Note title is required');
+      return;
+    }
+
+    // Add subject to subjects list if new
+    if (noteData.subject && !AppState.notesSubjects.includes(noteData.subject)) {
+      if (!AppState.notesSubjects) AppState.notesSubjects = [];
+      AppState.notesSubjects.push(noteData.subject);
+    }
+
+    const operationId = note ? `update-note-${note.id}` : `create-note-${Date.now()}`;
+    const saveButton = document.querySelector('.modal-footer .btn-primary');
+    
+    if (saveButton) {
+      saveButton.classList.add('loading');
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving...';
+    }
+
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (note) {
+          const index = AppState.notes.findIndex(n => n.id === note.id);
+          if (index >= 0) {
+            AppState.notes[index] = { ...noteData, googleDocId: note.googleDocId };
+          }
+        } else {
+          // Add note with temporary ID
+          AppState.notes.push({ ...noteData });
+        }
+      },
+      async () => {
+        try {
+          if (note) {
+            await API.updateNote(noteData);
+          } else {
+            const result = await API.addNote(noteData);
+            if (result && result.id) {
+              // Update the note with the correct ID from backend
+              const tempIndex = AppState.notes.findIndex(n => n.id === noteData.id);
+              if (tempIndex >= 0) {
+                AppState.notes[tempIndex].id = result.id;
+                if (result.googleDocId) {
+                  AppState.notes[tempIndex].googleDocId = result.googleDocId;
+                }
+              }
+            }
+          }
+          await DataStore.refresh();
+        } catch (error) {
+          console.error('Error saving note:', error);
+          throw error;
+        }
+      },
+      () => {
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+        this.hide();
+        Toast.success(note ? 'Note updated' : 'Note created');
+        Router.render();
+      },
+      (error) => {
+        console.error('Note save error:', error);
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+        Toast.error('Error saving note: ' + (error.message || 'Unknown error'));
+      }
+    );
+  }
+};
+
+// Recurring Bill Modal
+const RecurringBillModal = {
+  show(bill = null) {
+    const overlay = DOM.create('div', 'modal-overlay active');
+    overlay.onclick = (e) => {
+      if (e.target === overlay) this.hide();
+    };
+
+    const modal = DOM.create('div', 'modal');
+    const header = DOM.create('div', 'modal-header');
+    header.appendChild(DOM.create('h2', 'modal-title', bill ? 'Edit Recurring Bill' : 'New Recurring Bill'));
+    const closeBtn = DOM.create('button', 'modal-close');
+    closeBtn.innerHTML = DOM.getIconSVG('close');
+    closeBtn.onclick = () => this.hide();
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    const form = DOM.create('form', '');
+    
+    const nameGroup = DOM.create('div', 'form-group');
+    nameGroup.appendChild(DOM.create('label', 'form-label', 'Name *'));
+    const nameInput = DOM.create('input', 'form-input');
+    nameInput.type = 'text';
+    nameInput.name = 'name';
+    nameInput.value = bill?.name || '';
+    nameInput.required = true;
+    nameInput.placeholder = 'e.g., Netflix, Rent, Internet';
+    nameGroup.appendChild(nameInput);
+    form.appendChild(nameGroup);
+
+    const typeGroup = DOM.create('div', 'form-group');
+    typeGroup.appendChild(DOM.create('label', 'form-label', 'Type *'));
+    const typeSelect = DOM.create('select', 'form-select');
+    typeSelect.name = 'type';
+    typeSelect.required = true;
+    const billOption = DOM.create('option', '', 'Bill');
+    billOption.value = 'bill';
+    if (bill?.type === 'bill' || !bill) billOption.selected = true;
+    const subOption = DOM.create('option', '', 'Subscription');
+    subOption.value = 'subscription';
+    if (bill?.type === 'subscription') subOption.selected = true;
+    typeSelect.appendChild(billOption);
+    typeSelect.appendChild(subOption);
+    typeGroup.appendChild(typeSelect);
+    form.appendChild(typeGroup);
+
+    const amountGroup = DOM.create('div', 'form-group');
+    amountGroup.appendChild(DOM.create('label', 'form-label', 'Amount (MAD) *'));
+    const amountInput = DOM.create('input', 'form-input');
+    amountInput.type = 'number';
+    amountInput.step = '0.01';
+    amountInput.required = true;
+    amountInput.value = bill?.amount || '';
+    amountInput.name = 'amount';
+    amountGroup.appendChild(amountInput);
+    form.appendChild(amountGroup);
+
+    const frequencyGroup = DOM.create('div', 'form-group');
+    frequencyGroup.appendChild(DOM.create('label', 'form-label', 'Frequency *'));
+    const frequencySelect = DOM.create('select', 'form-select');
+    frequencySelect.name = 'frequency';
+    frequencySelect.required = true;
+    ['monthly', 'yearly', 'weekly'].forEach(freq => {
+      const option = DOM.create('option', '', freq.charAt(0).toUpperCase() + freq.slice(1));
+      option.value = freq;
+      if ((bill?.frequency || 'monthly') === freq) option.selected = true;
+      frequencySelect.appendChild(option);
+    });
+    frequencyGroup.appendChild(frequencySelect);
+    form.appendChild(frequencyGroup);
+
+    const nextDueGroup = DOM.create('div', 'form-group');
+    nextDueGroup.appendChild(DOM.create('label', 'form-label', 'Next Due Date *'));
+    const nextDueInput = DOM.create('input', 'form-input');
+    nextDueInput.type = 'date';
+    nextDueInput.name = 'nextDueDate';
+    nextDueInput.value = bill?.nextDueDate || '';
+    nextDueInput.required = true;
+    nextDueGroup.appendChild(nextDueInput);
+    form.appendChild(nextDueGroup);
+
+    const categoryGroup = DOM.create('div', 'form-group');
+    categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category *'));
+    const categorySelect = DOM.create('select', 'form-select');
+    categorySelect.name = 'category';
+    categorySelect.required = true;
+    
+    // Find Subscription category or use it as default
+    const subscriptionCat = AppState.financeCategories.find(c => c.name === 'Subscription');
+    const defaultCategory = bill?.category || (subscriptionCat ? 'Subscription' : '');
+    
+    AppState.financeCategories.forEach(cat => {
+      const option = DOM.create('option', '', cat.name);
+      option.value = cat.name;
+      if (defaultCategory === cat.name) option.selected = true;
+      categorySelect.appendChild(option);
+    });
+    
+    // Auto-update category when type changes
+    typeSelect.onchange = () => {
+      if (typeSelect.value === 'subscription') {
+        const subOption = Array.from(categorySelect.options).find(opt => opt.value === 'Subscription');
+        if (subOption) {
+          categorySelect.value = 'Subscription';
+        }
+      }
+    };
+    
+    categoryGroup.appendChild(categorySelect);
+    form.appendChild(categoryGroup);
+
+    const descGroup = DOM.create('div', 'form-group');
+    descGroup.appendChild(DOM.create('label', 'form-label', 'Description'));
+    const descInput = DOM.create('textarea', 'form-input');
+    descInput.name = 'description';
+    descInput.value = bill?.description || '';
+    descInput.rows = 3;
+    descGroup.appendChild(descInput);
+    form.appendChild(descGroup);
+
+    const statusGroup = DOM.create('div', 'form-group');
+    statusGroup.appendChild(DOM.create('label', 'form-label', 'Status'));
+    const statusSelect = DOM.create('select', 'form-select');
+    statusSelect.name = 'status';
+    const activeOption = DOM.create('option', '', 'Active');
+    activeOption.value = 'active';
+    if ((bill?.status || 'active') === 'active') activeOption.selected = true;
+    const inactiveOption = DOM.create('option', '', 'Inactive');
+    inactiveOption.value = 'inactive';
+    if (bill?.status === 'inactive') inactiveOption.selected = true;
+    statusSelect.appendChild(activeOption);
+    statusSelect.appendChild(inactiveOption);
+    statusGroup.appendChild(statusSelect);
+    form.appendChild(statusGroup);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      this.save(bill, new FormData(form));
+    };
+
+    modal.appendChild(form);
+
+    const footer = DOM.create('div', 'modal-footer');
+    const saveBtn = DOM.create('button', 'btn btn-primary');
+    saveBtn.type = 'submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => form.requestSubmit();
+    footer.appendChild(saveBtn);
+    
+    const cancelBtn = DOM.create('button', 'btn btn-secondary');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => this.hide();
+    footer.appendChild(cancelBtn);
+    
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  },
+
+  hide() {
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  async save(bill, formData) {
+    const billData = {
+      id: bill?.id || Date.now(),
+      name: formData.get('name').trim(),
+      amount: parseFloat(formData.get('amount')) || 0,
+      type: formData.get('type'),
+      frequency: formData.get('frequency'),
+      nextDueDate: formData.get('nextDueDate'),
+      category: formData.get('category') || 'Subscription',
+      status: formData.get('status') || 'active',
+      description: formData.get('description') || ''
+    };
+
+    const operationId = bill ? `update-recurring-bill-${bill.id}` : `create-recurring-bill-${Date.now()}`;
+    const saveButton = document.querySelector('.modal-footer .btn-primary');
+    
+    if (saveButton) {
+      saveButton.classList.add('loading');
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving...';
+    }
+
+    await SaveManager.saveWithOptimisticUpdate(
+      operationId,
+      () => {
+        if (bill) {
+          const index = AppState.recurringBills.findIndex(b => b.id === bill.id);
+          if (index >= 0) {
+            AppState.recurringBills[index] = billData;
+          }
+        } else {
+          AppState.recurringBills.push(billData);
+        }
+      },
+      async () => {
+        if (bill) {
+          await API.updateRecurringBill(billData);
+        } else {
+          await API.addRecurringBill(billData);
+        }
+        await DataStore.refresh();
+      },
+      () => {
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+        this.hide();
+        Toast.success(bill ? 'Recurring bill updated' : 'Recurring bill created');
+        Router.render();
+      },
+      (error) => {
+        if (saveButton) {
+          saveButton.classList.remove('loading');
+          saveButton.textContent = 'Save';
+          saveButton.disabled = false;
+        }
+        Toast.error('Error saving recurring bill');
+      }
+    );
+  }
+};
 
 // Start app when DOM is ready
 if (document.readyState === 'loading') {
