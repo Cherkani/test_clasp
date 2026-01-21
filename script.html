@@ -1348,6 +1348,12 @@ const Dashboard = {
     const monthKey = FinancePage.getMonthKey(AppState.financeMonth);
     const records = FinancePage.getMonthlyRecordsFor(AppState.financeMonth);
     const totals = FinancePage.getTotals(records);
+    
+    // Calculate subscription spending from payment transactions
+    const subscriptionTotal = records
+      .filter(record => record.type === 'expense' && record.recurringBillType === 'subscription')
+      .reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+    
     const budget = FinancePage.getMonthlyBudget(monthKey);
     const remaining = budget > 0 ? budget - totals.expenses : null;
     const exceeded = remaining !== null && remaining < 0;
@@ -1364,6 +1370,10 @@ const Dashboard = {
       <div>
         <div class="dashboard-finance-label">Expenses</div>
         <div class="dashboard-finance-value expense">${FinancePage.formatCurrency(totals.expenses)}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Subscriptions</div>
+        <div class="dashboard-finance-value expense">${FinancePage.formatCurrency(subscriptionTotal)}</div>
       </div>
       <div>
         <div class="dashboard-finance-label">Net</div>
@@ -1597,6 +1607,14 @@ const Dashboard = {
     const prevTotals = FinancePage.getTotals(prevRecords);
     const budget = FinancePage.getMonthlyBudget(FinancePage.getMonthKey(currentMonth));
 
+    // Calculate subscription spending
+    const currentSubscriptions = currentRecords
+      .filter(record => record.type === 'expense' && record.recurringBillType === 'subscription')
+      .reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+    const prevSubscriptions = prevRecords
+      .filter(record => record.type === 'expense' && record.recurringBillType === 'subscription')
+      .reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+
     const budgetScore = budget > 0 ? Math.max(0, Math.round(((budget - currentTotals.expenses) / budget) * 100)) : null;
     const savingsRate = currentTotals.income > 0
       ? Math.round((currentTotals.net / currentTotals.income) * 100)
@@ -1604,6 +1622,7 @@ const Dashboard = {
 
     const trendIncome = this.formatTrend(currentTotals.income, prevTotals.income);
     const trendExpense = this.formatTrend(currentTotals.expenses, prevTotals.expenses);
+    const trendSubscriptions = this.formatTrend(currentSubscriptions, prevSubscriptions);
 
     const summary = DOM.create('div', 'dashboard-insights-grid');
     summary.innerHTML = `
@@ -1624,6 +1643,14 @@ const Dashboard = {
       <div>
         <div class="dashboard-finance-label">Expense Trend</div>
         <div class="dashboard-finance-value">${trendExpense}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Subscriptions</div>
+        <div class="dashboard-finance-value expense">${FinancePage.formatCurrency(currentSubscriptions)}</div>
+      </div>
+      <div>
+        <div class="dashboard-finance-label">Subscription Trend</div>
+        <div class="dashboard-finance-value">${trendSubscriptions}</div>
       </div>
     `;
     card.appendChild(summary);
@@ -3875,12 +3902,6 @@ const FinancePage = {
     noteInput.placeholder = 'Optional note';
     noteGroup.appendChild(noteInput);
 
-    const recurringWrapper = DOM.create('label', 'finance-checkbox span-3');
-    const recurringInput = DOM.create('input', '');
-    recurringInput.type = 'checkbox';
-    recurringWrapper.appendChild(recurringInput);
-    recurringWrapper.appendChild(DOM.create('span', '', 'Repeat monthly'));
-
     const submitBtn = DOM.create('button', 'btn btn-primary');
     submitBtn.type = 'submit';
     submitBtn.textContent = 'Add Transaction';
@@ -3891,7 +3912,6 @@ const FinancePage = {
     grid.appendChild(amountGroup);
     grid.appendChild(categoryGroup);
     grid.appendChild(noteGroup);
-    grid.appendChild(recurringWrapper);
     form.appendChild(grid);
     form.appendChild(submitBtn);
 
@@ -3904,7 +3924,7 @@ const FinancePage = {
         amount: parseFloat(amountInput.value || '0'),
         category: categorySelect.value,
         note: noteInput.value,
-        recurringMonthly: recurringInput.checked
+        recurringMonthly: false
       };
 
       const operationId = `create-finance-${Date.now()}`;
@@ -3918,7 +3938,6 @@ const FinancePage = {
           amountInput.value = '';
           categorySelect.value = '';
           noteInput.value = '';
-          recurringInput.checked = false;
         },
         async () => {
           await API.saveFinanceRecords(AppState.financeRecords);
@@ -4153,7 +4172,19 @@ const FinancePage = {
         return;
       }
 
+      // Payment transactions from recurring bills (have recurringBillId set)
+      // These are actual transactions and should be included if they fall in this month
+      if (record.recurringBillId) {
+        if (!record.date) return;
+        const recordDate = new Date(record.date);
+        if (recordDate.getFullYear() === year && recordDate.getMonth() === month) {
+          records.push(record);
+        }
+        return;
+      }
+
       // Skip recurring bill template records when processing regular records
+      // (templates have recurringFrequency/Status but no recurringBillId)
       if (record.recurringFrequency && record.recurringStatus) {
         return; // This is a recurring bill template, skip it from regular processing
       }
@@ -4300,17 +4331,6 @@ const FinanceModal = {
     noteGroup.appendChild(noteInput);
     form.appendChild(noteGroup);
 
-    const recurringGroup = DOM.create('div', 'form-group');
-    const recurringWrapper = DOM.create('label', 'finance-checkbox');
-    const recurringInput = DOM.create('input', '');
-    recurringInput.type = 'checkbox';
-    recurringInput.name = 'recurringMonthly';
-    recurringInput.checked = Boolean(record?.recurringMonthly);
-    recurringWrapper.appendChild(recurringInput);
-    recurringWrapper.appendChild(DOM.create('span', '', 'Repeat monthly'));
-    recurringGroup.appendChild(recurringWrapper);
-    form.appendChild(recurringGroup);
-
     form.onsubmit = async (event) => {
       event.preventDefault();
       await this.save(record, new FormData(form));
@@ -4348,7 +4368,7 @@ const FinanceModal = {
       amount: parseFloat(formData.get('amount') || '0'),
       category: formData.get('category'),
       note: formData.get('note'),
-      recurringMonthly: formData.get('recurringMonthly') === 'on'
+      recurringMonthly: false
     };
 
     const operationId = record ? `update-finance-${targetId}` : `create-finance-${Date.now()}`;

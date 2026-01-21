@@ -11,7 +11,7 @@ function include(filename) {
 
 function getDatags() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Data");
+  const sheet = ss.getSheetByName("Tasks");
   if (!sheet) return [];
 
   const values = sheet.getDataRange().getValues();
@@ -116,7 +116,7 @@ function getDatags() {
 
 
 function addDatags(taskbase) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Data");
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Tasks");
   if (!sheet) return [];
 
   if (sheet.getLastRow() > 1) {
@@ -461,16 +461,21 @@ function getFinanceRecords() {
 
   if (!sheet) {
     sheet = ss.insertSheet("Finance");
-    sheet.getRange(1, 1, 1, 7).setValues([[
+    sheet.getRange(1, 1, 1, 12).setValues([[
       "id",
       "date",
       "type",
       "amount",
       "category",
       "note",
-      "recurringMonthly"
+      "recurringMonthly",
+      "recurringFrequency",
+      "recurringNextDueDate",
+      "recurringBillType",
+      "recurringStatus",
+      "recurringBillId"
     ]]);
-    sheet.getRange(1, 1, 1, 7).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
   }
 
   const values = sheet.getDataRange().getValues();
@@ -498,7 +503,8 @@ function getFinanceRecords() {
       recurringFrequency: row[7] || "",
       recurringNextDueDate: formatDate(row[8]),
       recurringBillType: row[9] || "",
-      recurringStatus: row[10] || ""
+      recurringStatus: row[10] || "",
+      recurringBillId: row[11] || ""
     }));
 }
 
@@ -508,7 +514,7 @@ function saveFinanceRecords(records) {
 
   if (!sheet) {
     sheet = ss.insertSheet("Finance");
-    sheet.getRange(1, 1, 1, 11).setValues([[
+    sheet.getRange(1, 1, 1, 12).setValues([[
       "id",
       "date",
       "type",
@@ -519,9 +525,10 @@ function saveFinanceRecords(records) {
       "recurringFrequency",
       "recurringNextDueDate",
       "recurringBillType",
-      "recurringStatus"
+      "recurringStatus",
+      "recurringBillId"
     ]]);
-    sheet.getRange(1, 1, 1, 11).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
   }
 
   if (sheet.getLastRow() > 1) {
@@ -540,7 +547,8 @@ function saveFinanceRecords(records) {
       record.recurringFrequency || "",
       record.recurringNextDueDate || "",
       record.recurringBillType || "",
-      record.recurringStatus || ""
+      record.recurringStatus || "",
+      record.recurringBillId || ""
     ]);
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
     sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
@@ -1323,7 +1331,7 @@ function updateRecurringBill(bill) {
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] == bill.id) {
       // Update the finance record with recurring bill data
-      sheet.getRange(i + 1, 2, 1, 10).setValues([[
+      sheet.getRange(i + 1, 2, 1, 11).setValues([[
         bill.nextDueDate || '', // date
         'expense', // type
         bill.amount || 0, // amount
@@ -1333,7 +1341,8 @@ function updateRecurringBill(bill) {
         bill.frequency || 'monthly', // recurringFrequency
         bill.nextDueDate || '', // recurringNextDueDate
         bill.type || 'bill', // recurringBillType
-        bill.status || 'active' // recurringStatus
+        bill.status || 'active', // recurringStatus
+        '' // recurringBillId - empty for recurring bill templates
       ]]);
       return;
     }
@@ -1364,8 +1373,8 @@ function processRecurringBills() {
   
   if (!financeSheet) {
     financeSheet = ss.insertSheet("Finance");
-    financeSheet.getRange(1, 1, 1, 11).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus"]]);
-    financeSheet.getRange(1, 1, 1, 11).setFontWeight("bold");
+    financeSheet.getRange(1, 1, 1, 12).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus", "recurringBillId"]]);
+    financeSheet.getRange(1, 1, 1, 12).setFontWeight("bold");
   }
   
   bills.forEach(bill => {
@@ -1393,8 +1402,9 @@ function processRecurringBills() {
         false, // This is a payment record, not the recurring template
         '', // No frequency for payment records
         '', // No next due date
-        '', // No bill type for payment records
-        '' // No status for payment records
+        bill.type || 'bill', // recurringBillType - preserve subscription/bill type
+        '', // No status for payment records
+        bill.id // recurringBillId - link to the source recurring bill
       ]);
       
       // Update next due date on the recurring bill record
@@ -1438,12 +1448,26 @@ function getDerivedStats(tasks, financeRecords, objectives, categories, statuses
   }, { total: 0, completed: 0, overdue: 0, pending: 0 });
 
   const financeTotals = financeRecords.reduce((acc, record) => {
+    // Skip recurring bill templates - only count actual transactions
+    // Recurring bill templates have recurringFrequency and recurringStatus but no recurringBillId
+    // Payment transactions from recurring bills have recurringBillId set
+    if (record.recurringFrequency && record.recurringStatus && !record.recurringBillId) {
+      return acc; // Skip recurring bill template records
+    }
+    
     const amount = Number(record.amount) || 0;
-    if (record.type === "income") acc.income += amount;
-    else acc.expenses += amount;
+    if (record.type === "income") {
+      acc.income += amount;
+    } else {
+      acc.expenses += amount;
+      // Track subscription spending separately
+      if (record.recurringBillType === 'subscription') {
+        acc.subscriptions = (acc.subscriptions || 0) + amount;
+      }
+    }
     acc.net = acc.income - acc.expenses;
     return acc;
-  }, { income: 0, expenses: 0, net: 0 });
+  }, { income: 0, expenses: 0, net: 0, subscriptions: 0 });
 
   const debtTotals = debts.reduce((acc, debt) => {
     if (debt.status === 'pending') {

@@ -2,7 +2,7 @@
  * Reset Script - Deletes all sheets and recreates them with correct structure
  * 
  * WARNING: This will delete ALL data in the following sheets:
- * - Data
+ * - Tasks
  * - Objectives
  * - Categories
  * - Statuses
@@ -15,7 +15,7 @@ function resetAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // Delete existing sheets if they exist
-  const sheetNames = ['Data', 'Objectives', 'Categories', 'Statuses', 'Finance', 'FinanceSettings', 'FinanceCategories', 'Events', 'Debts'];
+  const sheetNames = ['Tasks', 'Objectives', 'Categories', 'Statuses', 'Finance', 'FinanceSettings', 'FinanceCategories', 'Events', 'Debts'];
   
   sheetNames.forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
@@ -24,8 +24,8 @@ function resetAllSheets() {
     }
   });
   
-  // Create Data sheet
-  const dataSheet = ss.insertSheet('Data');
+  // Create Tasks sheet
+  const dataSheet = ss.insertSheet('Tasks');
   dataSheet.getRange(1, 1, 1, 15).setValues([[
     'id',
     'task',
@@ -233,10 +233,10 @@ function resetAllSheets() {
 function ensureSheetsExist() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Ensure Data sheet exists
-  let dataSheet = ss.getSheetByName('Data');
+  // Ensure Tasks sheet exists
+  let dataSheet = ss.getSheetByName('Tasks');
   if (!dataSheet) {
-    dataSheet = ss.insertSheet('Data');
+    dataSheet = ss.insertSheet('Tasks');
     dataSheet.getRange(1, 1, 1, 15).setValues([[
       'id',
       'task',

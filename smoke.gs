@@ -1,7 +1,7 @@
 function seedSmokeData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  const dataSheet = ensureSheet(ss, "Data", [
+  const dataSheet = ensureSheet(ss, "Tasks", [
     "id",
     "task",
     "category",
