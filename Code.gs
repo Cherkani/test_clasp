@@ -11,7 +11,7 @@ function include(filename) {
 
 function getDatags() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Tasks");
+  const sheet = ss.getSheetByName("5_tasks");
   if (!sheet) return [];
 
   const values = sheet.getDataRange().getValues();
@@ -100,14 +100,16 @@ function getDatags() {
       endTime: formatDateTime(row[6], "time"),
       color: row[7],
       status: newStatus,
-      objective: row[9] || '', // Add objective from column 10 (index 9)
+      objectiveId: row[9] ? Number(row[9]) : null, // Store objective ID instead of name
       priority: row[10] || 'medium',
       repeatType: row[11] || 'none',
       repeatUntil: formatDateTime(row[12], "date") || '',
       impactType: row[13] || 'non-monetary',
       estimatedValue: Number(row[14]) || 0,
       actualValue: Number(row[15] || 0) || 0,
-      valueRealizedDate: formatDateTime(row[16] || '', "date") || ''
+      valueRealizedDate: formatDateTime(row[16] || '', "date") || '',
+      estimatedHours: Number(row[17] || 0) || 0,
+      isIncome: row[18] === true || row[18] === "TRUE"
     };
     return addDerivedFields(task, startDateTime, dueDateTime, newStatus);
   });
@@ -118,7 +120,7 @@ function getDatags() {
 
 
 function addDatags(taskbase) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Tasks");
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("5_tasks");
   if (!sheet) return [];
 
   if (sheet.getLastRow() > 1) {
@@ -138,14 +140,16 @@ function addDatags(taskbase) {
       item.endTime || '',
       item.color,
       item.status,
-      item.objective || '', // Add objective column
+      item.objectiveId || '', // Store objective ID
       item.priority || 'medium',
       item.repeatType || 'none',
       item.repeatUntil || '',
       item.impactType || 'non-monetary',
       item.estimatedValue || 0,
       item.actualValue || 0,
-      item.valueRealizedDate || ''
+      item.valueRealizedDate || '',
+      item.estimatedHours || 0,
+      item.isIncome || false
     ]);
 
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
@@ -159,11 +163,11 @@ function addDatags(taskbase) {
 // Objectives Functions
 function getObjectives() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Objectives");
+  let sheet = ss.getSheetByName("4_objectives");
   
   if (!sheet) {
     // Create Objectives sheet if it doesn't exist
-    sheet = ss.insertSheet("Objectives");
+    sheet = ss.insertSheet("4_objectives");
     sheet.getRange(1, 1, 1, 12).setValues([[
       "id", "name", "description", "color", "category", "dueDate",
       "budget", "actualSpending", "targetValue", "currentValue", "healthScore", "lastUpdated"
@@ -205,21 +209,22 @@ function getObjectives() {
     targetValue: Number(row[8] || 0) || 0,
     currentValue: Number(row[9] || 0) || 0,
     healthScore: Number(row[10] || 0) || 0,
-    lastUpdated: row[11] || ''
+    lastUpdated: row[11] || '',
+    relatedFinanceId: row[12] ? Number(row[12]) : null // Store finance record ID
   }));
 }
 
 function addObjective(objective) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Objectives");
+  let sheet = ss.getSheetByName("4_objectives");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Objectives");
-    sheet.getRange(1, 1, 1, 12).setValues([[
+    sheet = ss.insertSheet("4_objectives");
+    sheet.getRange(1, 1, 1, 13).setValues([[
       "id", "name", "description", "color", "category", "dueDate",
-      "budget", "actualSpending", "targetValue", "currentValue", "healthScore", "lastUpdated"
+      "budget", "actualSpending", "targetValue", "currentValue", "healthScore", "lastUpdated", "relatedFinanceId"
     ]]);
-    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 13).setFontWeight("bold");
   }
 
   // Calculate new ID
@@ -248,7 +253,8 @@ function addObjective(objective) {
     objective.targetValue || 0,
     0, // currentValue - will be calculated
     0, // healthScore - will be calculated
-    timestamp
+    timestamp,
+    objective.relatedFinanceId || ''
   ]);
 
   return newId;
@@ -256,7 +262,7 @@ function addObjective(objective) {
 
 function updateObjective(objective) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Objectives");
+  const sheet = ss.getSheetByName("4_objectives");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -267,7 +273,7 @@ function updateObjective(objective) {
     const tz = Session.getScriptTimeZone();
     const timestamp = Utilities.formatDate(now, tz, "yyyy-MM-dd HH:mm:ss");
 
-    sheet.getRange(rowIndex + 1, 2, 1, 11).setValues([[
+    sheet.getRange(rowIndex + 1, 2, 1, 12).setValues([[
       objective.name,
       objective.description || '',
       objective.color || '#3b82f6',
@@ -278,7 +284,8 @@ function updateObjective(objective) {
       objective.targetValue || 0,
       0, // currentValue - will be calculated
       0, // healthScore - will be calculated
-      timestamp
+      timestamp,
+      objective.relatedFinanceId || ''
     ]]);
     return true;
   }
@@ -288,11 +295,11 @@ function updateObjective(objective) {
 // Categories Functions
 function getCategories() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Categories");
+  let sheet = ss.getSheetByName("2_category");
   
   if (!sheet) {
     // Create Categories sheet if it doesn't exist
-    sheet = ss.insertSheet("Categories");
+    sheet = ss.insertSheet("2_category");
     sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
     sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
     
@@ -320,10 +327,10 @@ function getCategories() {
 
 function addCategory(category) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Categories");
+  let sheet = ss.getSheetByName("2_category");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Categories");
+    sheet = ss.insertSheet("2_category");
     sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
     sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
   }
@@ -349,7 +356,7 @@ function addCategory(category) {
 
 function updateCategory(category) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Categories");
+  const sheet = ss.getSheetByName("2_category");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -367,7 +374,7 @@ function updateCategory(category) {
 
 function deleteCategory(categoryId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Categories");
+  const sheet = ss.getSheetByName("2_category");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -383,11 +390,11 @@ function deleteCategory(categoryId) {
 // Status Functions
 function getStatuses() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Statuses");
+  let sheet = ss.getSheetByName("1_status");
   
   if (!sheet) {
-    // Create Statuses sheet if it doesn't exist
-    sheet = ss.insertSheet("Statuses");
+    // Create 1_status sheet if it doesn't exist
+    sheet = ss.insertSheet("1_status");
     sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
     sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
     
@@ -415,10 +422,10 @@ function getStatuses() {
 
 function addStatus(status) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Statuses");
+  let sheet = ss.getSheetByName("1_status");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Statuses");
+    sheet = ss.insertSheet("1_status");
     sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
     sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
   }
@@ -444,7 +451,7 @@ function addStatus(status) {
 
 function updateStatus(status) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Statuses");
+  const sheet = ss.getSheetByName("1_status");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -462,7 +469,7 @@ function updateStatus(status) {
 
 function deleteStatus(statusId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Statuses");
+  const sheet = ss.getSheetByName("1_status");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -477,7 +484,7 @@ function deleteStatus(statusId) {
 
 function deleteObjective(objectiveId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Objectives");
+  const sheet = ss.getSheetByName("4_objectives");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -493,11 +500,11 @@ function deleteObjective(objectiveId) {
 // Finance Functions
 function getFinanceRecords() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Finance");
+  let sheet = ss.getSheetByName("6_finance");
 
   if (!sheet) {
-    sheet = ss.insertSheet("Finance");
-    sheet.getRange(1, 1, 1, 12).setValues([[
+    sheet = ss.insertSheet("6_finance");
+    sheet.getRange(1, 1, 1, 16).setValues([[
       "id",
       "date",
       "type",
@@ -509,9 +516,13 @@ function getFinanceRecords() {
       "recurringNextDueDate",
       "recurringBillType",
       "recurringStatus",
-      "recurringBillId"
+      "recurringBillId",
+      "relatedTaskId",
+      "relatedObjective",
+      "isValueRealization",
+      "hoursNeeded"
     ]]);
-    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 16).setFontWeight("bold");
   }
 
   const values = sheet.getDataRange().getValues();
@@ -543,17 +554,18 @@ function getFinanceRecords() {
       recurringBillId: row[11] || "",
       relatedTaskId: row[12] || "",
       relatedObjective: row[13] || "",
-      isValueRealization: row[14] === true || row[14] === "TRUE"
+      isValueRealization: row[14] === true || row[14] === "TRUE",
+      hoursNeeded: Number(row[15] || 0) || 0
     }));
 }
 
 function saveFinanceRecords(records) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Finance");
+  let sheet = ss.getSheetByName("6_finance");
 
   if (!sheet) {
-    sheet = ss.insertSheet("Finance");
-    sheet.getRange(1, 1, 1, 15).setValues([[
+    sheet = ss.insertSheet("6_finance");
+    sheet.getRange(1, 1, 1, 16).setValues([[
       "id",
       "date",
       "type",
@@ -568,9 +580,10 @@ function saveFinanceRecords(records) {
       "recurringBillId",
       "relatedTaskId",
       "relatedObjective",
-      "isValueRealization"
+      "isValueRealization",
+      "hoursNeeded"
     ]]);
-    sheet.getRange(1, 1, 1, 15).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 16).setFontWeight("bold");
   }
 
   if (sheet.getLastRow() > 1) {
@@ -593,7 +606,8 @@ function saveFinanceRecords(records) {
       record.recurringBillId || "",
       record.relatedTaskId || "",
       record.relatedObjective || "",
-      record.isValueRealization ? true : false
+      record.isValueRealization ? true : false,
+      record.hoursNeeded || 0
     ]);
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
     sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
@@ -603,10 +617,10 @@ function saveFinanceRecords(records) {
 
 function getFinanceSettings() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("FinanceSettings");
+  let sheet = ss.getSheetByName("7_financeSettings");
 
   if (!sheet) {
-    sheet = ss.insertSheet("FinanceSettings");
+    sheet = ss.insertSheet("7_financeSettings");
     sheet.getRange(1, 1, 1, 2).setValues([["monthKey", "budget"]]);
     sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
   }
@@ -624,10 +638,10 @@ function getFinanceSettings() {
 
 function saveFinanceSettings(settings) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("FinanceSettings");
+  let sheet = ss.getSheetByName("7_financeSettings");
 
   if (!sheet) {
-    sheet = ss.insertSheet("FinanceSettings");
+    sheet = ss.insertSheet("7_financeSettings");
     sheet.getRange(1, 1, 1, 2).setValues([["monthKey", "budget"]]);
     sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
   }
@@ -645,10 +659,10 @@ function saveFinanceSettings(settings) {
 
 function getFinanceCategories() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("FinanceCategories");
+  let sheet = ss.getSheetByName("3_financeCategories");
   
   if (!sheet) {
-    sheet = ss.insertSheet("FinanceCategories");
+    sheet = ss.insertSheet("3_financeCategories");
     sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
     sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
     
@@ -680,10 +694,10 @@ function getFinanceCategories() {
 
 function addFinanceCategory(category) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("FinanceCategories");
+  let sheet = ss.getSheetByName("3_financeCategories");
   
   if (!sheet) {
-    sheet = ss.insertSheet("FinanceCategories");
+    sheet = ss.insertSheet("3_financeCategories");
     sheet.getRange(1, 1, 1, 3).setValues([["id", "name", "color"]]);
     sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
   }
@@ -708,7 +722,7 @@ function addFinanceCategory(category) {
 
 function updateFinanceCategory(category) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("FinanceCategories");
+  const sheet = ss.getSheetByName("3_financeCategories");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -726,7 +740,7 @@ function updateFinanceCategory(category) {
 
 function deleteFinanceCategory(categoryId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("FinanceCategories");
+  const sheet = ss.getSheetByName("3_financeCategories");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -774,10 +788,10 @@ function getAppData() {
 // Events Functions
 function getEvents() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Events");
+  let sheet = ss.getSheetByName("8_events");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Events");
+    sheet = ss.insertSheet("8_events");
     sheet.getRange(1, 1, 1, 13).setValues([[
       "id",
       "title",
@@ -837,10 +851,10 @@ function getEvents() {
 
 function addEvent(event) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Events");
+  let sheet = ss.getSheetByName("8_events");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Events");
+    sheet = ss.insertSheet("8_events");
     sheet.getRange(1, 1, 1, 9).setValues([[
       "id", "title", "description", "startDate", "startTime", "endDate", "endTime", "category", "color"
     ]]);
@@ -877,7 +891,7 @@ function addEvent(event) {
 
 function updateEvent(event) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Events");
+  const sheet = ss.getSheetByName("8_events");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -905,7 +919,7 @@ function updateEvent(event) {
 
 function deleteEvent(eventId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Events");
+  const sheet = ss.getSheetByName("8_events");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -1003,10 +1017,10 @@ function createGoogleCalendarEvent(event) {
 // Debt Functions
 function getDebts() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Debts");
+  let sheet = ss.getSheetByName("9_debts");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Debts");
+    sheet = ss.insertSheet("9_debts");
     sheet.getRange(1, 1, 1, 10).setValues([[
       "id",
       "person",
@@ -1052,10 +1066,10 @@ function getDebts() {
 
 function addDebt(debt) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Debts");
+  let sheet = ss.getSheetByName("9_debts");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Debts");
+    sheet = ss.insertSheet("9_debts");
     sheet.getRange(1, 1, 1, 8).setValues([[
       "id", "person", "amount", "direction", "description", "date", "status", "relatedTaskId"
     ]]);
@@ -1089,7 +1103,7 @@ function addDebt(debt) {
 
 function updateDebt(debt) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Debts");
+  const sheet = ss.getSheetByName("9_debts");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -1115,10 +1129,10 @@ function updateDebt(debt) {
 // Persons Functions
 function getPersons() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Persons");
+  let sheet = ss.getSheetByName("11_persons");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Persons");
+    sheet = ss.insertSheet("11_persons");
     sheet.getRange(1, 1, 1, 2).setValues([["id", "name"]]);
     sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
     return [];
@@ -1137,10 +1151,10 @@ function getPersons() {
 
 function addPerson(person) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Persons");
+  let sheet = ss.getSheetByName("11_persons");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Persons");
+    sheet = ss.insertSheet("11_persons");
     sheet.getRange(1, 1, 1, 2).setValues([["id", "name"]]);
     sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
   }
@@ -1160,7 +1174,7 @@ function addPerson(person) {
 
 function updatePerson(person) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Persons");
+  const sheet = ss.getSheetByName("11_persons");
   if (!sheet) return;
 
   const values = sheet.getDataRange().getValues();
@@ -1174,7 +1188,7 @@ function updatePerson(person) {
 
 function deletePerson(personId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Persons");
+  const sheet = ss.getSheetByName("11_persons");
   if (!sheet) return;
 
   const values = sheet.getDataRange().getValues();
@@ -1189,11 +1203,11 @@ function deletePerson(personId) {
 // Notes Functions
 function ensureNotesSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Notes");
+  let sheet = ss.getSheetByName("10_notes");
   const headers = ["id", "title", "subject", "date", "docLink", "description"];
 
   if (!sheet) {
-    sheet = ss.insertSheet("Notes");
+    sheet = ss.insertSheet("10_notes");
   }
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1249,7 +1263,7 @@ function addNote(note) {
 
 function updateNote(note) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Notes");
+  const sheet = ss.getSheetByName("10_notes");
   if (!sheet) return;
 
   const values = sheet.getDataRange().getValues();
@@ -1269,7 +1283,7 @@ function updateNote(note) {
 
 function deleteNote(noteId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Notes");
+  const sheet = ss.getSheetByName("10_notes");
   if (!sheet) return;
 
   const values = sheet.getDataRange().getValues();
@@ -1311,10 +1325,10 @@ function getRecurringBills() {
 
 function addRecurringBill(bill) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Finance");
+  let sheet = ss.getSheetByName("6_finance");
   
   if (!sheet) {
-    sheet = ss.insertSheet("Finance");
+    sheet = ss.insertSheet("6_finance");
     sheet.getRange(1, 1, 1, 11).setValues([[
       "id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus"
     ]]);
@@ -1358,7 +1372,7 @@ function addRecurringBill(bill) {
 
 function updateRecurringBill(bill) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Finance");
+  const sheet = ss.getSheetByName("6_finance");
   if (!sheet) return;
 
   const values = sheet.getDataRange().getValues();
@@ -1385,7 +1399,7 @@ function updateRecurringBill(bill) {
 
 function deleteRecurringBill(billId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Finance");
+  const sheet = ss.getSheetByName("6_finance");
   if (!sheet) return;
 
   const values = sheet.getDataRange().getValues();
@@ -1403,12 +1417,12 @@ function processRecurringBills() {
   const today = new Date();
   const todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyy-MM-dd");
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let financeSheet = ss.getSheetByName("Finance");
+  let financeSheet = ss.getSheetByName("6_finance");
   
   if (!financeSheet) {
-    financeSheet = ss.insertSheet("Finance");
-    financeSheet.getRange(1, 1, 1, 15).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus", "recurringBillId", "relatedTaskId", "relatedObjective", "isValueRealization"]]);
-    financeSheet.getRange(1, 1, 1, 15).setFontWeight("bold");
+    financeSheet = ss.insertSheet("6_finance");
+    financeSheet.getRange(1, 1, 1, 16).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus", "recurringBillId", "relatedTaskId", "relatedObjective", "isValueRealization", "hoursNeeded"]]);
+    financeSheet.getRange(1, 1, 1, 16).setFontWeight("bold");
   }
   
   bills.forEach(bill => {
@@ -1441,7 +1455,8 @@ function processRecurringBills() {
         bill.id, // recurringBillId - link to the source recurring bill
         '', // relatedTaskId - empty for bill payments
         '', // relatedObjective - empty for bill payments
-        false // isValueRealization - false for bill payments
+        false, // isValueRealization - false for bill payments
+        0 // hoursNeeded - 0 for bill payments
       ]);
       
       // Update next due date on the recurring bill record
@@ -1462,7 +1477,7 @@ function processRecurringBills() {
 
 function deleteDebt(debtId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Debts");
+  const sheet = ss.getSheetByName("9_debts");
   if (!sheet) return false;
 
   const values = sheet.getDataRange().getValues();
@@ -1570,6 +1585,7 @@ function getDerivedStats(tasks, financeRecords, objectives, categories, statuses
 
 function calculateObjectivesStats(tasks, financeRecords, objectives) {
   const now = new Date();
+  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const objectiveStats = {
     total: objectives.length,
     onTrack: 0,
@@ -1581,9 +1597,30 @@ function calculateObjectivesStats(tasks, financeRecords, objectives) {
     averageHealthScore: 0
   };
 
+  // Get current month's finance records
+  const monthRecords = financeRecords.filter(record => {
+    if (!record.date) return false;
+    const recordDate = new Date(record.date);
+    return recordDate.getFullYear() === currentMonth.getFullYear() && 
+           recordDate.getMonth() === currentMonth.getMonth();
+  });
+
   const objectivesWithProgress = objectives.map(objective => {
-    // Get tasks for this objective
-    const objectiveTasks = tasks.filter(task => task.objective === objective.name);
+    // Auto-sync budget/targetValue from current month's finance record if relatedFinanceName is set
+    // This ensures objectives always reflect the current month's finance data
+    let budget = objective.budget || 0;
+    let targetValue = objective.targetValue || 0;
+    
+    if (objective.relatedFinanceId) {
+      const financeRecord = monthRecords.find(r => r.id === objective.relatedFinanceId);
+      if (financeRecord) {
+        budget = Number(financeRecord.amount) || 0;
+        targetValue = Number(financeRecord.amount) || 0;
+      }
+    }
+    
+    // Get tasks for this objective (using ID)
+    const objectiveTasks = tasks.filter(task => task.objectiveId === objective.id);
     const totalTasks = objectiveTasks.length;
     const completedTasks = objectiveTasks.filter(task => task.status === 'completed').length;
     const overdueTasks = objectiveTasks.filter(task => task.status === 'overdue').length;
@@ -1650,6 +1687,8 @@ function calculateObjectivesStats(tasks, financeRecords, objectives) {
 
     return {
       ...objective,
+      budget: budget, // Use synced budget
+      targetValue: targetValue, // Use synced targetValue
       totalTasks,
       completedTasks,
       overdueTasks,
@@ -1730,11 +1769,11 @@ function calculateRelationshipsStats(tasks, financeRecords, objectives, events, 
   // Task to Objective relationships
   const taskToObjective = {};
   objectives.forEach(objective => {
-    const objectiveTasks = tasks.filter(task => task.objective === objective.name);
+    const objectiveTasks = tasks.filter(task => task.objectiveId === objective.id);
     const completedTasks = objectiveTasks.filter(task => task.status === 'completed');
     const totalValue = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
 
-    taskToObjective[objective.name] = {
+    taskToObjective[objective.id] = {
       taskCount: objectiveTasks.length,
       completedCount: completedTasks.length,
       totalValue
@@ -1885,7 +1924,7 @@ function generatePredictiveInsights(tasks, objectivesStats, categoriesStats) {
   // Objective completion forecasts
   const objectives = getObjectives();
   objectives.forEach(objective => {
-    const objectiveTasks = tasks.filter(task => task.objective === objective.name);
+    const objectiveTasks = tasks.filter(task => task.objectiveId === objective.id);
     const totalTasks = objectiveTasks.length;
     const completedTasks = objectiveTasks.filter(task => task.status === 'completed').length;
 

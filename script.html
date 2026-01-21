@@ -1,42 +1,42 @@
 <script>
-  // App State
-  const AppState = {
-    currentPage: 'dashboard',
-    tasks: [],
-    objectives: [],
-    categories: [],
-    statuses: [],
-    events: [],
-    debts: [],
-    persons: [],
-    isSyncing: false,
-    sidebarCollapsed: false,
-    timelineView: 'month',
-    timelineCurrentDate: new Date(),
-    timelineCollapsedDates: {},
-    timelineFilters: { statuses: [], categories: [], objectives: [] },
-    eventsTimelineView: 'month',
-    eventsTimelineCurrentDate: new Date(),
-    eventsTimelineCollapsedDates: {},
-    financeRecords: [],
-    financeSettings: {},
-    financeCategories: [],
-    stats: null,
-    financeMonth: new Date(),
-    dashboardCharts: {},
-    searchQuery: '',
-    referenceTab: 'objectives',
-    financeTab: 'transactions',
-    mobileSidebarOpen: false,
-    taskFilters: { statuses: [], categories: [], objectives: [] },
-    financeFilters: { types: [], categories: [] },
-    calendarCurrentDate: new Date(),
-    debtsPersonTab: 'list',
-    reportsPeriod: 'month',
-    notes: [],
-    notesSubjects: [],
-    notesSubject: 'all',
-    recurringBills: [],
+// App State
+const AppState = {
+  currentPage: 'dashboard',
+  tasks: [],
+  objectives: [],
+  categories: [],
+  statuses: [],
+  events: [],
+  debts: [],
+  persons: [],
+  isSyncing: false,
+  sidebarCollapsed: false,
+  timelineView: 'month',
+  timelineCurrentDate: new Date(),
+  timelineCollapsedDates: {},
+  timelineFilters: { statuses: [], categories: [], objectives: [] },
+  eventsTimelineView: 'month',
+  eventsTimelineCurrentDate: new Date(),
+  eventsTimelineCollapsedDates: {},
+  financeRecords: [],
+  financeSettings: {},
+  financeCategories: [],
+  stats: null,
+  financeMonth: new Date(),
+  dashboardCharts: {},
+  searchQuery: '',
+  referenceTab: 'objectives',
+  financeTab: 'transactions',
+  mobileSidebarOpen: false,
+  taskFilters: { statuses: [], categories: [], objectives: [] },
+  financeFilters: { types: [], categories: [] },
+  calendarCurrentDate: new Date(),
+  debtsPersonTab: 'list',
+  reportsPeriod: 'month',
+  notes: [],
+  notesSubjects: [],
+  notesSubject: 'all',
+  recurringBills: [],
   };
   
   // Google Apps Script API
@@ -777,9 +777,31 @@
     return occurrences;
   }
   
-  function getObjectiveColor(name) {
-    if (!name) return '';
-    return AppState.objectives.find(objective => objective.name === name)?.color || '';
+  // Helper functions for ID-based relationships
+  function getObjectiveById(id) {
+    if (!id) return null;
+    return AppState.objectives.find(obj => obj.id === id) || null;
+  }
+  
+  function getObjectiveName(id) {
+    const obj = getObjectiveById(id);
+    return obj ? obj.name : '';
+  }
+  
+  function getObjectiveColor(id) {
+    if (!id) return '';
+    const obj = getObjectiveById(id);
+    return obj ? obj.color : '';
+  }
+  
+  function getFinanceRecordById(id) {
+    if (!id) return null;
+    return AppState.financeRecords.find(record => record.id === id) || null;
+  }
+  
+  function getFinanceRecordName(id) {
+    const record = getFinanceRecordById(id);
+    return record ? record.note : '';
   }
   
   const ColorPalette = {
@@ -859,11 +881,12 @@
       const query = AppState.searchQuery.trim().toLowerCase();
       if (!query) return tasks;
       return tasks.filter(task => {
+        const objectiveName = getObjectiveName(task.objectiveId);
         const haystack = [
           task.task,
           task.category,
           task.status,
-          task.objective,
+          objectiveName,
           task.priority
         ]
           .filter(Boolean)
@@ -883,7 +906,10 @@
         if (filters.categories.length > 0 && !filters.categories.includes(task.category)) {
           return false;
         }
-        if (filters.objectives.length > 0 && !filters.objectives.includes(task.objective)) {
+        if (filters.objectives.length > 0 && task.objectiveId && !filters.objectives.includes(task.objectiveId.toString())) {
+          return false;
+        }
+        if (filters.objectives.length > 0 && !task.objectiveId) {
           return false;
         }
         return true;
@@ -942,14 +968,22 @@
       const options = DOM.create('div', 'filter-options');
       const safeItems = Array.isArray(items) ? items : [];
       safeItems.forEach(item => {
-        const value = item && item.name ? item.name : item;
-        if (!value) return;
+        // For objectives, use ID but display name
+        let value, displayText;
+        if (filterKey === 'objectives' && item && item.id) {
+          value = item.id.toString();
+          displayText = item.name || '';
+        } else {
+          value = item && item.name ? item.name : item;
+          displayText = value;
+        }
+        if (!value || !displayText) return;
         const option = DOM.create('label', 'filter-option');
         const checkbox = DOM.create('input', '');
         checkbox.type = 'checkbox';
         checkbox.checked = AppState.taskFilters[filterKey].includes(value);
         checkbox.onchange = () => this.toggleFilter(filterKey, value);
-        const text = DOM.create('span', '', value);
+        const text = DOM.create('span', '', displayText);
         option.appendChild(checkbox);
         option.appendChild(text);
         options.appendChild(option);
@@ -1032,13 +1066,12 @@
       const navList = DOM.create('ul', 'nav-list');
   
       const navGroups = [
-        {
-          title: 'Overview',
-          items: [
-            { id: 'dashboard', label: 'Dashboard', icon: 'home' },
-            { id: 'reports', label: 'Reports & Analytics', icon: 'reports' }
-          ]
-        },
+      {
+        title: 'Overview',
+        items: [
+          { id: 'dashboard', label: 'Dashboard', icon: 'home' }
+        ]
+      },
         {
           title: 'Workspace',
           items: [
@@ -1058,8 +1091,7 @@
         {
           title: 'Tools',
           items: [
-            { id: 'notes', label: 'Notes & Journal', icon: 'notes' },
-            { id: 'categories', label: 'Category Performance', icon: 'chart' }
+            { id: 'notes', label: 'Notes & Journal', icon: 'notes' }
           ]
         }
       ];
@@ -1213,12 +1245,6 @@
         case 'reference':
           pageContent = ReferencePage.render();
           break;
-        case 'reports':
-          pageContent = ReportsPage.render();
-          break;
-        case 'categories':
-          pageContent = CategoryPerformancePage.render();
-          break;
         case 'notes':
           pageContent = NotesPage.render();
           break;
@@ -1283,11 +1309,52 @@
       titleWrap.appendChild(DOM.create('p', 'page-subtitle', 'Overview of your tasks & finances'));
       header.appendChild(titleWrap);
       container.appendChild(header);
+
+      // Better switcher (toggle-style)
+      const currentTab = AppState.dashboardTab || 'dashboard';
+      const switcherContainer = DOM.create('div', 'dashboard-switcher-container');
+      
+      const switcher = DOM.create('div', 'dashboard-switcher');
+      
+      const dashboardOption = DOM.create('button', 'dashboard-switcher-option');
+      dashboardOption.textContent = 'Dashboard';
+      dashboardOption.type = 'button';
+      if (currentTab === 'dashboard') {
+        dashboardOption.classList.add('active');
+      }
+      dashboardOption.onclick = () => {
+        AppState.dashboardTab = 'dashboard';
+        Router.render();
+      };
+      
+      const reportsOption = DOM.create('button', 'dashboard-switcher-option');
+      reportsOption.textContent = 'Reports & Analytics';
+      reportsOption.type = 'button';
+      if (currentTab === 'reports') {
+        reportsOption.classList.add('active');
+      }
+      reportsOption.onclick = () => {
+        AppState.dashboardTab = 'reports';
+        Router.render();
+      };
+      
+      switcher.appendChild(dashboardOption);
+      switcher.appendChild(reportsOption);
+      switcherContainer.appendChild(switcher);
+      container.appendChild(switcherContainer);
+
+      // Show content based on selected tab
+      if (currentTab === 'reports') {
+        return this.renderReportsContent(container);
+      }
   
       const layout = DOM.create('div', 'dashboard-layout');
       const mainColumn = DOM.create('div', 'dashboard-main');
       const sideColumn = DOM.create('aside', 'dashboard-side');
   
+      // Time & Money Summary
+      mainColumn.appendChild(this.renderTimeMoneySummary());
+      
       // Charts at the top
       mainColumn.appendChild(this.renderFinanceCharts());
       mainColumn.appendChild(this.renderWorkCharts());
@@ -1339,15 +1406,26 @@
   
       const recentTasks = DOM.create('div', 'card');
       recentTasks.appendChild(DOM.create('h2', '', 'Recent Tasks'));
-      const taskList = DOM.create('div', 'task-list');
-  
-      filteredTasks.slice(0, 5).forEach(task => {
-        taskList.appendChild(this.renderTask(task));
-      });
-  
+
+      const taskList = DOM.create('div', 'dashboard-recent-tasks');
+      const recentTasksList = AppState.tasks
+        .filter(task => task.status === 'completed')
+        .sort((a, b) => new Date(b.endDate || b.startDate) - new Date(a.endDate || a.startDate))
+        .slice(0, 5);
+
+      if (recentTasksList.length === 0) {
+        taskList.appendChild(DOM.create('p', 'empty-state', 'No completed tasks yet.'));
+      } else {
+        recentTasksList.forEach(task => {
+          const item = Dashboard.renderTask(task);
+          item.onclick = () => TaskModal.show(task);
+          taskList.appendChild(item);
+        });
+      }
+
       recentTasks.appendChild(taskList);
       mainColumn.appendChild(recentTasks);
-  
+
       sideColumn.appendChild(this.renderFinanceSummary());
       sideColumn.appendChild(this.renderDebtsSummary());
       sideColumn.appendChild(this.renderEventsSummary());
@@ -1368,6 +1446,161 @@
       this.drawCharts();
   
       return container;
+    },
+
+    renderReportsContent(container) {
+      // Time period selector
+      const periodSelector = DOM.create('div', 'reference-tabs');
+      periodSelector.style.marginBottom = '1.5rem';
+      const periods = [
+        { id: 'month', label: 'This Month' },
+        { id: 'year', label: 'This Year' },
+        { id: 'all', label: 'All Time' }
+      ];
+      const currentPeriod = AppState.reportsPeriod || 'month';
+      periods.forEach(period => {
+        const btn = DOM.create('button', 'reference-tab');
+        btn.textContent = period.label;
+        if (currentPeriod === period.id) btn.classList.add('active');
+        btn.onclick = () => {
+          AppState.reportsPeriod = period.id;
+          Router.render();
+        };
+        periodSelector.appendChild(btn);
+      });
+      container.appendChild(periodSelector);
+
+      // Category Performance (merged from CategoryPerformancePage)
+      container.appendChild(this.renderCategoryPerformanceFull());
+
+      // Reports content from ReportsPage
+      container.appendChild(ReportsPage.renderSpendingTrends());
+      container.appendChild(ReportsPage.renderCategoryBreakdown());
+      container.appendChild(ReportsPage.renderTaskCompletion());
+      container.appendChild(ReportsPage.renderProductivityTrends());
+
+      requestAnimationFrame(() => {
+        ReportsPage.drawCharts();
+      });
+
+      return container;
+    },
+
+    renderCategoryPerformanceFull() {
+      const card = DOM.create('div', 'card');
+      card.appendChild(DOM.create('h2', '', '📊 Category Performance'));
+
+      const stats = AppState.stats?.categories || {};
+      const categoriesGrid = DOM.create('div', 'categories-performance-grid');
+
+      const sortedCategories = Object.entries(stats)
+        .filter(([name, data]) => data.taskCount > 0)
+        .sort((a, b) => b[1].taskCount - a[1].taskCount);
+
+      if (sortedCategories.length === 0) {
+        const emptyState = DOM.create('div', 'empty-state');
+        emptyState.style.textAlign = 'center';
+        emptyState.style.padding = '3rem';
+        emptyState.style.color = '#6b7280';
+        emptyState.innerHTML = '<p>No category data available yet.</p><p>Complete some tasks to see performance analytics.</p>';
+        categoriesGrid.appendChild(emptyState);
+      } else {
+        sortedCategories.forEach(([categoryName, categoryStats]) => {
+          const categoryCard = this.renderCategoryPerformanceCard(categoryName, categoryStats);
+          categoriesGrid.appendChild(categoryCard);
+        });
+      }
+
+      card.appendChild(categoriesGrid);
+      return card;
+    },
+
+    renderCategoryPerformanceCard(categoryName, stats) {
+      const card = DOM.create('div', 'category-performance-card');
+      card.style.borderLeftColor = stats.color || '#3b82f6';
+  
+      const header = DOM.create('div', 'category-header');
+      header.appendChild(DOM.create('h3', 'category-name', categoryName));
+  
+      // Performance indicators
+      const indicators = DOM.create('div', 'category-indicators');
+      indicators.innerHTML = `
+        <div class="indicator">
+          <span class="indicator-value">${stats.completionRate}%</span>
+          <span class="indicator-label">Completion Rate</span>
+        </div>
+        <div class="indicator">
+          <span class="indicator-value">${stats.taskCount}</span>
+          <span class="indicator-label">Total Tasks</span>
+        </div>
+        <div class="indicator">
+          <span class="indicator-value">${FinancePage.formatCurrency(stats.totalValue)}</span>
+          <span class="indicator-label">Value Delivered</span>
+        </div>
+      `;
+  
+      // ROI indicator
+      const roiIndicator = DOM.create('div', 'roi-indicator');
+      const roiValue = typeof stats.roi === 'number' ? `${stats.roi.toFixed(1)}x` : stats.roi;
+      const roiColor = typeof stats.roi === 'number' ?
+        (stats.roi >= 2 ? '#10b981' : stats.roi >= 1 ? '#f59e0b' : '#ef4444') : '#6b7280';
+  
+      roiIndicator.innerHTML = `
+        <div class="indicator">
+          <span class="indicator-value" style="color: ${roiColor}">${roiValue}</span>
+          <span class="indicator-label">ROI</span>
+        </div>
+      `;
+  
+      // Task breakdown
+      const breakdown = DOM.create('div', 'category-breakdown');
+      const totalTasks = stats.taskCount;
+      const completedTasks = stats.completedCount;
+      const overdueTasks = stats.overdueCount;
+      const pendingTasks = totalTasks - completedTasks - overdueTasks;
+  
+      breakdown.innerHTML = `
+        <div class="breakdown-item">
+          <span class="breakdown-label">Completed:</span>
+          <span class="breakdown-value completed">${completedTasks}</span>
+        </div>
+        <div class="breakdown-item">
+          <span class="breakdown-label">Pending:</span>
+          <span class="breakdown-value pending">${pendingTasks}</span>
+        </div>
+        <div class="breakdown-item">
+          <span class="breakdown-label">Overdue:</span>
+          <span class="breakdown-value overdue">${overdueTasks}</span>
+        </div>
+        <div class="breakdown-item">
+          <span class="breakdown-label">Avg Duration:</span>
+          <span class="breakdown-value">${stats.averageDuration} days</span>
+        </div>
+      `;
+  
+      // Spending info
+      const spendingInfo = DOM.create('div', 'category-spending');
+      spendingInfo.innerHTML = `
+        <div class="spending-item">
+          <span class="spending-label">Spending:</span>
+          <span class="spending-value">${FinancePage.formatCurrency(stats.totalSpending)}</span>
+        </div>
+      `;
+  
+      card.appendChild(header);
+      card.appendChild(indicators);
+      card.appendChild(roiIndicator);
+      card.appendChild(breakdown);
+      card.appendChild(spendingInfo);
+  
+      // Click to view tasks in this category
+      card.onclick = () => {
+        // Filter tasks by this category and navigate to timeline
+        AppState.timelineFilters.categories = [categoryName];
+        Router.navigate('timeline');
+      };
+  
+      return card;
     },
   
     renderFinanceSummary() {
@@ -1577,104 +1810,101 @@
   
     renderFinanceCharts() {
       const card = DOM.create('div', 'card');
-      card.appendChild(DOM.create('h2', '', 'Finance Charts'));
-  
+      card.appendChild(DOM.create('h2', '', '💰 Time & Money Overview'));
+
       const grid = DOM.create('div', 'dashboard-chart-grid');
-  
-      const categoryCard = DOM.create('div', 'dashboard-chart-card');
-      categoryCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Spending by Category'));
-      const categoryCanvas = DOM.create('canvas', '');
-      categoryCanvas.id = 'financeCategoryChart';
-      categoryCard.appendChild(categoryCanvas);
-      grid.appendChild(categoryCard);
-  
+
+      // Hours vs Income Chart
+      const hoursIncomeCard = DOM.create('div', 'dashboard-chart-card');
+      hoursIncomeCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Hours Worked vs Income Earned'));
+      const hoursIncomeCanvas = DOM.create('canvas', '');
+      hoursIncomeCanvas.id = 'hoursIncomeChart';
+      hoursIncomeCard.appendChild(hoursIncomeCanvas);
+      grid.appendChild(hoursIncomeCard);
+
+      // Hourly Rate Trend
+      const hourlyRateCard = DOM.create('div', 'dashboard-chart-card');
+      hourlyRateCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Hourly Rate Trend'));
+      const hourlyRateCanvas = DOM.create('canvas', '');
+      hourlyRateCanvas.id = 'hourlyRateChart';
+      hourlyRateCard.appendChild(hourlyRateCanvas);
+      grid.appendChild(hourlyRateCard);
+
+      // Income vs Expenses
       const trendCard = DOM.create('div', 'dashboard-chart-card');
-      trendCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Income vs Expense Trend'));
+      trendCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Income vs Expenses'));
       const trendCanvas = DOM.create('canvas', '');
       trendCanvas.id = 'financeTrendChart';
       trendCard.appendChild(trendCanvas);
       grid.appendChild(trendCard);
-  
+
       card.appendChild(grid);
       return card;
     },
   
   renderObjectiveHealthOverview() {
     const card = DOM.create('div', 'card');
-    card.appendChild(DOM.create('h2', '', '🎯 Objective Health Overview'));
+    card.appendChild(DOM.create('h2', '', '🎯 Objectives Overview'));
 
     const objectives = AppState.objectives || [];
     if (objectives.length === 0) {
-      card.appendChild(DOM.create('p', 'empty-state', 'No objectives yet. Create your first objective to see health metrics.'));
+      card.appendChild(DOM.create('p', 'empty-state', 'No objectives yet. Create your first objective to get started.'));
       return card;
     }
+  
+    const grid = DOM.create('div', 'objectives-health-grid');
+  
+    objectives.forEach(objective => {
+      const objectiveCard = DOM.create('div', 'objective-health-card');
+  
+      const header = DOM.create('div', 'objective-health-header');
+      header.appendChild(DOM.create('h4', 'objective-health-name', objective.name));
+  
+      // Progress bar
+      const tasksWithObjective = AppState.tasks.filter(t => t.objectiveId === objective.id);
+      const completedTasks = tasksWithObjective.filter(t => t.status === 'completed').length;
+      const progressPercent = tasksWithObjective.length > 0 ? Math.round((completedTasks / tasksWithObjective.length) * 100) : 0;
+  
+      const progressBar = DOM.create('div', 'objective-progress');
+      progressBar.innerHTML = `
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${progressPercent}%"></div>
+        </div>
+        <span class="progress-text">${progressPercent}% Complete (${completedTasks}/${tasksWithObjective.length} tasks)</span>
+      `;
+  
+      // Hours progress
+      const completedHours = tasksWithObjective
+        .filter(t => t.status === 'completed')
+        .reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+      const totalHours = tasksWithObjective.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+      
+      const hoursInfo = DOM.create('div', 'objective-value');
+      if (totalHours > 0) {
+        const hoursPercent = Math.round((completedHours / totalHours) * 100);
+        hoursInfo.innerHTML = `
+          <span class="value-amount">${completedHours.toFixed(1)}h / ${totalHours.toFixed(1)}h</span>
+          <span class="value-label">Hours (${hoursPercent}%)</span>
+        `;
+      } else {
+        hoursInfo.innerHTML = `
+          <span class="value-amount">—</span>
+          <span class="value-label">Hours</span>
+        `;
+      }
 
-    // Check if objectives have health scores, otherwise show basic view
-    const hasHealthScores = objectives.some(obj => obj.healthScore && obj.healthScore > 0);
-    if (!hasHealthScores) {
-      card.appendChild(DOM.create('p', 'empty-state', 'Health scores will appear once you add the new columns to your Objectives sheet.'));
-      return card;
-    }
+      objectiveCard.appendChild(header);
+      objectiveCard.appendChild(progressBar);
+      objectiveCard.appendChild(hoursInfo);
   
-      const grid = DOM.create('div', 'objectives-health-grid');
+      // Make clickable to navigate to objectives page
+      objectiveCard.onclick = () => Router.navigate('objectives');
   
-      // Sort objectives by health score (worst first, then best)
-      const sortedObjectives = objectives.sort((a, b) => {
-        // First by health score (lower is worse), then by name
-        if (a.healthScore !== b.healthScore) {
-          return a.healthScore - b.healthScore;
-        }
-        return a.name.localeCompare(b.name);
-      });
+      grid.appendChild(objectiveCard);
+    });
   
-      sortedObjectives.forEach(objective => {
-        const objectiveCard = DOM.create('div', 'objective-health-card');
-  
-        const header = DOM.create('div', 'objective-health-header');
-        header.appendChild(DOM.create('h4', 'objective-health-name', objective.name));
-  
-        // Health score indicator
-        const healthScore = objective.healthScore || 0;
-        const healthIndicator = DOM.create('div', 'health-score-indicator');
-        healthIndicator.innerHTML = `
-          <span class="health-score">${healthScore}</span>
-          <span class="health-label">Health</span>
-        `;
-  
-        // Progress bar
-        const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
-        const completedTasks = tasksWithObjective.filter(t => t.status === 'completed').length;
-        const progressPercent = tasksWithObjective.length > 0 ? Math.round((completedTasks / tasksWithObjective.length) * 100) : 0;
-  
-        const progressBar = DOM.create('div', 'objective-progress');
-        progressBar.innerHTML = `
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${progressPercent}%"></div>
-          </div>
-          <span class="progress-text">${progressPercent}% Complete</span>
-        `;
-  
-        // Value delivered
-        const valueDelivered = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
-        const valueElement = DOM.create('div', 'objective-value');
-        valueElement.innerHTML = `
-          <span class="value-amount">$${valueDelivered.toFixed(0)}</span>
-          <span class="value-label">Value</span>
-        `;
-  
-        objectiveCard.appendChild(header);
-        objectiveCard.appendChild(healthIndicator);
-        objectiveCard.appendChild(progressBar);
-        objectiveCard.appendChild(valueElement);
-  
-        // Make clickable to navigate to objectives page
-        objectiveCard.onclick = () => Router.navigate('objectives');
-  
-        grid.appendChild(objectiveCard);
-      });
-  
-      card.appendChild(grid);
-      return card;
+    card.appendChild(grid);
+    return card;
     },
   
   renderCategoryPerformanceOverview() {
@@ -1721,13 +1951,10 @@
           </div>
         `;
   
-        categoryCard.appendChild(header);
-        categoryCard.appendChild(metrics);
-  
-        // Make clickable to navigate to category performance page
-        categoryCard.onclick = () => Router.navigate('categories');
-  
-        grid.appendChild(categoryCard);
+      categoryCard.appendChild(header);
+      categoryCard.appendChild(metrics);
+
+      grid.appendChild(categoryCard);
       });
   
       card.appendChild(grid);
@@ -1736,24 +1963,120 @@
   
     renderWorkCharts() {
       const card = DOM.create('div', 'card');
-      card.appendChild(DOM.create('h2', '', 'Work Charts'));
-  
+      card.appendChild(DOM.create('h2', '', '⏱️ Time & Progress'));
+
       const grid = DOM.create('div', 'dashboard-chart-grid');
-  
-      const statusCard = DOM.create('div', 'dashboard-chart-card');
-      statusCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Task Status Split'));
-      const statusCanvas = DOM.create('canvas', '');
-      statusCanvas.id = 'taskStatusChart';
-      statusCard.appendChild(statusCanvas);
-      grid.appendChild(statusCard);
-  
+
+      // Hours by Objective
+      const hoursObjectiveCard = DOM.create('div', 'dashboard-chart-card');
+      hoursObjectiveCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Hours by Objective'));
+      const hoursObjectiveCanvas = DOM.create('canvas', '');
+      hoursObjectiveCanvas.id = 'hoursByObjectiveChart';
+      hoursObjectiveCard.appendChild(hoursObjectiveCanvas);
+      grid.appendChild(hoursObjectiveCard);
+
+      // Value vs Hours (ROI)
+      const roiCard = DOM.create('div', 'dashboard-chart-card');
+      roiCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Value Delivered vs Hours Invested'));
+      const roiCanvas = DOM.create('canvas', '');
+      roiCanvas.id = 'valueHoursChart';
+      roiCard.appendChild(roiCanvas);
+      grid.appendChild(roiCard);
+
+      // Task Completion Trend
       const productivityCard = DOM.create('div', 'dashboard-chart-card');
-      productivityCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Productivity Trend'));
+      productivityCard.appendChild(DOM.create('div', 'dashboard-chart-title', 'Task Completion Trend'));
       const productivityCanvas = DOM.create('canvas', '');
       productivityCanvas.id = 'productivityTrendChart';
       productivityCard.appendChild(productivityCanvas);
       grid.appendChild(productivityCard);
-  
+
+      card.appendChild(grid);
+      return card;
+    },
+
+    renderTimeMoneySummary() {
+      const card = DOM.create('div', 'card');
+      card.appendChild(DOM.create('h2', '', '📊 Time & Money Summary'));
+
+      // Current month data
+      const now = new Date();
+      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthRecords = FinancePage.getMonthlyRecordsFor(currentMonth);
+      const monthTasks = this.getTasksForMonth(currentMonth).filter(t => t.status === 'completed');
+      
+      // Calculate metrics
+      const totalIncome = monthRecords
+        .filter(r => r.type === 'income')
+        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      
+      const totalHours = monthTasks.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+      
+      const totalValue = monthTasks.reduce((sum, task) => {
+        const value = Number(task.actualValue) || Number(task.estimatedValue) || 0;
+        return sum + (task.isIncome !== false ? value : 0);
+      }, 0);
+      
+      const hourlyRate = totalHours > 0 ? totalValue / totalHours : 0;
+      
+      // Hours needed for income
+      const incomeRecords = monthRecords.filter(r => r.type === 'income' && r.hoursNeeded > 0);
+      const totalHoursNeeded = incomeRecords.reduce((sum, r) => sum + (Number(r.hoursNeeded) || 0), 0);
+      const hoursProgress = totalHoursNeeded > 0 ? Math.min(100, Math.round((totalHours / totalHoursNeeded) * 100)) : 0;
+
+      const grid = DOM.create('div', 'dashboard-metrics-grid');
+      grid.style.display = 'grid';
+      grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+      grid.style.gap = '1rem';
+      grid.style.marginTop = '1rem';
+
+      // Income
+      const incomeCard = DOM.create('div', 'metric-card');
+      incomeCard.innerHTML = `
+        <div class="metric-label">Total Income</div>
+        <div class="metric-value income">${FinancePage.formatCurrency(totalIncome)}</div>
+        <div class="metric-hint">This month</div>
+      `;
+      grid.appendChild(incomeCard);
+
+      // Hours Worked
+      const hoursCard = DOM.create('div', 'metric-card');
+      hoursCard.innerHTML = `
+        <div class="metric-label">Hours Worked</div>
+        <div class="metric-value">${totalHours.toFixed(1)}h</div>
+        <div class="metric-hint">${totalHoursNeeded > 0 ? `${hoursProgress}% of target` : 'Completed tasks'}</div>
+      `;
+      grid.appendChild(hoursCard);
+
+      // Hourly Rate
+      const rateCard = DOM.create('div', 'metric-card');
+      rateCard.innerHTML = `
+        <div class="metric-label">Hourly Rate</div>
+        <div class="metric-value">${hourlyRate > 0 ? FinancePage.formatCurrency(hourlyRate) + '/hr' : '—'}</div>
+        <div class="metric-hint">${totalHours > 0 ? 'From completed tasks' : 'No data yet'}</div>
+      `;
+      grid.appendChild(rateCard);
+
+      // Value Delivered
+      const valueCard = DOM.create('div', 'metric-card');
+      valueCard.innerHTML = `
+        <div class="metric-label">Value Delivered</div>
+        <div class="metric-value">${FinancePage.formatCurrency(totalValue)}</div>
+        <div class="metric-hint">From completed tasks</div>
+      `;
+      grid.appendChild(valueCard);
+
+      // Hours Target Progress
+      if (totalHoursNeeded > 0) {
+        const progressCard = DOM.create('div', 'metric-card');
+        progressCard.innerHTML = `
+          <div class="metric-label">Hours Progress</div>
+          <div class="metric-value">${hoursProgress}%</div>
+          <div class="metric-hint">${totalHours.toFixed(1)}h / ${totalHoursNeeded.toFixed(1)}h</div>
+        `;
+        grid.appendChild(progressCard);
+      }
+
       card.appendChild(grid);
       return card;
     },
@@ -1962,7 +2285,8 @@
     },
   
     getObjectiveCompletion(objectiveName) {
-      const tasks = AppState.tasks.filter(task => task.objective === objectiveName);
+      const objective = AppState.objectives.find(obj => obj.name === objectiveName);
+      const tasks = objective ? AppState.tasks.filter(task => task.objectiveId === objective.id) : [];
       const completed = tasks.filter(task => task.status === 'completed').length;
       return { completed, total: tasks.length };
     },
@@ -2011,9 +2335,11 @@
         const ready = await ensureChartLibrary();
         if (!ready) return;
         this.destroyCharts();
-        this.drawFinanceCategoryChart();
+        this.drawHoursIncomeChart();
+        this.drawHourlyRateChart();
         this.drawFinanceTrendChart();
-        this.drawTaskStatusChart();
+        this.drawHoursByObjectiveChart();
+        this.drawValueHoursChart();
         this.drawProductivityTrendChart();
       });
     },
@@ -2025,37 +2351,109 @@
       AppState.dashboardCharts = {};
     },
   
-    drawFinanceCategoryChart() {
-      const canvas = document.getElementById('financeCategoryChart');
+    drawHoursIncomeChart() {
+      const canvas = document.getElementById('hoursIncomeChart');
       if (!canvas) return;
-      const records = FinancePage.getMonthlyRecords();
-      const expenses = records.filter(record => record.type === 'expense');
-      const totals = {};
-      expenses.forEach(record => {
-        const key = record.category || 'Uncategorized';
-        totals[key] = (totals[key] || 0) + (Number(record.amount) || 0);
+      
+      const months = this.getLastMonths(6);
+      const hoursData = [];
+      const incomeData = [];
+      
+      months.forEach(month => {
+        // Get tasks completed in this month
+        const monthTasks = this.getTasksForMonth(month.date)
+          .filter(task => task.status === 'completed');
+        const totalHours = monthTasks.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+        hoursData.push(totalHours);
+        
+        // Get income from finance records in this month
+        const monthRecords = FinancePage.getMonthlyRecordsFor(month.date);
+        const income = monthRecords
+          .filter(r => r.type === 'income')
+          .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        incomeData.push(income);
       });
-  
-      const labels = Object.keys(totals);
-      const data = Object.values(totals);
-      if (labels.length === 0) {
-        labels.push('No Data');
-        data.push(1);
-      }
-  
-      AppState.dashboardCharts.financeCategory = new Chart(canvas, {
-        type: 'doughnut',
+
+      AppState.dashboardCharts.hoursIncome = new Chart(canvas, {
+        type: 'bar',
         data: {
-          labels,
+          labels: months.map(month => month.label),
+          datasets: [
+            {
+              label: 'Hours Worked',
+              data: hoursData,
+              backgroundColor: 'rgba(59, 130, 246, 0.6)',
+              yAxisID: 'y'
+            },
+            {
+              label: 'Income Earned',
+              data: incomeData,
+              backgroundColor: 'rgba(16, 185, 129, 0.6)',
+              yAxisID: 'y1',
+              type: 'line',
+              borderColor: '#10b981',
+              borderWidth: 2,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } },
+          scales: {
+            y: {
+              type: 'linear',
+              position: 'left',
+              beginAtZero: true,
+              title: { display: true, text: 'Hours' }
+            },
+            y1: {
+              type: 'linear',
+              position: 'right',
+              beginAtZero: true,
+              title: { display: true, text: 'Income ($)' },
+              grid: { drawOnChartArea: false }
+            }
+          }
+        }
+      });
+    },
+
+    drawHourlyRateChart() {
+      const canvas = document.getElementById('hourlyRateChart');
+      if (!canvas) return;
+      
+      const months = this.getLastMonths(6);
+      const hourlyRates = [];
+      
+      months.forEach(month => {
+        const monthTasks = this.getTasksForMonth(month.date)
+          .filter(task => task.status === 'completed');
+        const totalHours = monthTasks.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+        const totalValue = monthTasks.reduce((sum, task) => {
+          const value = Number(task.actualValue) || Number(task.estimatedValue) || 0;
+          return sum + (task.isIncome !== false ? value : 0);
+        }, 0);
+        
+        const rate = totalHours > 0 ? totalValue / totalHours : 0;
+        hourlyRates.push(rate);
+      });
+
+      AppState.dashboardCharts.hourlyRate = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: months.map(month => month.label),
           datasets: [{
-            data,
-            backgroundColor: ['#f97316', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899']
+            label: 'Hourly Rate ($/hr)',
+            data: hourlyRates,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.2)',
+            tension: 0.3,
+            fill: true
           }]
         },
         options: {
-          plugins: {
-            legend: { position: 'bottom' }
-          }
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: 'Rate ($/hr)' } } }
         }
       });
     },
@@ -2102,26 +2500,133 @@
       });
     },
   
-    drawTaskStatusChart() {
-      const canvas = document.getElementById('taskStatusChart');
+    drawHoursByObjectiveChart() {
+      const canvas = document.getElementById('hoursByObjectiveChart');
       if (!canvas) return;
-      const statuses = ['completed', 'pending', 'overdue', 'in-progress'];
-      const counts = statuses.map(status => AppState.tasks.filter(task => task.status === status).length);
-      if (counts.every(count => count === 0)) {
-        counts[0] = 1;
+      
+      const objectiveHours = {};
+      AppState.objectives.forEach(objective => {
+        const tasks = AppState.tasks.filter(t => t.objectiveId === objective.id);
+        const completedHours = tasks
+          .filter(t => t.status === 'completed')
+          .reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+        const totalHours = tasks.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+        
+        if (totalHours > 0) {
+          objectiveHours[objective.name] = {
+            completed: completedHours,
+            total: totalHours
+          };
+        }
+      });
+
+      const labels = Object.keys(objectiveHours);
+      const completedData = labels.map(name => objectiveHours[name].completed);
+      const totalData = labels.map(name => objectiveHours[name].total);
+
+      if (labels.length === 0) {
+        labels.push('No Data');
+        completedData.push(0);
+        totalData.push(1);
       }
-  
-      AppState.dashboardCharts.taskStatus = new Chart(canvas, {
-        type: 'doughnut',
+
+      AppState.dashboardCharts.hoursByObjective = new Chart(canvas, {
+        type: 'bar',
         data: {
-          labels: statuses.map(status => status.replace('-', ' ')),
-          datasets: [{
-            data: counts,
-            backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#f59e0b']
-          }]
+          labels,
+          datasets: [
+            {
+              label: 'Completed Hours',
+              data: completedData,
+              backgroundColor: 'rgba(16, 185, 129, 0.6)'
+            },
+            {
+              label: 'Total Hours',
+              data: totalData,
+              backgroundColor: 'rgba(59, 130, 246, 0.4)'
+            }
+          ]
         },
         options: {
-          plugins: { legend: { position: 'bottom' } }
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: 'Hours' } } }
+        }
+      });
+    },
+
+    drawValueHoursChart() {
+      const canvas = document.getElementById('valueHoursChart');
+      if (!canvas) return;
+      
+      const objectiveData = [];
+      AppState.objectives.forEach(objective => {
+        const tasks = AppState.tasks.filter(t => t.objectiveId === objective.id);
+        const completedTasks = tasks.filter(t => t.status === 'completed');
+        const totalHours = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+        const totalValue = completedTasks.reduce((sum, task) => {
+          const value = Number(task.actualValue) || Number(task.estimatedValue) || 0;
+          return sum + (task.isIncome !== false ? value : 0);
+        }, 0);
+        
+        if (totalHours > 0 || totalValue > 0) {
+          objectiveData.push({
+            name: objective.name,
+            hours: totalHours,
+            value: totalValue
+          });
+        }
+      });
+
+      const labels = objectiveData.map(d => d.name);
+      const hoursData = objectiveData.map(d => d.hours);
+      const valueData = objectiveData.map(d => d.value);
+
+      if (labels.length === 0) {
+        labels.push('No Data');
+        hoursData.push(0);
+        valueData.push(0);
+      }
+
+      AppState.dashboardCharts.valueHours = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Hours',
+              data: hoursData,
+              backgroundColor: 'rgba(59, 130, 246, 0.6)',
+              yAxisID: 'y'
+            },
+            {
+              label: 'Value ($)',
+              data: valueData,
+              backgroundColor: 'rgba(139, 92, 246, 0.6)',
+              yAxisID: 'y1',
+              type: 'line',
+              borderColor: '#8b5cf6',
+              borderWidth: 2,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } },
+          scales: {
+            y: {
+              type: 'linear',
+              position: 'left',
+              beginAtZero: true,
+              title: { display: true, text: 'Hours' }
+            },
+            y1: {
+              type: 'linear',
+              position: 'right',
+              beginAtZero: true,
+              title: { display: true, text: 'Value ($)' },
+              grid: { drawOnChartArea: false }
+            }
+          }
         }
       });
     },
@@ -2170,7 +2675,7 @@
   
     renderTask(task) {
       const item = DOM.create('div', 'task-item');
-      const objectiveColor = getObjectiveColor(task.objective);
+      const objectiveColor = getObjectiveColor(task.objectiveId);
       item.style.borderLeftColor = objectiveColor || task.color || '#3b82f6';
       
       const header = DOM.create('div', 'task-header');
@@ -2205,8 +2710,9 @@
       if (task.category) {
         badges.appendChild(DOM.create('span', 'task-badge', task.category));
       }
-      if (task.objective) {
-        const objectiveBadge = DOM.create('span', 'task-badge objective', `🎯 ${task.objective}`);
+      if (task.objectiveId) {
+        const objectiveName = getObjectiveName(task.objectiveId);
+        const objectiveBadge = DOM.create('span', 'task-badge objective', `🎯 ${objectiveName}`);
         objectiveBadge.style.borderColor = objectiveColor || '#3b82f6';
         objectiveBadge.style.color = objectiveColor || '#3b82f6';
         badges.appendChild(objectiveBadge);
@@ -2231,32 +2737,39 @@
         const repeatLabel = task.repeatType === 'daily' ? 'Repeats daily' : 'Repeats monthly';
         badges.appendChild(DOM.create('span', 'task-badge repeat', repeatLabel));
       }
-      if (task.impactType) {
-        const impactLabelMap = {
-          money: 'Revenue impact',
-          'long-term': 'Long-term value',
-          'non-monetary': 'Non-monetary'
-        };
-        badges.appendChild(DOM.create('span', `task-badge impact ${task.impactType}`,
-          impactLabelMap[task.impactType] || task.impactType));
+    if (task.impactType && task.impactType !== 'non-monetary') {
+      const impactLabel = task.impactType === 'money' ? '💰 Financial' : '📈 Long-term';
+      badges.appendChild(DOM.create('span', `task-badge impact ${task.impactType}`, impactLabel));
+    }
+    if (task.impactType && task.impactType !== 'non-monetary') {
+      const value = task.actualValue || task.estimatedValue || 0;
+      const isIncome = task.isIncome !== false; // Default to true for financial tasks
+      const valueText = value > 0 ?
+        `${isIncome ? '💰' : '💸'} ${FinancePage.formatCurrency(value)}` :
+        `${isIncome ? '💰' : '💸'} Financial`;
+      badges.appendChild(DOM.create('span', 'task-badge value', valueText));
+
+      // Show hourly rate if hours are estimated
+      if (task.estimatedHours && task.estimatedHours > 0 && value > 0) {
+        const hourlyRate = value / task.estimatedHours;
+        const rateBadge = DOM.create('span', 'task-badge rate');
+        rateBadge.textContent = `$${hourlyRate.toFixed(0)}/hr`;
+        rateBadge.style.backgroundColor = isIncome ? '#10b981' : '#f59e0b';
+        rateBadge.style.color = 'white';
+        badges.appendChild(rateBadge);
       }
-      if (task.estimatedValue || task.actualValue) {
-        const valueText = task.actualValue
-          ? `Actual: ${FinancePage.formatCurrency(task.actualValue)}`
-          : `Est: ${FinancePage.formatCurrency(task.estimatedValue)}`;
-        badges.appendChild(DOM.create('span', 'task-badge value', valueText));
-  
-        // Show ROI if both estimated and actual values exist
-        if (task.actualValue && task.estimatedValue && task.estimatedValue > 0) {
-          const roi = ((task.actualValue - task.estimatedValue) / task.estimatedValue * 100).toFixed(1);
-          const roiColor = roi >= 0 ? '#10b981' : '#ef4444';
-          const roiBadge = DOM.create('span', 'task-badge roi');
-          roiBadge.textContent = `${roi >= 0 ? '+' : ''}${roi}%`;
-          roiBadge.style.backgroundColor = roiColor;
-          roiBadge.style.color = 'white';
-          badges.appendChild(roiBadge);
-        }
+
+      // Show ROI if both estimated and actual values exist
+      if (task.actualValue && task.estimatedValue && task.estimatedValue > 0) {
+        const roi = ((task.actualValue - task.estimatedValue) / task.estimatedValue * 100).toFixed(1);
+        const roiColor = roi >= 0 ? '#10b981' : '#ef4444';
+        const roiBadge = DOM.create('span', 'task-badge roi');
+        roiBadge.textContent = `${roi >= 0 ? '+' : ''}${roi}%`;
+        roiBadge.style.backgroundColor = roiColor;
+        roiBadge.style.color = 'white';
+        badges.appendChild(roiBadge);
       }
+    }
       if (badges.childNodes.length > 0) {
         item.appendChild(badges);
       }
@@ -2279,12 +2792,10 @@
       }
       const dueInfo = getTaskDueInfo(task);
       meta.appendChild(DOM.create('div', `task-meta-item task-due ${dueInfo.status}`, dueInfo.label));
-      if (task.impactType) {
-        const timeValueScore = task.impactType === 'money' ? 'High ROI'
-          : task.impactType === 'long-term' ? 'Builds momentum'
-          : 'Personal value';
-        meta.appendChild(DOM.create('div', 'task-meta-item', `Impact: ${timeValueScore}`));
-      }
+    if (task.impactType && task.impactType !== 'non-monetary') {
+      const impactLabel = task.impactType === 'money' ? 'Financial Impact' : 'Long-term Value';
+      meta.appendChild(DOM.create('div', 'task-meta-item', `Impact: ${impactLabel}`));
+    }
       item.appendChild(meta);
   
       return item;
@@ -2400,7 +2911,7 @@
   
       const objectiveLoad = tasks.reduce((acc, task) => {
         if (task.status === 'completed') return acc;
-        const key = task.objective || 'No objective';
+        const key = task.objectiveId ? getObjectiveName(task.objectiveId) : 'No objective';
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
@@ -2909,7 +3420,10 @@
           return false;
         }
         // Objective filter
-        if (filters.objectives.length > 0 && !filters.objectives.includes(task.objective)) {
+        if (filters.objectives.length > 0 && task.objectiveId && !filters.objectives.includes(task.objectiveId.toString())) {
+          return false;
+        }
+        if (filters.objectives.length > 0 && !task.objectiveId) {
           return false;
         }
         return true;
@@ -3204,7 +3718,7 @@
     renderTaskCard(task) {
       const taskBar = DOM.create('div', 'timeline-task-bar');
       const statusColor = AppState.statuses.find(s => s.name === task.status)?.color || '#3b82f6';
-      const objectiveColor = getObjectiveColor(task.objective);
+      const objectiveColor = getObjectiveColor(task.objectiveId);
       const accentColor = objectiveColor || statusColor;
       taskBar.style.backgroundColor = accentColor;
       taskBar.style.borderLeftColor = accentColor;
@@ -3224,7 +3738,8 @@
         ? ` • ${(task.startTime || '')}${task.endTime ? `-${task.endTime}` : ''}`
         : '';
       const categoryInfo = task.category ? ` • ${task.category}` : '';
-      const objectiveInfo = task.objective ? ` • ${task.objective}` : '';
+      const objectiveName = task.objectiveId ? getObjectiveName(task.objectiveId) : '';
+      const objectiveInfo = objectiveName ? ` • ${objectiveName}` : '';
       const priorityInfo = task.priority ? ` • ${task.priority}` : '';
       const repeatInfo = task.repeatType && task.repeatType !== 'none' ? ` • ${task.repeatType}` : '';
       meta.textContent = `${task.status}${rangeInfo}${timeInfo}${categoryInfo}${objectiveInfo}${priorityInfo}${repeatInfo}`;
@@ -3249,7 +3764,11 @@
       const timeRangeText = task.startTime || task.endTime
         ? `\nTime: ${task.startTime || ''}${task.endTime ? ' - ' + task.endTime : ''}`
         : '';
-      taskBar.title = `${task.task}\nStatus: ${task.status}${tooltipRange ? '\nRange: ' + tooltipRange : ''}${timeRangeText}${repeatInfoText}${task.category ? '\nCategory: ' + task.category : ''}${task.objective ? '\nObjective: ' + task.objective : ''}${task.priority ? '\nPriority: ' + task.priority : ''}`;
+      const hourlyInfo = task.estimatedHours && task.estimatedHours > 0 && (task.estimatedValue || task.actualValue) ?
+        `\nHourly Rate: $${((task.actualValue || task.estimatedValue || 0) / task.estimatedHours).toFixed(2)}/hour` : '';
+
+      const objName = task.objectiveId ? getObjectiveName(task.objectiveId) : '';
+      taskBar.title = `${task.task}\nStatus: ${task.status}${tooltipRange ? '\nRange: ' + tooltipRange : ''}${timeRangeText}${repeatInfoText}${task.category ? '\nCategory: ' + task.category : ''}${objName ? '\nObjective: ' + objName : ''}${task.priority ? '\nPriority: ' + task.priority : ''}${hourlyInfo}`;
   
       const statusIndicator = DOM.create('div', `timeline-task-status ${task.status}`);
       taskBar.appendChild(statusIndicator);
@@ -4006,7 +4525,7 @@
       }
   
       const objectiveCounts = AppState.tasks.reduce((acc, task) => {
-        const key = task.objective || 'No objective';
+        const key = task.objectiveId ? getObjectiveName(task.objectiveId) : 'No objective';
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
@@ -4092,8 +4611,27 @@
       noteGroup.appendChild(DOM.create('label', 'form-label', 'Note'));
       const noteInput = DOM.create('input', 'form-input');
       noteInput.type = 'text';
-      noteInput.placeholder = 'Optional note';
+      noteInput.name = 'note';
+      noteInput.placeholder = 'Name/description of this transaction';
       noteGroup.appendChild(noteInput);
+
+      // Hours Needed field (only for income)
+      const hoursNeededGroup = DOM.create('div', 'form-group');
+      hoursNeededGroup.id = 'hours-needed-group-add';
+      hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
+      hoursNeededGroup.appendChild(DOM.create('label', 'form-label', 'Hours Needed to Earn This'));
+      const hoursNeededInput = DOM.create('input', 'form-input');
+      hoursNeededInput.type = 'number';
+      hoursNeededInput.name = 'hoursNeeded';
+      hoursNeededInput.step = '0.25';
+      hoursNeededInput.min = '0';
+      hoursNeededInput.placeholder = 'How many hours of work needed to earn this income';
+      hoursNeededGroup.appendChild(hoursNeededInput);
+
+      // Show/hide hours needed based on type
+      typeSelect.onchange = () => {
+        hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
+      };
   
       const submitBtn = DOM.create('button', 'btn btn-primary');
       submitBtn.type = 'submit';
@@ -4106,6 +4644,7 @@
       grid.appendChild(categoryGroup);
       grid.appendChild(noteGroup);
       form.appendChild(grid);
+      form.appendChild(hoursNeededGroup);
       form.appendChild(submitBtn);
   
       form.onsubmit = async (event) => {
@@ -4117,7 +4656,8 @@
           amount: parseFloat(amountInput.value || '0'),
           category: categorySelect.value,
           note: noteInput.value,
-          recurringMonthly: false
+          recurringMonthly: false,
+          hoursNeeded: typeSelect.value === 'income' ? parseFloat(hoursNeededInput.value || '0') : 0
         };
   
         const operationId = `create-finance-${Date.now()}`;
@@ -4131,6 +4671,10 @@
             amountInput.value = '';
             categorySelect.value = '';
             noteInput.value = '';
+            hoursNeededInput.value = '';
+            hoursNeededGroup.style.display = 'none';
+            hoursNeededInput.value = '';
+            hoursNeededGroup.style.display = 'none';
           },
           async () => {
             await API.saveFinanceRecords(AppState.financeRecords);
@@ -4521,8 +5065,29 @@
       noteInput.type = 'text';
       noteInput.name = 'note';
       noteInput.value = record?.note || '';
+      noteInput.placeholder = 'Name/description of this transaction';
       noteGroup.appendChild(noteInput);
       form.appendChild(noteGroup);
+
+      // Hours Needed field (only for income)
+      const hoursNeededGroup = DOM.create('div', 'form-group');
+      hoursNeededGroup.id = 'hours-needed-group';
+      hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
+      hoursNeededGroup.appendChild(DOM.create('label', 'form-label', 'Hours Needed to Earn This'));
+      const hoursNeededInput = DOM.create('input', 'form-input');
+      hoursNeededInput.type = 'number';
+      hoursNeededInput.name = 'hoursNeeded';
+      hoursNeededInput.value = record?.hoursNeeded || '';
+      hoursNeededInput.step = '0.25';
+      hoursNeededInput.min = '0';
+      hoursNeededInput.placeholder = 'How many hours of work needed to earn this income';
+      hoursNeededGroup.appendChild(hoursNeededInput);
+      form.appendChild(hoursNeededGroup);
+
+      // Show/hide hours needed based on type
+      typeSelect.onchange = () => {
+        hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
+      };
   
       form.onsubmit = async (event) => {
         event.preventDefault();
@@ -4561,7 +5126,8 @@
         amount: parseFloat(formData.get('amount') || '0'),
         category: formData.get('category'),
         note: formData.get('note'),
-        recurringMonthly: false
+        recurringMonthly: false,
+        hoursNeeded: formData.get('type') === 'income' ? parseFloat(formData.get('hoursNeeded') || '0') : 0
       };
   
       const operationId = record ? `update-finance-${targetId}` : `create-finance-${Date.now()}`;
@@ -4939,56 +5505,84 @@
       return container;
     },
   
-    renderObjective(objective) {
-      const card = DOM.create('div', 'objective-card');
-      card.style.borderLeftColor = objective.color || '#3b82f6';
-  
-      const header = DOM.create('div', 'objective-header');
-      const titleSection = DOM.create('div', '');
-      titleSection.appendChild(DOM.create('h3', 'objective-title', objective.name));
-      if (objective.description) {
-        titleSection.appendChild(DOM.create('p', 'objective-description', objective.description));
-      }
-      if (objective.category) {
-        const categoryBadge = DOM.create('span', 'task-category');
-        categoryBadge.textContent = `📁 ${objective.category}`;
-        categoryBadge.style.marginTop = '0.5rem';
-        categoryBadge.style.display = 'inline-block';
-        titleSection.appendChild(categoryBadge);
-      }
-      if (objective.dueDate) {
-        const dueBadge = DOM.create('span', 'task-objective');
-        dueBadge.textContent = `📅 Due ${objective.dueDate}`;
-        dueBadge.style.marginTop = '0.5rem';
-        dueBadge.style.display = 'inline-block';
-        titleSection.appendChild(dueBadge);
-      }
-      header.appendChild(titleSection);
-  
-      // Add health score and progress section
-      const healthSection = this.renderObjectiveHealth(objective);
-      header.appendChild(healthSection);
+  renderObjective(objective) {
+    const card = DOM.create('div', 'objective-card collapsible-card');
+    card.style.borderLeftColor = objective.color || '#3b82f6';
+
+    // Header with title and actions
+    const header = DOM.create('div', 'objective-header');
+    const titleSection = DOM.create('div', 'objective-title-section');
+    titleSection.appendChild(DOM.create('h3', 'objective-title', objective.name));
+
+    // Collapse/expand toggle
+    const toggleBtn = DOM.create('button', 'objective-toggle btn-icon');
+    toggleBtn.innerHTML = '▼';
+    toggleBtn.onclick = () => this.toggleObjectiveCard(card);
+    titleSection.appendChild(toggleBtn);
+
+    header.appendChild(titleSection);
+
+    // Actions in header
+    const actions = DOM.create('div', 'objective-actions');
+    const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => ObjectiveModal.show(objective);
+    actions.appendChild(editBtn);
+
+    const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = () => this.deleteObjective(objective);
+    actions.appendChild(deleteBtn);
+
+    header.appendChild(actions);
+    card.appendChild(header);
+
+    // Collapsible content
+    const content = DOM.create('div', 'objective-content');
+
+    // Basic info (always visible when expanded)
+    const basicInfo = DOM.create('div', 'objective-basic-info');
+    if (objective.description) {
+      basicInfo.appendChild(DOM.create('p', 'objective-description', objective.description));
+    }
+
+    const badges = DOM.create('div', 'objective-badges');
+    if (objective.category) {
+      const categoryBadge = DOM.create('span', 'task-category');
+      categoryBadge.textContent = `📁 ${objective.category}`;
+      badges.appendChild(categoryBadge);
+    }
+    if (objective.dueDate) {
+      const dueBadge = DOM.create('span', 'task-objective');
+      dueBadge.textContent = `📅 Due ${objective.dueDate}`;
+      badges.appendChild(dueBadge);
+    }
+    
+    // Show financial value if linked to finance record
+    if (objective.relatedFinanceId) {
+      const financeRecord = getFinanceRecordById(objective.relatedFinanceId);
       
-      const actions = DOM.create('div', 'objective-actions');
-      const editBtn = DOM.create('button', 'btn btn-secondary btn-sm');
-      editBtn.textContent = 'Edit';
-      editBtn.onclick = () => ObjectiveModal.show(objective);
-      actions.appendChild(editBtn);
-  
-      const deleteBtn = DOM.create('button', 'btn btn-danger btn-sm');
-      deleteBtn.textContent = 'Delete';
-      deleteBtn.onclick = () => this.deleteObjective(objective);
-      actions.appendChild(deleteBtn);
-  
-      header.appendChild(actions);
-      card.appendChild(header);
-  
-      // Add progress and analytics section
-      const analyticsSection = this.renderObjectiveAnalytics(objective);
-      card.appendChild(analyticsSection);
+      if (financeRecord) {
+        const financeBadge = DOM.create('span', 'task-badge value');
+        financeBadge.textContent = `💰 ${FinancePage.formatCurrency(financeRecord.amount)}`;
+        badges.appendChild(financeBadge);
+        
+        // Show hours needed if available
+        if (financeRecord.hoursNeeded && financeRecord.hoursNeeded > 0) {
+          const hoursBadge = DOM.create('span', 'task-badge');
+          hoursBadge.textContent = `⏱️ ${financeRecord.hoursNeeded}h needed`;
+          badges.appendChild(hoursBadge);
+        }
+      }
+    }
+    
+    basicInfo.appendChild(badges);
+    content.appendChild(basicInfo);
+
+    card.appendChild(content);
   
       // Show tasks with this objective
-      const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
+      const tasksWithObjective = AppState.tasks.filter(t => t.objectiveId === objective.id);
       if (tasksWithObjective.length > 0) {
         const tasksSection = DOM.create('div', 'objective-tasks');
         tasksSection.appendChild(DOM.create('p', 'objective-tasks-label', `Tasks: ${tasksWithObjective.length}`));
@@ -5011,10 +5605,25 @@
         card.appendChild(tasksSection);
       }
   
-      return card;
-    },
-  
-    renderObjectiveHealth(objective) {
+    return card;
+  },
+
+  toggleObjectiveCard(card) {
+    const content = card.querySelector('.objective-content');
+    const toggleBtn = card.querySelector('.objective-toggle');
+
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      toggleBtn.innerHTML = '▼';
+      card.classList.remove('collapsed');
+    } else {
+      content.style.display = 'none';
+      toggleBtn.innerHTML = '▶';
+      card.classList.add('collapsed');
+    }
+  },
+
+  renderObjectiveHealth(objective) {
       const healthSection = DOM.create('div', 'objective-health');
       healthSection.style.display = 'flex';
       healthSection.style.alignItems = 'center';
@@ -5043,30 +5652,51 @@
         healthIcon.title = 'At risk';
       }
   
-      const healthText = DOM.create('span', 'health-score');
-      healthText.textContent = `${healthScore}/100`;
+    const healthText = DOM.create('span', 'health-score');
+    healthText.textContent = `${healthScore}%`;
+
+    // Add descriptive label based on score
+    const healthLabel = DOM.create('span', 'health-label');
+    if (healthScore >= 90) {
+      healthLabel.textContent = 'Excellent';
+      healthLabel.style.color = '#10b981';
+    } else if (healthScore >= 75) {
+      healthLabel.textContent = 'Good';
+      healthLabel.style.color = '#3b82f6';
+    } else if (healthScore >= 60) {
+      healthLabel.textContent = 'Fair';
+      healthLabel.style.color = '#f59e0b';
+    } else if (healthScore >= 40) {
+      healthLabel.textContent = 'Poor';
+      healthLabel.style.color = '#f97316';
+    } else {
+      healthLabel.textContent = 'Critical';
+      healthLabel.style.color = '#ef4444';
+    }
       healthText.style.fontWeight = 'bold';
   
-      healthIndicator.appendChild(healthIcon);
-      healthIndicator.appendChild(healthText);
+    healthIndicator.appendChild(healthIcon);
+    healthIndicator.appendChild(healthText);
+    healthIndicator.appendChild(healthLabel);
   
-      // Progress indicator
-      const progressIndicator = DOM.create('div', 'progress-indicator');
-      const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
-      const completedTasks = tasksWithObjective.filter(t => t.status === 'completed').length;
-      const progressPercent = tasksWithObjective.length > 0 ? Math.round((completedTasks / tasksWithObjective.length) * 100) : 0;
-  
-      progressIndicator.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <div style="width: 60px; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden;">
-            <div style="width: ${progressPercent}%; height: 100%; background: ${objective.color || '#3b82f6'}; transition: width 0.3s ease;"></div>
-          </div>
-          <span style="font-size: 0.875rem; color: #6b7280;">${progressPercent}%</span>
+    // Progress indicator
+    const progressIndicator = DOM.create('div', 'progress-indicator');
+    const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
+    const completedTasks = tasksWithObjective.filter(t => t.status === 'completed').length;
+    const progressPercent = tasksWithObjective.length > 0 ? Math.round((completedTasks / tasksWithObjective.length) * 100) : 0;
+
+    progressIndicator.innerHTML = `
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+        <div style="width: 80px; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden;">
+          <div style="width: ${progressPercent}%; height: 100%; background: ${objective.color || '#3b82f6'}; transition: width 0.3s ease;"></div>
         </div>
-      `;
-  
-      healthSection.appendChild(healthIndicator);
-      healthSection.appendChild(progressIndicator);
+        <span style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Progress</span>
+        <span style="font-size: 0.875rem; font-weight: 500; color: #1f2937;">${progressPercent}%</span>
+      </div>
+    `;
+
+    healthSection.appendChild(healthIndicator);
+    healthSection.appendChild(progressIndicator);
   
       return healthSection;
     },
@@ -5079,31 +5709,42 @@
       analyticsSection.style.borderRadius = '8px';
   
       // Get objective analytics
-      const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
+      const tasksWithObjective = AppState.tasks.filter(t => t.objectiveId === objective.id);
       const completedTasks = tasksWithObjective.filter(t => t.status === 'completed');
       const overdueTasks = tasksWithObjective.filter(t => t.status === 'overdue');
   
-      const totalValue = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedValue) || 0), 0);
-  
-      // Finance records related to this objective's tasks
-      const relatedFinance = AppState.financeRecords.filter(record =>
-        record.type === 'expense' && tasksWithObjective.some(task => task.id == record.relatedTaskId)
-      );
-      const totalSpending = relatedFinance.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-  
-      const analyticsGrid = DOM.create('div', '');
-      analyticsGrid.style.display = 'grid';
-      analyticsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(150px, 1fr))';
-      analyticsGrid.style.gap = '1rem';
-  
-      const metrics = [
-        { label: 'Total Tasks', value: tasksWithObjective.length.toString() },
-        { label: 'Completed', value: completedTasks.length.toString() },
-        { label: 'Overdue', value: overdueTasks.length.toString() },
-        { label: 'Value Delivered', value: FinancePage.formatCurrency(totalValue) },
-        { label: 'Related Spending', value: FinancePage.formatCurrency(totalSpending) },
-        { label: 'ROI', value: totalSpending > 0 ? `${Math.round((totalValue / totalSpending) * 100) / 100}x` : (totalValue > 0 ? '∞' : '—') }
-      ];
+    const totalValue = completedTasks.reduce((sum, task) => {
+      const value = Number(task.actualValue) || Number(task.estimatedValue) || 0;
+      return sum + (task.isIncome !== false ? value : -Math.abs(value));
+    }, 0);
+
+    // Calculate total hours and completed hours for this objective
+    const totalHours = tasksWithObjective.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+    const completedHours = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
+    const hoursProgress = totalHours > 0 ? Math.round((completedHours / totalHours) * 100) : 0;
+    const hourlyRate = totalHours > 0 && totalValue > 0 ? totalValue / totalHours : 0;
+
+    // Finance records related to this objective's tasks
+    const relatedFinance = AppState.financeRecords.filter(record =>
+      record.type === 'expense' && tasksWithObjective.some(task => task.id == record.relatedTaskId)
+    );
+    const totalSpending = relatedFinance.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+
+    const analyticsGrid = DOM.create('div', '');
+    analyticsGrid.style.display = 'grid';
+    analyticsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(150px, 1fr))';
+    analyticsGrid.style.gap = '1rem';
+
+    const metrics = [
+      { label: 'Total Tasks', value: tasksWithObjective.length.toString() },
+      { label: 'Completed', value: completedTasks.length.toString() },
+      { label: 'Overdue', value: overdueTasks.length.toString() },
+      { label: 'Value Delivered', value: FinancePage.formatCurrency(totalValue) },
+      { label: 'Hours Progress', value: totalHours > 0 ? `${completedHours.toFixed(1)}h / ${totalHours.toFixed(1)}h (${hoursProgress}%)` : '—' },
+      { label: 'Hourly Rate', value: hourlyRate > 0 ? `${FinancePage.formatCurrency(hourlyRate)}/hr` : '—' },
+      { label: 'Related Spending', value: FinancePage.formatCurrency(totalSpending) },
+      { label: 'ROI', value: totalSpending > 0 ? `${Math.round((totalValue / totalSpending) * 100) / 100}x` : (totalValue > 0 ? '∞' : '—') }
+    ];
   
       metrics.forEach(metric => {
         const metricCard = DOM.create('div', 'metric-card');
@@ -5196,9 +5837,9 @@
       const descInput = DOM.create('textarea', 'form-input');
       descInput.name = 'description';
       descInput.value = objective?.description || '';
-      descInput.rows = 3;
-      descInput.style.minHeight = '80px';
-      descInput.placeholder = 'Optional description for this objective';
+      descInput.rows = 2;
+      descInput.style.minHeight = '60px';
+      descInput.placeholder = 'Brief description...';
       descGroup.appendChild(descInput);
       form.appendChild(descGroup);
   
@@ -5233,7 +5874,7 @@
   
       // Due date
       const dueGroup = DOM.create('div', 'form-group');
-      dueGroup.appendChild(DOM.create('label', 'form-label', 'Objective Due Date'));
+      dueGroup.appendChild(DOM.create('label', 'form-label', 'Due Date (Optional)'));
       const dueInput = DOM.create('input', 'form-input');
       dueInput.type = 'date';
       dueInput.name = 'dueDate';
@@ -5241,33 +5882,47 @@
       dueGroup.appendChild(dueInput);
       form.appendChild(dueGroup);
   
-      // Budget
-      const budgetGroup = DOM.create('div', 'form-group');
-      budgetGroup.appendChild(DOM.create('label', 'form-label', 'Budget ($)'));
-      const budgetInput = DOM.create('input', 'form-input');
-      budgetInput.type = 'number';
-      budgetInput.name = 'budget';
-      budgetInput.value = objective?.budget || '';
-      budgetInput.step = '0.01';
-      budgetInput.min = '0';
-      budgetInput.placeholder = 'Optional budget for this objective';
-      budgetGroup.appendChild(budgetInput);
-      form.appendChild(budgetGroup);
-  
-      // Target Value
-      const targetValueGroup = DOM.create('div', 'form-group');
-      targetValueGroup.appendChild(DOM.create('label', 'form-label', 'Target Value ($)'));
-      const targetValueInput = DOM.create('input', 'form-input');
-      targetValueInput.type = 'number';
-      targetValueInput.name = 'targetValue';
-      targetValueInput.value = objective?.targetValue || '';
-      targetValueInput.step = '0.01';
-      targetValueInput.min = '0';
-      targetValueInput.placeholder = 'Expected value to deliver from tasks';
-      targetValueGroup.appendChild(targetValueInput);
-      form.appendChild(targetValueGroup);
-  
-      // Color
+      // Financial Value (Optional - links to income record)
+      const financialGroup = DOM.create('div', 'form-group');
+      financialGroup.appendChild(DOM.create('label', 'form-label', 'Link to Income Record (Optional)'));
+      
+      // Get current month's income records
+      const now = new Date();
+      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthRecords = FinancePage.getMonthlyRecordsFor(currentMonth);
+      const incomeRecords = monthRecords.filter(record => 
+        record.type === 'income' && Number(record.amount) > 0 && record.note && record.note.trim() !== ''
+      );
+      
+      const financialSelect = DOM.create('select', 'form-select');
+      financialSelect.name = 'relatedFinanceId';
+      
+      const noneFinancialOption = DOM.create('option', '');
+      noneFinancialOption.value = '';
+      noneFinancialOption.textContent = 'None (no financial tracking)';
+      if (!objective?.relatedFinanceId) {
+        noneFinancialOption.selected = true;
+      }
+      financialSelect.appendChild(noneFinancialOption);
+      
+      incomeRecords.forEach(record => {
+        const option = DOM.create('option', '');
+        option.value = record.id.toString(); // Store ID
+        option.textContent = record.note; // Display name
+        if (objective?.relatedFinanceId === record.id) {
+          option.selected = true;
+        }
+        financialSelect.appendChild(option);
+      });
+      
+      financialGroup.appendChild(financialSelect);
+      const financialHint = DOM.create('div', 'form-hint');
+      financialHint.style.fontSize = '0.75rem';
+      financialHint.style.color = '#6b7280';
+      financialHint.style.marginTop = '0.25rem';
+      financialHint.textContent = 'Budget and target value will be automatically set from the selected income record';
+      financialGroup.appendChild(financialHint);
+      form.appendChild(financialGroup);
   
       form.onsubmit = (e) => {
         e.preventDefault();
@@ -5299,12 +5954,38 @@
     },
   
     async save(objective, formData, callback) {
+      // Get related finance record name from dropdown
+      const relatedFinanceName = formData.get('relatedFinanceName') || '';
+      
+      // Get budget/targetValue from current month's matching finance record
+      let budget = 0;
+      let targetValue = 0;
+      
+      if (relatedFinanceName) {
+        const now = new Date();
+        const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthRecords = FinancePage.getMonthlyRecordsFor(currentMonth);
+        
+        // Find matching finance record in current month
+        const financeRecord = monthRecords.find(r => 
+          r.type === 'income' && r.note && r.note.trim() === relatedFinanceName.trim()
+        );
+        
+        if (financeRecord) {
+          budget = Number(financeRecord.amount) || 0;
+          targetValue = Number(financeRecord.amount) || 0;
+        }
+      }
+      
       const objectiveData = {
         name: formData.get('name'),
         description: formData.get('description'),
         color: objective?.color || ColorPalette.getNext(AppState.objectives.map(item => item.color)),
-        category: formData.get('category') || '',
-        dueDate: formData.get('dueDate') || ''
+        category: '', // Category removed - can be added back if needed
+        dueDate: formData.get('dueDate') || '',
+        budget: budget,
+        targetValue: targetValue,
+        relatedFinanceId: relatedFinanceId // Store ID
       };
       const previousName = objective?.name || '';
   
@@ -5317,9 +5998,7 @@
             objectiveData.id = objective.id;
             const index = AppState.objectives.findIndex(o => o.id === objective.id);
             if (index >= 0) AppState.objectives[index] = objectiveData;
-            if (previousName && previousName !== objectiveData.name) {
-              updateTaskReferences('objective', previousName, objectiveData.name);
-            }
+            // No need to update task references when using IDs
           } else {
             objectiveData.id = Date.now(); // Temporary ID
             AppState.objectives.push(objectiveData);
@@ -5329,7 +6008,8 @@
         async () => {
           if (objective) {
             await API.updateObjective(objectiveData);
-            if (previousName && previousName !== objectiveData.name) {
+            // No need to update task references when using IDs
+            if (false && previousName && previousName !== objectiveData.name) {
               await API.saveTasks(AppState.tasks);
             }
           } else {
@@ -6582,7 +7262,7 @@
         startTime: formData.get('startTime') || '',
         endDate: formData.get('endDate') || '',
         endTime: formData.get('endTime') || '',
-        category: formData.get('category') || '',
+        category: '', // Category removed - simplified
         color: event?.color || ColorPalette.getNext(AppState.events.map(item => item.color))
       };
       const operationId = event ? `update-event-${event.id}` : `create-event-${Date.now()}`;
@@ -7387,36 +8067,9 @@
       endDateGroup.appendChild(endDateInput);
       form.appendChild(endDateGroup);
   
-      const repeatGroup = DOM.create('div', 'form-group');
-      repeatGroup.appendChild(DOM.create('label', 'form-label', 'Repeat'));
-      const repeatSelect = DOM.create('select', 'form-select');
-      repeatSelect.name = 'repeatType';
-      const repeatOptions = [
-        { value: 'none', label: 'No repeat' },
-        { value: 'daily', label: 'Daily' },
-        { value: 'monthly', label: 'Monthly' }
-      ];
-      repeatOptions.forEach(optionData => {
-        const option = DOM.create('option', '');
-        option.value = optionData.value;
-        option.textContent = optionData.label;
-        if ((task?.repeatType || 'none') === optionData.value) option.selected = true;
-        repeatSelect.appendChild(option);
-      });
-      repeatGroup.appendChild(repeatSelect);
-      form.appendChild(repeatGroup);
-  
-      const repeatUntilGroup = DOM.create('div', 'form-group');
-      repeatUntilGroup.appendChild(DOM.create('label', 'form-label', 'Repeat Until'));
-      const repeatUntilInput = DOM.create('input', 'form-input');
-      repeatUntilInput.type = 'date';
-      repeatUntilInput.name = 'repeatUntil';
-      repeatUntilInput.value = task?.repeatUntil || '';
-      repeatUntilGroup.appendChild(repeatUntilInput);
-      form.appendChild(repeatUntilGroup);
-  
+      // Time Range (Optional)
       const timeGroup = DOM.create('div', 'form-group');
-      timeGroup.appendChild(DOM.create('label', 'form-label', 'Time Range'));
+      timeGroup.appendChild(DOM.create('label', 'form-label', 'Time Range (Optional)'));
       const timeRow = DOM.create('div', 'time-range-row');
   
       const startTimeWrap = DOM.create('div', '');
@@ -7465,28 +8118,7 @@
       });
       form.appendChild(statusGroup);
   
-      // Priority
-      const priorityGroup = DOM.create('div', 'form-group');
-      priorityGroup.appendChild(DOM.create('label', 'form-label', 'Priority'));
-      const prioritySelect = DOM.create('select', 'form-select');
-      prioritySelect.name = 'priority';
-      const priorities = [
-        { value: 'high', label: 'High' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'low', label: 'Low' }
-      ];
-      priorities.forEach(priority => {
-        const option = DOM.create('option', '');
-        option.value = priority.value;
-        option.textContent = priority.label;
-        if ((task?.priority || 'medium') === priority.value) option.selected = true;
-        prioritySelect.appendChild(option);
-      });
-      priorityGroup.appendChild(prioritySelect);
-      form.appendChild(priorityGroup);
-  
-      // Impact Type
-      // Objective (Category is automatically derived from objective)
+      // Objective (Category and Priority are automatically derived from objective)
       const objectiveGroup = DOM.create('div', 'form-group');
       objectiveGroup.appendChild(DOM.create('label', 'form-label', 'Objective'));
       const objectiveSelect = DOM.create('select', 'form-select');
@@ -7501,10 +8133,10 @@
       
       AppState.objectives.forEach(obj => {
         const option = DOM.create('option', '');
-        option.value = obj.name;
+        option.value = obj.id.toString(); // Store ID
         const categoryLabel = obj.category ? ` (${obj.category})` : '';
-        option.textContent = obj.name + categoryLabel;
-        if (task?.objective === obj.name) option.selected = true;
+        option.textContent = obj.name + categoryLabel; // Display name
+        if (task?.objectiveId === obj.id) option.selected = true;
         objectiveSelect.appendChild(option);
       });
       
@@ -7516,100 +8148,60 @@
         });
       });
       
-      // Show category info based on selected objective
-      const categoryInfo = DOM.create('div', 'form-hint');
-      categoryInfo.style.fontSize = '0.75rem';
-      categoryInfo.style.color = '#6b7280';
-      categoryInfo.style.marginTop = '0.25rem';
-      categoryInfo.textContent = 'Category will be automatically set from the selected objective';
-      objectiveGroup.appendChild(categoryInfo);
-      
-      // Update category info when objective changes
-      objectiveSelect.onchange = () => {
-        const selectedObjectiveName = objectiveSelect.value;
-        if (selectedObjectiveName) {
-          const selectedObjective = AppState.objectives.find(obj => obj.name === selectedObjectiveName);
+      // Show auto-filled info hint
+      const autoFillHint = DOM.create('div', 'form-hint');
+      autoFillHint.style.fontSize = '0.75rem';
+      autoFillHint.style.color = '#6b7280';
+      autoFillHint.style.marginTop = '0.25rem';
+      autoFillHint.textContent = 'Category and financial data will be automatically set from the selected objective';
+      objectiveGroup.appendChild(autoFillHint);
+
+      // Update hint when objective changes
+      const updateObjectiveInfo = () => {
+        const selectedObjectiveId = objectiveSelect.value ? Number(objectiveSelect.value) : null;
+        if (selectedObjectiveId) {
+          const selectedObjective = getObjectiveById(selectedObjectiveId);
+          const hints = [];
           if (selectedObjective?.category) {
-            categoryInfo.textContent = `Category: ${selectedObjective.category}`;
-            categoryInfo.style.color = '#10b981';
+            hints.push(`Category: ${selectedObjective.category}`);
+          }
+          if (selectedObjective && (selectedObjective.budget > 0 || selectedObjective.targetValue > 0)) {
+            hints.push(`Financial: ${FinancePage.formatCurrency(selectedObjective.targetValue || selectedObjective.budget)}`);
+          }
+          if (hints.length > 0) {
+            autoFillHint.textContent = hints.join(' • ');
+            autoFillHint.style.color = '#10b981';
           } else {
-            categoryInfo.textContent = 'No category assigned to this objective';
-            categoryInfo.style.color = '#f59e0b';
+            autoFillHint.textContent = 'Category and financial data will be automatically set from the selected objective';
+            autoFillHint.style.color = '#6b7280';
           }
         } else {
-          categoryInfo.textContent = 'Category will be automatically set from the selected objective';
-          categoryInfo.style.color = '#6b7280';
+          autoFillHint.textContent = 'Category and financial data will be automatically set from the selected objective';
+          autoFillHint.style.color = '#6b7280';
         }
       };
+
+      objectiveSelect.onchange = updateObjectiveInfo;
       
-      // Set initial category info if editing existing task
-      if (task?.objective) {
-        objectiveSelect.onchange();
+      // Set initial info if editing existing task
+      if (task?.objectiveId) {
+        updateObjectiveInfo();
       }
       
       form.appendChild(objectiveGroup);
-  
-      // Impact type
-      const impactGroup = DOM.create('div', 'form-group');
-      impactGroup.appendChild(DOM.create('label', 'form-label', 'Impact Type'));
-      const impactSelect = DOM.create('select', 'form-select');
-      impactSelect.name = 'impactType';
-      const impactOptions = [
-        { value: 'non-monetary', label: 'Personal/Non-monetary' },
-        { value: 'long-term', label: 'Long-term value' },
-        { value: 'money', label: 'Financial/Revenue' }
-      ];
-      impactOptions.forEach(option => {
-        const opt = DOM.create('option', '');
-        opt.value = option.value;
-        opt.textContent = option.label;
-        if (task?.impactType === option.value) opt.selected = true;
-        impactSelect.appendChild(opt);
-      });
-      impactGroup.appendChild(impactSelect);
-      form.appendChild(impactGroup);
-  
-      // Estimated value
-      const valueGroup = DOM.create('div', 'form-group');
-      valueGroup.appendChild(DOM.create('label', 'form-label', 'Estimated Value ($)'));
-      const valueInput = DOM.create('input', 'form-input');
-      valueInput.type = 'number';
-      valueInput.name = 'estimatedValue';
-      valueInput.value = task?.estimatedValue || '';
-      valueInput.step = '0.01';
-      valueInput.min = '0';
-      valueInput.placeholder = 'Optional estimated financial value';
-      valueGroup.appendChild(valueInput);
-      form.appendChild(valueGroup);
-  
-      // Related events
-      const eventsGroup = DOM.create('div', 'form-group');
-      eventsGroup.appendChild(DOM.create('label', 'form-label', 'Related Events'));
-      const eventsSelect = DOM.create('select', 'form-select');
-      eventsSelect.name = 'relatedEventIds';
-      eventsSelect.multiple = true;
-      eventsSelect.style.height = '80px';
-  
-      const noEventsOption = DOM.create('option', '');
-      noEventsOption.value = '';
-      noEventsOption.textContent = 'No related events';
-      noEventsOption.disabled = true;
-      noEventsOption.selected = true;
-      eventsSelect.appendChild(noEventsOption);
-  
-      AppState.events.forEach(event => {
-        const option = DOM.create('option', '');
-        option.value = event.id;
-        const dateStr = event.startDate ? ` (${event.startDate})` : '';
-        option.textContent = `${event.title}${dateStr}`;
-        if (task?.relatedEventIds && task.relatedEventIds.split(',').includes(event.id.toString())) {
-          option.selected = true;
-        }
-        eventsSelect.appendChild(option);
-      });
-  
-      eventsGroup.appendChild(eventsSelect);
-      form.appendChild(eventsGroup);
+
+    // Hours estimate (for tracking time investment)
+    const hoursGroup = DOM.create('div', 'form-group');
+    hoursGroup.appendChild(DOM.create('label', 'form-label', 'Estimated Hours'));
+    const hoursInput = DOM.create('input', 'form-input');
+    hoursInput.type = 'number';
+    hoursInput.name = 'estimatedHours';
+    hoursInput.value = task?.estimatedHours || '';
+    hoursInput.step = '0.25';
+    hoursInput.min = '0';
+    hoursInput.placeholder = 'Time investment for this task';
+    hoursGroup.appendChild(hoursInput);
+    form.appendChild(hoursGroup);
   
       // Actual value (only show for completed tasks)
       if (task?.status === 'completed') {
@@ -7671,16 +8263,24 @@
       const startDate = rawStartDate || rawEndDate;
       const endDate = rawEndDate || startDate;
       
-      // Get category from selected objective
-      const objectiveName = formData.get('objective') || '';
+      // Get objective ID and derive category
+      const objectiveId = formData.get('objective') ? Number(formData.get('objective')) : null;
       let category = '';
-      if (objectiveName) {
-        const selectedObjective = AppState.objectives.find(obj => obj.name === objectiveName);
-        category = selectedObjective?.category || '';
-      }
+      let impactType = 'non-monetary';
+      let isIncome = false;
+      let estimatedValue = 0;
       
-      // Get related event IDs from multi-select
-      const relatedEventIds = Array.from(formData.getAll('relatedEventIds')).filter(id => id).join(',');
+      if (objectiveId) {
+        const selectedObjective = getObjectiveById(objectiveId);
+        if (selectedObjective) {
+          category = selectedObjective.category || '';
+          if (selectedObjective.budget > 0 || selectedObjective.targetValue > 0) {
+            impactType = 'money';
+            isIncome = selectedObjective.targetValue > 0;
+            estimatedValue = selectedObjective.targetValue || 0;
+          }
+        }
+      }
   
       const taskData = {
         id: task?.id || Date.now(),
@@ -7690,17 +8290,18 @@
         endDate,
         startTime: formData.get('startTime') || '',
         endTime: formData.get('endTime') || '',
-        color: getObjectiveColor(objectiveName),
+        color: getObjectiveColor(objectiveId),
         status: formData.get('status') || 'pending',
-        objective: objectiveName,
-        priority: formData.get('priority') || 'medium',
-        repeatType: formData.get('repeatType') || 'none',
-        repeatUntil: formData.get('repeatUntil') || '',
-        impactType: formData.get('impactType') || 'non-monetary',
-        estimatedValue: Number(formData.get('estimatedValue')) || 0,
+        objectiveId: objectiveId, // Store ID instead of name
+        priority: 'medium', // Default priority, can be derived from objective in future
+        repeatType: 'none', // Simplified - no repeat functionality
+        repeatUntil: '',
+        impactType: impactType, // Derived from objective
+        isIncome: isIncome, // Derived from objective
+        estimatedHours: Number(formData.get('estimatedHours')) || 0,
+        estimatedValue: estimatedValue, // Derived from objective
         actualValue: Number(formData.get('actualValue')) || 0,
-        valueRealizedDate: formData.get('valueRealizedDate') || '',
-        relatedEventIds: relatedEventIds
+        valueRealizedDate: formData.get('valueRealizedDate') || ''
       };
   
       const operationId = task ? `update-task-${task.id}` : `create-task-${Date.now()}`;
@@ -7853,8 +8454,9 @@ const InsightsPanel = {
     }
   };
   
-  // Category Performance Page
-  const CategoryPerformancePage = {
+
+// Category Performance Page
+const CategoryPerformancePage = {
     render() {
       const container = DOM.create('div', '');
   
@@ -8706,22 +9308,99 @@ const InsightsPanel = {
   
       const subjectGroup = DOM.create('div', 'form-group');
       subjectGroup.appendChild(DOM.create('label', 'form-label', 'Subject/Topic'));
-      const subjectInput = DOM.create('input', 'form-input');
-      subjectInput.type = 'text';
-      subjectInput.name = 'subject';
-      subjectInput.value = note?.subject || '';
-      subjectInput.placeholder = 'e.g., Work, Personal, Ideas';
-      subjectInput.list = 'subjects-list';
-      subjectGroup.appendChild(subjectInput);
       
-      const datalist = DOM.create('datalist', '');
-      datalist.id = 'subjects-list';
-      (AppState.notesSubjects || []).forEach(subject => {
+      // Get existing subjects from both AppState.notesSubjects and existing notes
+      const subjectsFromList = NotesPage.getSubjects();
+      const subjectsFromNotes = [...new Set((AppState.notes || [])
+        .map(n => n.subject)
+        .filter(s => s && s.trim() !== ''))];
+      
+      // Combine and deduplicate
+      const allSubjects = [...new Set([...subjectsFromList, ...subjectsFromNotes])].sort();
+      
+      // Create select dropdown
+      const subjectSelect = DOM.create('select', 'form-select');
+      subjectSelect.name = 'subject';
+      
+      // Add empty option
+      const emptyOption = DOM.create('option', '');
+      emptyOption.value = '';
+      emptyOption.textContent = 'Select or add a subject...';
+      if (!note?.subject) {
+        emptyOption.selected = true;
+      }
+      subjectSelect.appendChild(emptyOption);
+      
+      // Add existing subjects
+      allSubjects.forEach(subject => {
         const option = DOM.create('option', '');
         option.value = subject;
-        datalist.appendChild(option);
+        option.textContent = subject;
+        if (note?.subject === subject) {
+          option.selected = true;
+        }
+        subjectSelect.appendChild(option);
       });
-      subjectGroup.appendChild(datalist);
+      
+      // Add option to create new subject
+      const addNewOption = DOM.create('option', '');
+      addNewOption.value = '__add_new__';
+      addNewOption.textContent = '+ Add New Subject';
+      subjectSelect.appendChild(addNewOption);
+      
+      // Handle subject selection
+      let newSubjectInput = null;
+      subjectSelect.onchange = () => {
+        if (subjectSelect.value === '__add_new__') {
+          // Remove the add new option temporarily
+          subjectSelect.value = '';
+          
+          // Create input field for new subject
+          if (!newSubjectInput) {
+            newSubjectInput = DOM.create('input', 'form-input');
+            newSubjectInput.type = 'text';
+            newSubjectInput.name = 'newSubject';
+            newSubjectInput.placeholder = 'Enter new subject name';
+            newSubjectInput.style.marginTop = '0.5rem';
+            subjectGroup.appendChild(newSubjectInput);
+            
+            // Add option to go back to dropdown
+            const backOption = DOM.create('button', 'btn btn-sm btn-secondary');
+            backOption.type = 'button';
+            backOption.textContent = 'Cancel';
+            backOption.style.marginTop = '0.5rem';
+            backOption.onclick = () => {
+              if (newSubjectInput) {
+                newSubjectInput.remove();
+                newSubjectInput = null;
+              }
+              if (backOption) backOption.remove();
+              subjectSelect.value = '';
+            };
+            subjectGroup.appendChild(backOption);
+          }
+        } else {
+          // Remove new subject input if it exists
+          if (newSubjectInput) {
+            newSubjectInput.remove();
+            newSubjectInput = null;
+            // Remove cancel button
+            const cancelBtn = subjectGroup.querySelector('button');
+            if (cancelBtn) cancelBtn.remove();
+          }
+        }
+      };
+      
+      // If editing and subject doesn't exist in list, add it
+      if (note?.subject && !allSubjects.includes(note.subject)) {
+        const customOption = DOM.create('option', '');
+        customOption.value = note.subject;
+        customOption.textContent = note.subject;
+        customOption.selected = true;
+        subjectSelect.insertBefore(customOption, addNewOption);
+      }
+      
+      subjectGroup.appendChild(subjectSelect);
       form.appendChild(subjectGroup);
   
       const dateGroup = DOM.create('div', 'form-group');
@@ -8783,10 +9462,19 @@ const InsightsPanel = {
     },
   
     async save(note, formData) {
+      // Get subject from either dropdown or new subject input
+      let subject = formData.get('subject')?.trim() || '';
+      const newSubject = formData.get('newSubject')?.trim() || '';
+      
+      // If new subject was entered, use that instead
+      if (newSubject) {
+        subject = newSubject;
+      }
+      
       const noteData = {
         id: note?.id || Date.now(),
         title: formData.get('title').trim(),
-        subject: formData.get('subject').trim() || '',
+        subject: subject,
         date: formData.get('date') || '',
         docLink: (formData.get('docLink') || '').trim(),
         description: (formData.get('description') || '').trim()
