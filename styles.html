@@ -2879,6 +2879,34 @@
       grid-template-columns: 1fr;
       gap: 0.75rem;
     }
+    
+    /* Mobile Ordering - Forms first, Charts last */
+    /* Apply flexbox ordering to main content containers */
+    .app-main,
+    .dashboard-main,
+    .reference-content {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Forms and action items come first on mobile */
+    .mobile-order-form {
+      order: 1 !important;
+    }
+    
+    /* Charts and visualizations come last on mobile */
+    .mobile-order-chart {
+      order: 999 !important;
+    }
+    
+    /* Regular content stays in natural order (between forms and charts) */
+    .finance-controls,
+    .finance-filters,
+    .reference-tabs,
+    .page-header,
+    .dashboard-switcher-container {
+      order: 0 !important;
+    }
   
     .finance-summary-card {
       padding: 1rem;
