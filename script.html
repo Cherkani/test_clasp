@@ -1,7 +1,7 @@
 <script>
 // App State
 const AppState = {
-  currentPage: 'dashboard',
+  currentPage: window.innerWidth <= 768 ? 'finance' : 'dashboard',
   tasks: [],
   objectives: [],
   categories: [],
@@ -857,6 +857,72 @@ const AppState = {
       return icons[name] || '';
     }
   };
+
+  const ModalUtils = {
+    prompt({ title, label, placeholder = '', value = '', confirmText = 'Save', cancelText = 'Cancel' }) {
+      return new Promise((resolve) => {
+        const overlay = DOM.create('div', 'modal-overlay active');
+        overlay.onclick = (event) => {
+          if (event.target === overlay) {
+            overlay.remove();
+            resolve(null);
+          }
+        };
+
+        const modal = DOM.create('div', 'modal');
+        const header = DOM.create('div', 'modal-header');
+        header.appendChild(DOM.create('h2', 'modal-title', title));
+        const closeBtn = DOM.create('button', 'modal-close');
+        closeBtn.innerHTML = DOM.getIconSVG('close');
+        closeBtn.onclick = () => {
+          overlay.remove();
+          resolve(null);
+        };
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
+
+        const form = DOM.create('form', '');
+        const inputGroup = DOM.create('div', 'form-group');
+        inputGroup.appendChild(DOM.create('label', 'form-label', label));
+        const input = DOM.create('input', 'form-input');
+        input.type = 'text';
+        input.placeholder = placeholder;
+        input.value = value;
+        inputGroup.appendChild(input);
+        form.appendChild(inputGroup);
+
+        form.onsubmit = (event) => {
+          event.preventDefault();
+          const result = input.value.trim();
+          overlay.remove();
+          resolve(result || null);
+        };
+
+        modal.appendChild(form);
+
+        const footer = DOM.create('div', 'modal-footer');
+        const saveBtn = DOM.create('button', 'btn btn-primary');
+        saveBtn.type = 'submit';
+        saveBtn.textContent = confirmText;
+        saveBtn.onclick = () => form.requestSubmit();
+        footer.appendChild(saveBtn);
+
+        const cancelBtn = DOM.create('button', 'btn btn-secondary');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = cancelText;
+        cancelBtn.onclick = () => {
+          overlay.remove();
+          resolve(null);
+        };
+        footer.appendChild(cancelBtn);
+        modal.appendChild(footer);
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        input.focus();
+      });
+    }
+  };
   
   const SelectUtils = {
     addCreateOption(select, label, onCreate) {
@@ -1359,9 +1425,6 @@ const AppState = {
       mainColumn.appendChild(this.renderFinanceCharts());
       mainColumn.appendChild(this.renderWorkCharts());
 
-      // Add objective health overview
-      mainColumn.appendChild(this.renderObjectiveHealthOverview());
-
       // Add category performance overview
       mainColumn.appendChild(this.renderCategoryPerformanceOverview());
   
@@ -1842,71 +1905,6 @@ const AppState = {
       return card;
     },
   
-  renderObjectiveHealthOverview() {
-    const card = DOM.create('div', 'card');
-    card.appendChild(DOM.create('h2', '', '🎯 Objectives Overview'));
-
-    const objectives = AppState.objectives || [];
-    if (objectives.length === 0) {
-      card.appendChild(DOM.create('p', 'empty-state', 'No objectives yet. Create your first objective to get started.'));
-      return card;
-    }
-  
-    const grid = DOM.create('div', 'objectives-health-grid');
-  
-    objectives.forEach(objective => {
-      const objectiveCard = DOM.create('div', 'objective-health-card');
-  
-      const header = DOM.create('div', 'objective-health-header');
-      header.appendChild(DOM.create('h4', 'objective-health-name', objective.name));
-  
-      // Progress bar
-      const tasksWithObjective = AppState.tasks.filter(t => t.objectiveId === objective.id);
-      const completedTasks = tasksWithObjective.filter(t => t.status === 'completed').length;
-      const progressPercent = tasksWithObjective.length > 0 ? Math.round((completedTasks / tasksWithObjective.length) * 100) : 0;
-  
-      const progressBar = DOM.create('div', 'objective-progress');
-      progressBar.innerHTML = `
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: ${progressPercent}%"></div>
-        </div>
-        <span class="progress-text">${progressPercent}% Complete (${completedTasks}/${tasksWithObjective.length} tasks)</span>
-      `;
-  
-      // Hours progress
-      const completedHours = tasksWithObjective
-        .filter(t => t.status === 'completed')
-        .reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
-      const totalHours = tasksWithObjective.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
-      
-      const hoursInfo = DOM.create('div', 'objective-value');
-      if (totalHours > 0) {
-        const hoursPercent = Math.round((completedHours / totalHours) * 100);
-        hoursInfo.innerHTML = `
-          <span class="value-amount">${completedHours.toFixed(1)}h / ${totalHours.toFixed(1)}h</span>
-          <span class="value-label">Hours (${hoursPercent}%)</span>
-        `;
-      } else {
-        hoursInfo.innerHTML = `
-          <span class="value-amount">—</span>
-          <span class="value-label">Hours</span>
-        `;
-      }
-
-      objectiveCard.appendChild(header);
-      objectiveCard.appendChild(progressBar);
-      objectiveCard.appendChild(hoursInfo);
-  
-      // Make clickable to navigate to objectives page
-      objectiveCard.onclick = () => Router.navigate('objectives');
-  
-      grid.appendChild(objectiveCard);
-    });
-  
-    card.appendChild(grid);
-    return card;
-    },
-  
   renderCategoryPerformanceOverview() {
     const card = DOM.create('div', 'card');
     card.appendChild(DOM.create('h2', '', '📊 Category Performance'));
@@ -2019,11 +2017,6 @@ const AppState = {
       
       const hourlyRate = totalHours > 0 ? totalValue / totalHours : 0;
       
-      // Hours needed for income
-      const incomeRecords = monthRecords.filter(r => r.type === 'income' && r.hoursNeeded > 0);
-      const totalHoursNeeded = incomeRecords.reduce((sum, r) => sum + (Number(r.hoursNeeded) || 0), 0);
-      const hoursProgress = totalHoursNeeded > 0 ? Math.min(100, Math.round((totalHours / totalHoursNeeded) * 100)) : 0;
-
       const grid = DOM.create('div', 'dashboard-metrics-grid');
       grid.style.display = 'grid';
       grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
@@ -2044,7 +2037,7 @@ const AppState = {
       hoursCard.innerHTML = `
         <div class="metric-label">Hours Worked</div>
         <div class="metric-value">${totalHours.toFixed(1)}h</div>
-        <div class="metric-hint">${totalHoursNeeded > 0 ? `${hoursProgress}% of target` : 'Completed tasks'}</div>
+        <div class="metric-hint">Completed tasks</div>
       `;
       grid.appendChild(hoursCard);
 
@@ -2065,17 +2058,6 @@ const AppState = {
         <div class="metric-hint">From completed tasks</div>
       `;
       grid.appendChild(valueCard);
-
-      // Hours Target Progress
-      if (totalHoursNeeded > 0) {
-        const progressCard = DOM.create('div', 'metric-card');
-        progressCard.innerHTML = `
-          <div class="metric-label">Hours Progress</div>
-          <div class="metric-value">${hoursProgress}%</div>
-          <div class="metric-hint">${totalHours.toFixed(1)}h / ${totalHoursNeeded.toFixed(1)}h</div>
-        `;
-        grid.appendChild(progressCard);
-      }
 
       card.appendChild(grid);
       return card;
@@ -4615,24 +4597,6 @@ const AppState = {
       noteInput.placeholder = 'Name/description of this transaction';
       noteGroup.appendChild(noteInput);
 
-      // Hours Needed field (only for income)
-      const hoursNeededGroup = DOM.create('div', 'form-group');
-      hoursNeededGroup.id = 'hours-needed-group-add';
-      hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
-      hoursNeededGroup.appendChild(DOM.create('label', 'form-label', 'Hours Needed to Earn This'));
-      const hoursNeededInput = DOM.create('input', 'form-input');
-      hoursNeededInput.type = 'number';
-      hoursNeededInput.name = 'hoursNeeded';
-      hoursNeededInput.step = '0.25';
-      hoursNeededInput.min = '0';
-      hoursNeededInput.placeholder = 'How many hours of work needed to earn this income';
-      hoursNeededGroup.appendChild(hoursNeededInput);
-
-      // Show/hide hours needed based on type
-      typeSelect.onchange = () => {
-        hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
-      };
-  
       const submitBtn = DOM.create('button', 'btn btn-primary');
       submitBtn.type = 'submit';
       submitBtn.textContent = 'Add Transaction';
@@ -4644,7 +4608,6 @@ const AppState = {
       grid.appendChild(categoryGroup);
       grid.appendChild(noteGroup);
       form.appendChild(grid);
-      form.appendChild(hoursNeededGroup);
       form.appendChild(submitBtn);
   
       form.onsubmit = async (event) => {
@@ -4656,8 +4619,7 @@ const AppState = {
           amount: parseFloat(amountInput.value || '0'),
           category: categorySelect.value,
           note: noteInput.value,
-          recurringMonthly: false,
-          hoursNeeded: typeSelect.value === 'income' ? parseFloat(hoursNeededInput.value || '0') : 0
+          recurringMonthly: false
         };
   
         const operationId = `create-finance-${Date.now()}`;
@@ -4671,10 +4633,6 @@ const AppState = {
             amountInput.value = '';
             categorySelect.value = '';
             noteInput.value = '';
-            hoursNeededInput.value = '';
-            hoursNeededGroup.style.display = 'none';
-            hoursNeededInput.value = '';
-            hoursNeededGroup.style.display = 'none';
           },
           async () => {
             await API.saveFinanceRecords(AppState.financeRecords);
@@ -5069,26 +5027,6 @@ const AppState = {
       noteGroup.appendChild(noteInput);
       form.appendChild(noteGroup);
 
-      // Hours Needed field (only for income)
-      const hoursNeededGroup = DOM.create('div', 'form-group');
-      hoursNeededGroup.id = 'hours-needed-group';
-      hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
-      hoursNeededGroup.appendChild(DOM.create('label', 'form-label', 'Hours Needed to Earn This'));
-      const hoursNeededInput = DOM.create('input', 'form-input');
-      hoursNeededInput.type = 'number';
-      hoursNeededInput.name = 'hoursNeeded';
-      hoursNeededInput.value = record?.hoursNeeded || '';
-      hoursNeededInput.step = '0.25';
-      hoursNeededInput.min = '0';
-      hoursNeededInput.placeholder = 'How many hours of work needed to earn this income';
-      hoursNeededGroup.appendChild(hoursNeededInput);
-      form.appendChild(hoursNeededGroup);
-
-      // Show/hide hours needed based on type
-      typeSelect.onchange = () => {
-        hoursNeededGroup.style.display = (typeSelect.value === 'income') ? 'block' : 'none';
-      };
-  
       form.onsubmit = async (event) => {
         event.preventDefault();
         await this.save(record, new FormData(form));
@@ -5126,8 +5064,7 @@ const AppState = {
         amount: parseFloat(formData.get('amount') || '0'),
         category: formData.get('category'),
         note: formData.get('note'),
-        recurringMonthly: false,
-        hoursNeeded: formData.get('type') === 'income' ? parseFloat(formData.get('hoursNeeded') || '0') : 0
+        recurringMonthly: false
       };
   
       const operationId = record ? `update-finance-${targetId}` : `create-finance-${Date.now()}`;
@@ -5558,24 +5495,6 @@ const AppState = {
       badges.appendChild(dueBadge);
     }
     
-    // Show financial value if linked to finance record
-    if (objective.relatedFinanceId) {
-      const financeRecord = getFinanceRecordById(objective.relatedFinanceId);
-      
-      if (financeRecord) {
-        const financeBadge = DOM.create('span', 'task-badge value');
-        financeBadge.textContent = `💰 ${FinancePage.formatCurrency(financeRecord.amount)}`;
-        badges.appendChild(financeBadge);
-        
-        // Show hours needed if available
-        if (financeRecord.hoursNeeded && financeRecord.hoursNeeded > 0) {
-          const hoursBadge = DOM.create('span', 'task-badge');
-          hoursBadge.textContent = `⏱️ ${financeRecord.hoursNeeded}h needed`;
-          badges.appendChild(hoursBadge);
-        }
-      }
-    }
-    
     basicInfo.appendChild(badges);
     content.appendChild(basicInfo);
 
@@ -5623,158 +5542,6 @@ const AppState = {
     }
   },
 
-  renderObjectiveHealth(objective) {
-      const healthSection = DOM.create('div', 'objective-health');
-      healthSection.style.display = 'flex';
-      healthSection.style.alignItems = 'center';
-      healthSection.style.gap = '1rem';
-      healthSection.style.marginTop = '0.75rem';
-  
-      // Health score indicator
-      const healthScore = objective.healthScore || 0;
-      const healthIndicator = DOM.create('div', 'health-indicator');
-      healthIndicator.style.display = 'flex';
-      healthIndicator.style.alignItems = 'center';
-      healthIndicator.style.gap = '0.5rem';
-  
-      const healthIcon = DOM.create('span', '');
-      if (healthScore >= 80) {
-        healthIcon.textContent = '🟢';
-        healthIcon.title = 'Excellent health';
-      } else if (healthScore >= 60) {
-        healthIcon.textContent = '🟡';
-        healthIcon.title = 'Good health';
-      } else if (healthScore >= 40) {
-        healthIcon.textContent = '🟠';
-        healthIcon.title = 'Needs attention';
-      } else {
-        healthIcon.textContent = '🔴';
-        healthIcon.title = 'At risk';
-      }
-  
-    const healthText = DOM.create('span', 'health-score');
-    healthText.textContent = `${healthScore}%`;
-
-    // Add descriptive label based on score
-    const healthLabel = DOM.create('span', 'health-label');
-    if (healthScore >= 90) {
-      healthLabel.textContent = 'Excellent';
-      healthLabel.style.color = '#10b981';
-    } else if (healthScore >= 75) {
-      healthLabel.textContent = 'Good';
-      healthLabel.style.color = '#3b82f6';
-    } else if (healthScore >= 60) {
-      healthLabel.textContent = 'Fair';
-      healthLabel.style.color = '#f59e0b';
-    } else if (healthScore >= 40) {
-      healthLabel.textContent = 'Poor';
-      healthLabel.style.color = '#f97316';
-    } else {
-      healthLabel.textContent = 'Critical';
-      healthLabel.style.color = '#ef4444';
-    }
-      healthText.style.fontWeight = 'bold';
-  
-    healthIndicator.appendChild(healthIcon);
-    healthIndicator.appendChild(healthText);
-    healthIndicator.appendChild(healthLabel);
-  
-    // Progress indicator
-    const progressIndicator = DOM.create('div', 'progress-indicator');
-    const tasksWithObjective = AppState.tasks.filter(t => t.objective === objective.name);
-    const completedTasks = tasksWithObjective.filter(t => t.status === 'completed').length;
-    const progressPercent = tasksWithObjective.length > 0 ? Math.round((completedTasks / tasksWithObjective.length) * 100) : 0;
-
-    progressIndicator.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
-        <div style="width: 80px; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden;">
-          <div style="width: ${progressPercent}%; height: 100%; background: ${objective.color || '#3b82f6'}; transition: width 0.3s ease;"></div>
-        </div>
-        <span style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Progress</span>
-        <span style="font-size: 0.875rem; font-weight: 500; color: #1f2937;">${progressPercent}%</span>
-      </div>
-    `;
-
-    healthSection.appendChild(healthIndicator);
-    healthSection.appendChild(progressIndicator);
-  
-      return healthSection;
-    },
-  
-    renderObjectiveAnalytics(objective) {
-      const analyticsSection = DOM.create('div', 'objective-analytics');
-      analyticsSection.style.marginTop = '1rem';
-      analyticsSection.style.padding = '1rem';
-      analyticsSection.style.background = '#f9fafb';
-      analyticsSection.style.borderRadius = '8px';
-  
-      // Get objective analytics
-      const tasksWithObjective = AppState.tasks.filter(t => t.objectiveId === objective.id);
-      const completedTasks = tasksWithObjective.filter(t => t.status === 'completed');
-      const overdueTasks = tasksWithObjective.filter(t => t.status === 'overdue');
-  
-    const totalValue = completedTasks.reduce((sum, task) => {
-      const value = Number(task.actualValue) || Number(task.estimatedValue) || 0;
-      return sum + (task.isIncome !== false ? value : -Math.abs(value));
-    }, 0);
-
-    // Calculate total hours and completed hours for this objective
-    const totalHours = tasksWithObjective.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
-    const completedHours = completedTasks.reduce((sum, task) => sum + (Number(task.estimatedHours) || 0), 0);
-    const hoursProgress = totalHours > 0 ? Math.round((completedHours / totalHours) * 100) : 0;
-    const hourlyRate = totalHours > 0 && totalValue > 0 ? totalValue / totalHours : 0;
-
-    // Finance records related to this objective's tasks
-    const relatedFinance = AppState.financeRecords.filter(record =>
-      record.type === 'expense' && tasksWithObjective.some(task => task.id == record.relatedTaskId)
-    );
-    const totalSpending = relatedFinance.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-
-    const analyticsGrid = DOM.create('div', '');
-    analyticsGrid.style.display = 'grid';
-    analyticsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(150px, 1fr))';
-    analyticsGrid.style.gap = '1rem';
-
-    const metrics = [
-      { label: 'Total Tasks', value: tasksWithObjective.length.toString() },
-      { label: 'Completed', value: completedTasks.length.toString() },
-      { label: 'Overdue', value: overdueTasks.length.toString() },
-      { label: 'Value Delivered', value: FinancePage.formatCurrency(totalValue) },
-      { label: 'Hours Progress', value: totalHours > 0 ? `${completedHours.toFixed(1)}h / ${totalHours.toFixed(1)}h (${hoursProgress}%)` : '—' },
-      { label: 'Hourly Rate', value: hourlyRate > 0 ? `${FinancePage.formatCurrency(hourlyRate)}/hr` : '—' },
-      { label: 'Related Spending', value: FinancePage.formatCurrency(totalSpending) },
-      { label: 'ROI', value: totalSpending > 0 ? `${Math.round((totalValue / totalSpending) * 100) / 100}x` : (totalValue > 0 ? '∞' : '—') }
-    ];
-  
-      metrics.forEach(metric => {
-        const metricCard = DOM.create('div', 'metric-card');
-        metricCard.style.textAlign = 'center';
-        metricCard.style.padding = '0.75rem';
-        metricCard.style.background = 'white';
-        metricCard.style.borderRadius = '6px';
-        metricCard.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-  
-        const value = DOM.create('div', 'metric-value');
-        value.style.fontSize = '1.25rem';
-        value.style.fontWeight = 'bold';
-        value.style.color = objective.color || '#3b82f6';
-        value.textContent = metric.value;
-  
-        const label = DOM.create('div', 'metric-label');
-        label.style.fontSize = '0.875rem';
-        label.style.color = '#6b7280';
-        label.textContent = metric.label;
-  
-        metricCard.appendChild(value);
-        metricCard.appendChild(label);
-        analyticsGrid.appendChild(metricCard);
-      });
-  
-      analyticsSection.appendChild(analyticsGrid);
-  
-      return analyticsSection;
-    },
-  
     async deleteObjective(objective) {
       if (!confirm(`Are you sure you want to delete "${objective.name}"?`)) return;
       
@@ -5842,19 +5609,19 @@ const AppState = {
       descInput.placeholder = 'Brief description...';
       descGroup.appendChild(descInput);
       form.appendChild(descGroup);
-  
+
       // Category
       const categoryGroup = DOM.create('div', 'form-group');
       categoryGroup.appendChild(DOM.create('label', 'form-label', 'Category'));
       const categorySelect = DOM.create('select', 'form-select');
       categorySelect.name = 'category';
-      
+
       const noneCategoryOption = DOM.create('option', '');
       noneCategoryOption.value = '';
       noneCategoryOption.textContent = 'None';
       if (!objective?.category) noneCategoryOption.selected = true;
       categorySelect.appendChild(noneCategoryOption);
-      
+
       AppState.categories.forEach(cat => {
         const option = DOM.create('option', '');
         option.value = cat.name;
@@ -5862,7 +5629,7 @@ const AppState = {
         if (objective?.category === cat.name) option.selected = true;
         categorySelect.appendChild(option);
       });
-      
+
       categoryGroup.appendChild(categorySelect);
       SelectUtils.addCreateOption(categorySelect, 'Category', () => {
         this.hide();
@@ -5881,48 +5648,6 @@ const AppState = {
       dueInput.value = objective?.dueDate || '';
       dueGroup.appendChild(dueInput);
       form.appendChild(dueGroup);
-  
-      // Financial Value (Optional - links to income record)
-      const financialGroup = DOM.create('div', 'form-group');
-      financialGroup.appendChild(DOM.create('label', 'form-label', 'Link to Income Record (Optional)'));
-      
-      // Get current month's income records
-      const now = new Date();
-      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthRecords = FinancePage.getMonthlyRecordsFor(currentMonth);
-      const incomeRecords = monthRecords.filter(record => 
-        record.type === 'income' && Number(record.amount) > 0 && record.note && record.note.trim() !== ''
-      );
-      
-      const financialSelect = DOM.create('select', 'form-select');
-      financialSelect.name = 'relatedFinanceId';
-      
-      const noneFinancialOption = DOM.create('option', '');
-      noneFinancialOption.value = '';
-      noneFinancialOption.textContent = 'None (no financial tracking)';
-      if (!objective?.relatedFinanceId) {
-        noneFinancialOption.selected = true;
-      }
-      financialSelect.appendChild(noneFinancialOption);
-      
-      incomeRecords.forEach(record => {
-        const option = DOM.create('option', '');
-        option.value = record.id.toString(); // Store ID
-        option.textContent = record.note; // Display name
-        if (objective?.relatedFinanceId === record.id) {
-          option.selected = true;
-        }
-        financialSelect.appendChild(option);
-      });
-      
-      financialGroup.appendChild(financialSelect);
-      const financialHint = DOM.create('div', 'form-hint');
-      financialHint.style.fontSize = '0.75rem';
-      financialHint.style.color = '#6b7280';
-      financialHint.style.marginTop = '0.25rem';
-      financialHint.textContent = 'Budget and target value will be automatically set from the selected income record';
-      financialGroup.appendChild(financialHint);
-      form.appendChild(financialGroup);
   
       form.onsubmit = (e) => {
         e.preventDefault();
@@ -5954,38 +5679,12 @@ const AppState = {
     },
   
     async save(objective, formData, callback) {
-      // Get related finance record name from dropdown
-      const relatedFinanceName = formData.get('relatedFinanceName') || '';
-      
-      // Get budget/targetValue from current month's matching finance record
-      let budget = 0;
-      let targetValue = 0;
-      
-      if (relatedFinanceName) {
-        const now = new Date();
-        const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthRecords = FinancePage.getMonthlyRecordsFor(currentMonth);
-        
-        // Find matching finance record in current month
-        const financeRecord = monthRecords.find(r => 
-          r.type === 'income' && r.note && r.note.trim() === relatedFinanceName.trim()
-        );
-        
-        if (financeRecord) {
-          budget = Number(financeRecord.amount) || 0;
-          targetValue = Number(financeRecord.amount) || 0;
-        }
-      }
-      
       const objectiveData = {
         name: formData.get('name'),
         description: formData.get('description'),
         color: objective?.color || ColorPalette.getNext(AppState.objectives.map(item => item.color)),
-        category: '', // Category removed - can be added back if needed
-        dueDate: formData.get('dueDate') || '',
-        budget: budget,
-        targetValue: targetValue,
-        relatedFinanceId: relatedFinanceId // Store ID
+        category: formData.get('category') || '',
+        dueDate: formData.get('dueDate') || ''
       };
       const previousName = objective?.name || '';
   
@@ -6097,25 +5796,6 @@ const AppState = {
       header.appendChild(actions);
       card.appendChild(header);
   
-      // Show objectives with this category
-      const objectivesWithCategory = AppState.objectives.filter(o => o.category === category.name);
-      if (objectivesWithCategory.length > 0) {
-        const objectivesSection = DOM.create('div', 'objective-tasks');
-        objectivesSection.appendChild(DOM.create('p', 'objective-tasks-label', `Objectives: ${objectivesWithCategory.length}`));
-        const objectiveList = DOM.create('div', 'objective-task-list');
-        objectivesWithCategory.forEach(objective => {
-          const objectiveItem = DOM.create('div', 'objective-task-item');
-          objectiveItem.textContent = objective.name;
-          objectiveItem.onclick = () => {
-            ReferenceTabs.open('objectives');
-            setTimeout(() => ObjectiveModal.show(objective), 100);
-          };
-          objectiveList.appendChild(objectiveItem);
-        });
-        objectivesSection.appendChild(objectiveList);
-        card.appendChild(objectivesSection);
-      }
-  
       return card;
     },
   
@@ -6127,19 +5807,10 @@ const AppState = {
         operationId,
         () => {
           AppState.categories = AppState.categories.filter(c => c.id !== category.id);
-          AppState.objectives.forEach(objective => {
-            if (objective.category === category.name) {
-              objective.category = '';
-            }
-          });
           updateTaskReferences('category', category.name, '');
         },
         async () => {
           await API.deleteCategory(category.id);
-          const objectivesToUpdate = AppState.objectives.filter(o => o.category === '');
-          if (objectivesToUpdate.length > 0) {
-            await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
-          }
           await API.saveTasks(AppState.tasks);
         },
         () => {
@@ -6240,11 +5911,6 @@ const AppState = {
             const index = AppState.categories.findIndex(c => c.id === category.id);
             if (index >= 0) AppState.categories[index] = categoryData;
             if (previousName && previousName !== categoryData.name) {
-              AppState.objectives.forEach(objective => {
-                if (objective.category === previousName) {
-                  objective.category = categoryData.name;
-                }
-              });
               updateTaskReferences('category', previousName, categoryData.name);
             }
           } else {
@@ -6257,10 +5923,6 @@ const AppState = {
           if (category) {
             await API.updateCategory(categoryData);
             if (previousName && previousName !== categoryData.name) {
-              const objectivesToUpdate = AppState.objectives.filter(o => o.category === categoryData.name && o.category === previousName);
-              if (objectivesToUpdate.length > 0) {
-                await Promise.all(objectivesToUpdate.map(objective => API.updateObjective(objective)));
-              }
               await API.saveTasks(AppState.tasks);
             }
           } else {
@@ -7453,28 +7115,6 @@ const AppState = {
           details.appendChild(meta);
           details.appendChild(status);
   
-          // Add resolution information for paid debts
-          if (debt.status === 'paid' && (debt.resolvedByTaskId || debt.resolvedDate)) {
-            const resolutionInfo = DOM.create('div', 'debt-resolution-info');
-            resolutionInfo.style.fontSize = '0.75rem';
-            resolutionInfo.style.color = '#10b981';
-            resolutionInfo.style.marginTop = '0.25rem';
-  
-            let resolutionText = 'Resolved';
-            if (debt.resolvedDate) {
-              resolutionText += ` on ${debt.resolvedDate}`;
-            }
-            if (debt.resolvedByTaskId) {
-              const resolvingTask = AppState.tasks.find(t => t.id == debt.resolvedByTaskId);
-              if (resolvingTask) {
-                resolutionText += ` via "${resolvingTask.task}"`;
-              }
-            }
-  
-            resolutionInfo.textContent = resolutionText;
-            details.appendChild(resolutionInfo);
-          }
-          
           const amount = DOM.create('div', `finance-record-amount ${debt.direction === 'owed' ? 'income' : 'expense'}`);
           amount.textContent = `${debt.amount.toFixed(2)} MAD`;
           
@@ -7703,15 +7343,9 @@ const AppState = {
       }
   
       const operationId = person ? `update-person-${person.id}` : `create-person-${Date.now()}`;
-      const saveButton = document.querySelector('.modal-footer .btn-primary');
-      
-      if (saveButton) {
-        saveButton.classList.add('loading');
-        saveButton.disabled = true;
-        saveButton.textContent = 'Saving...';
-      }
-  
-      await SaveManager.saveWithOptimisticUpdate(
+      this.hide();
+
+      SaveManager.saveWithOptimisticUpdate(
         operationId,
         () => {
           if (person) {
@@ -7742,22 +7376,11 @@ const AppState = {
           await DataStore.refresh();
         },
         () => {
-          if (saveButton) {
-            saveButton.classList.remove('loading');
-            saveButton.textContent = 'Save';
-            saveButton.disabled = false;
-          }
-          this.hide();
           Toast.success(person ? 'Person updated' : 'Person created');
           if (onSaveCallback) onSaveCallback();
           Router.render();
         },
         (error) => {
-          if (saveButton) {
-            saveButton.classList.remove('loading');
-            saveButton.textContent = 'Save';
-            saveButton.disabled = false;
-          }
           Toast.error('Error saving person');
         }
       );
@@ -7888,62 +7511,6 @@ const AppState = {
       
       statusGroup.appendChild(statusSelect);
       form.appendChild(statusGroup);
-  
-      // Resolution tracking (only when status is paid)
-      const resolutionGroup = DOM.create('div', 'form-group resolution-fields');
-      resolutionGroup.style.display = debt?.status === 'paid' ? 'block' : 'none';
-      resolutionGroup.appendChild(DOM.create('label', 'form-label', 'Resolution Details'));
-  
-      const resolutionFields = DOM.create('div', 'resolution-details');
-  
-      // Resolved by task
-      const taskGroup = DOM.create('div', 'form-group');
-      taskGroup.appendChild(DOM.create('label', 'form-label', 'Resolved by Task'));
-      const taskSelect = DOM.create('select', 'form-select');
-      taskSelect.name = 'resolvedByTaskId';
-  
-      const noTaskOption = DOM.create('option', '');
-      noTaskOption.value = '';
-      noTaskOption.textContent = 'No specific task';
-      taskSelect.appendChild(noTaskOption);
-  
-      AppState.tasks
-        .filter(task => task.status === 'completed')
-        .sort((a, b) => new Date(b.endDate || b.startDate) - new Date(a.endDate || a.startDate))
-        .slice(0, 20) // Show only recent completed tasks
-        .forEach(task => {
-          const option = DOM.create('option', '');
-          option.value = task.id;
-          const dateStr = task.endDate || task.startDate ? ` (${task.endDate || task.startDate})` : '';
-          option.textContent = `${task.task}${dateStr}`;
-          if (debt?.resolvedByTaskId == task.id) option.selected = true;
-          taskSelect.appendChild(option);
-        });
-  
-      taskGroup.appendChild(taskSelect);
-      resolutionFields.appendChild(taskGroup);
-  
-      // Resolution date
-      const resolvedDateGroup = DOM.create('div', 'form-group');
-      resolvedDateGroup.appendChild(DOM.create('label', 'form-label', 'Resolution Date'));
-      const resolvedDateInput = DOM.create('input', 'form-input');
-      resolvedDateInput.type = 'date';
-      resolvedDateInput.name = 'resolvedDate';
-      resolvedDateInput.value = debt?.resolvedDate || (debt?.status === 'paid' ? new Date().toISOString().split('T')[0] : '');
-      resolvedDateGroup.appendChild(resolvedDateInput);
-      resolutionFields.appendChild(resolvedDateGroup);
-  
-      resolutionGroup.appendChild(resolutionFields);
-      form.appendChild(resolutionGroup);
-  
-      // Show/hide resolution fields based on status
-      statusSelect.onchange = () => {
-        const isPaid = statusSelect.value === 'paid';
-        resolutionGroup.style.display = isPaid ? 'block' : 'none';
-        if (isPaid && !resolvedDateInput.value) {
-          resolvedDateInput.value = new Date().toISOString().split('T')[0];
-        }
-      };
   
       const footer = DOM.create('div', 'modal-footer');
       const cancelBtn = DOM.create('button', 'btn btn-secondary');
@@ -8134,8 +7701,7 @@ const AppState = {
       AppState.objectives.forEach(obj => {
         const option = DOM.create('option', '');
         option.value = obj.id.toString(); // Store ID
-        const categoryLabel = obj.category ? ` (${obj.category})` : '';
-        option.textContent = obj.name + categoryLabel; // Display name
+        option.textContent = obj.name;
         if (task?.objectiveId === obj.id) option.selected = true;
         objectiveSelect.appendChild(option);
       });
@@ -8148,61 +7714,8 @@ const AppState = {
         });
       });
       
-      // Show auto-filled info hint
-      const autoFillHint = DOM.create('div', 'form-hint');
-      autoFillHint.style.fontSize = '0.75rem';
-      autoFillHint.style.color = '#6b7280';
-      autoFillHint.style.marginTop = '0.25rem';
-      autoFillHint.textContent = 'Category and financial data will be automatically set from the selected objective';
-      objectiveGroup.appendChild(autoFillHint);
-
-      // Update hint when objective changes
-      const updateObjectiveInfo = () => {
-        const selectedObjectiveId = objectiveSelect.value ? Number(objectiveSelect.value) : null;
-        if (selectedObjectiveId) {
-          const selectedObjective = getObjectiveById(selectedObjectiveId);
-          const hints = [];
-          if (selectedObjective?.category) {
-            hints.push(`Category: ${selectedObjective.category}`);
-          }
-          if (selectedObjective && (selectedObjective.budget > 0 || selectedObjective.targetValue > 0)) {
-            hints.push(`Financial: ${FinancePage.formatCurrency(selectedObjective.targetValue || selectedObjective.budget)}`);
-          }
-          if (hints.length > 0) {
-            autoFillHint.textContent = hints.join(' • ');
-            autoFillHint.style.color = '#10b981';
-          } else {
-            autoFillHint.textContent = 'Category and financial data will be automatically set from the selected objective';
-            autoFillHint.style.color = '#6b7280';
-          }
-        } else {
-          autoFillHint.textContent = 'Category and financial data will be automatically set from the selected objective';
-          autoFillHint.style.color = '#6b7280';
-        }
-      };
-
-      objectiveSelect.onchange = updateObjectiveInfo;
-      
-      // Set initial info if editing existing task
-      if (task?.objectiveId) {
-        updateObjectiveInfo();
-      }
-      
       form.appendChild(objectiveGroup);
 
-    // Hours estimate (for tracking time investment)
-    const hoursGroup = DOM.create('div', 'form-group');
-    hoursGroup.appendChild(DOM.create('label', 'form-label', 'Estimated Hours'));
-    const hoursInput = DOM.create('input', 'form-input');
-    hoursInput.type = 'number';
-    hoursInput.name = 'estimatedHours';
-    hoursInput.value = task?.estimatedHours || '';
-    hoursInput.step = '0.25';
-    hoursInput.min = '0';
-    hoursInput.placeholder = 'Time investment for this task';
-    hoursGroup.appendChild(hoursInput);
-    form.appendChild(hoursGroup);
-  
       // Actual value (only show for completed tasks)
       if (task?.status === 'completed') {
         const actualValueGroup = DOM.create('div', 'form-group');
@@ -8266,22 +7779,17 @@ const AppState = {
       // Get objective ID and derive category
       const objectiveId = formData.get('objective') ? Number(formData.get('objective')) : null;
       let category = '';
-      let impactType = 'non-monetary';
-      let isIncome = false;
-      let estimatedValue = 0;
+      const impactType = 'non-monetary';
+      const isIncome = false;
+      const estimatedValue = 0;
       
       if (objectiveId) {
         const selectedObjective = getObjectiveById(objectiveId);
         if (selectedObjective) {
           category = selectedObjective.category || '';
-          if (selectedObjective.budget > 0 || selectedObjective.targetValue > 0) {
-            impactType = 'money';
-            isIncome = selectedObjective.targetValue > 0;
-            estimatedValue = selectedObjective.targetValue || 0;
-          }
         }
       }
-  
+
       const taskData = {
         id: task?.id || Date.now(),
         task: formData.get('task'),
@@ -9045,12 +8553,16 @@ const CategoryPerformancePage = {
       const addSubjectBtn = DOM.create('button', 'reference-tab');
       addSubjectBtn.textContent = '+ Add Subject';
       addSubjectBtn.style.borderStyle = 'dashed';
-      addSubjectBtn.onclick = () => {
-        const subject = prompt('Enter subject/topic name:');
-        if (subject && subject.trim()) {
+      addSubjectBtn.onclick = async () => {
+        const subject = await ModalUtils.prompt({
+          title: 'Add Subject',
+          label: 'Subject/Topic',
+          placeholder: 'Enter subject/topic name'
+        });
+        if (subject) {
           if (!AppState.notesSubjects) AppState.notesSubjects = [];
-          if (!AppState.notesSubjects.includes(subject.trim())) {
-            AppState.notesSubjects.push(subject.trim());
+          if (!AppState.notesSubjects.includes(subject)) {
+            AppState.notesSubjects.push(subject);
             Router.render();
           }
         }
@@ -9413,7 +8925,7 @@ const CategoryPerformancePage = {
       form.appendChild(dateGroup);
   
       const docLinkGroup = DOM.create('div', 'form-group');
-      docLinkGroup.appendChild(DOM.create('label', 'form-label', 'Link (URL)'));
+      docLinkGroup.appendChild(DOM.create('label', 'form-label', 'Link (Optional)'));
       const docLinkInput = DOM.create('input', 'form-input');
       docLinkInput.type = 'url';
       docLinkInput.name = 'docLink';
@@ -9492,15 +9004,9 @@ const CategoryPerformancePage = {
       }
   
       const operationId = note ? `update-note-${note.id}` : `create-note-${Date.now()}`;
-      const saveButton = document.querySelector('.modal-footer .btn-primary');
-      
-      if (saveButton) {
-        saveButton.classList.add('loading');
-        saveButton.disabled = true;
-        saveButton.textContent = 'Saving...';
-      }
-  
-      await SaveManager.saveWithOptimisticUpdate(
+      this.hide();
+
+      SaveManager.saveWithOptimisticUpdate(
         operationId,
         () => {
           if (note) {
@@ -9537,22 +9043,11 @@ const CategoryPerformancePage = {
           }
         },
         () => {
-          if (saveButton) {
-            saveButton.classList.remove('loading');
-            saveButton.textContent = 'Save';
-            saveButton.disabled = false;
-          }
-          this.hide();
           Toast.success(note ? 'Note updated' : 'Note created');
           Router.render();
         },
         (error) => {
           console.error('Note save error:', error);
-          if (saveButton) {
-            saveButton.classList.remove('loading');
-            saveButton.textContent = 'Save';
-            saveButton.disabled = false;
-          }
           Toast.error('Error saving note: ' + (error.message || 'Unknown error'));
         }
       );
@@ -9737,15 +9232,9 @@ const CategoryPerformancePage = {
       };
   
       const operationId = bill ? `update-recurring-bill-${bill.id}` : `create-recurring-bill-${Date.now()}`;
-      const saveButton = document.querySelector('.modal-footer .btn-primary');
-      
-      if (saveButton) {
-        saveButton.classList.add('loading');
-        saveButton.disabled = true;
-        saveButton.textContent = 'Saving...';
-      }
-  
-      await SaveManager.saveWithOptimisticUpdate(
+      this.hide();
+
+      SaveManager.saveWithOptimisticUpdate(
         operationId,
         () => {
           if (bill) {
@@ -9766,21 +9255,10 @@ const CategoryPerformancePage = {
           await DataStore.refresh();
         },
         () => {
-          if (saveButton) {
-            saveButton.classList.remove('loading');
-            saveButton.textContent = 'Save';
-            saveButton.disabled = false;
-          }
-          this.hide();
           Toast.success(bill ? 'Recurring bill updated' : 'Recurring bill created');
           Router.render();
         },
         (error) => {
-          if (saveButton) {
-            saveButton.classList.remove('loading');
-            saveButton.textContent = 'Save';
-            saveButton.disabled = false;
-          }
           Toast.error('Error saving recurring bill');
         }
       );

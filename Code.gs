@@ -14,6 +14,11 @@ function getDatags() {
   const sheet = ss.getSheetByName("5_tasks");
   if (!sheet) return [];
 
+  const objectives = getObjectives();
+  const objectiveCategoryMap = new Map(
+    objectives.map(objective => [Number(objective.id), objective.category || ''])
+  );
+
   const values = sheet.getDataRange().getValues();
   const tz = Session.getScriptTimeZone();
   const now = new Date();
@@ -78,8 +83,9 @@ function getDatags() {
 
   
   return values.slice(1).map(row => {
-    const startDateTime = makeDateTime(row[3], row[4]);
-    const dueDateTime = makeDateTime(row[5], row[6]);
+    const startDateTime = makeDateTime(row[2], row[3]);
+    const dueDateTime = makeDateTime(row[4], row[5]);
+    const objectiveId = row[8] ? Number(row[8]) : null;
 
     let newStatus = row[8];
     if (newStatus !== "completed" && dueDateTime) {
@@ -93,23 +99,14 @@ function getDatags() {
     const task = {
       id: row[0],
       task: row[1],
-      category: row[2],
-      startDate: formatDateTime(row[3], "date"),
-      startTime: formatDateTime(row[4], "time"),
-      endDate: formatDateTime(row[5], "date"),
-      endTime: formatDateTime(row[6], "time"),
-      color: row[7],
+      category: objectiveId ? (objectiveCategoryMap.get(objectiveId) || '') : '',
+      startDate: formatDateTime(row[2], "date"),
+      startTime: formatDateTime(row[3], "time"),
+      endDate: formatDateTime(row[4], "date"),
+      endTime: formatDateTime(row[5], "time"),
+      color: row[6],
       status: newStatus,
-      objectiveId: row[9] ? Number(row[9]) : null, // Store objective ID instead of name
-      priority: row[10] || 'medium',
-      repeatType: row[11] || 'none',
-      repeatUntil: formatDateTime(row[12], "date") || '',
-      impactType: row[13] || 'non-monetary',
-      estimatedValue: Number(row[14]) || 0,
-      actualValue: Number(row[15] || 0) || 0,
-      valueRealizedDate: formatDateTime(row[16] || '', "date") || '',
-      estimatedHours: Number(row[17] || 0) || 0,
-      isIncome: row[18] === true || row[18] === "TRUE"
+      objectiveId: objectiveId
     };
     return addDerivedFields(task, startDateTime, dueDateTime, newStatus);
   });
@@ -133,23 +130,13 @@ function addDatags(taskbase) {
     const rows = taskbase.map((item) => [
       item.id,
       item.task,
-      item.category,
       item.startDate,
       item.startTime || '',
       item.endDate,
       item.endTime || '',
       item.color,
       item.status,
-      item.objectiveId || '', // Store objective ID
-      item.priority || 'medium',
-      item.repeatType || 'none',
-      item.repeatUntil || '',
-      item.impactType || 'non-monetary',
-      item.estimatedValue || 0,
-      item.actualValue || 0,
-      item.valueRealizedDate || '',
-      item.estimatedHours || 0,
-      item.isIncome || false
+      item.objectiveId || ''
     ]);
 
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
@@ -168,11 +155,10 @@ function getObjectives() {
   if (!sheet) {
     // Create Objectives sheet if it doesn't exist
     sheet = ss.insertSheet("4_objectives");
-    sheet.getRange(1, 1, 1, 12).setValues([[
-      "id", "name", "description", "color", "category", "dueDate",
-      "budget", "actualSpending", "targetValue", "currentValue", "healthScore", "lastUpdated"
+    sheet.getRange(1, 1, 1, 6).setValues([[
+      "id", "name", "description", "color", "category", "dueDate"
     ]]);
-    sheet.getRange(1, 1, 1, 12).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 6).setFontWeight("bold");
     
     // Add sample objectives
     const sampleObjectives = [
@@ -203,14 +189,7 @@ function getObjectives() {
     description: row[2] || '',
     color: row[3] || '#3b82f6',
     category: row[4] || '',
-    dueDate: formatDate(row[5] || ''),
-    budget: Number(row[6] || 0) || 0,
-    actualSpending: Number(row[7] || 0) || 0,
-    targetValue: Number(row[8] || 0) || 0,
-    currentValue: Number(row[9] || 0) || 0,
-    healthScore: Number(row[10] || 0) || 0,
-    lastUpdated: row[11] || '',
-    relatedFinanceId: row[12] ? Number(row[12]) : null // Store finance record ID
+    dueDate: formatDate(row[5] || '')
   }));
 }
 
@@ -220,11 +199,10 @@ function addObjective(objective) {
   
   if (!sheet) {
     sheet = ss.insertSheet("4_objectives");
-    sheet.getRange(1, 1, 1, 13).setValues([[
-      "id", "name", "description", "color", "category", "dueDate",
-      "budget", "actualSpending", "targetValue", "currentValue", "healthScore", "lastUpdated", "relatedFinanceId"
+    sheet.getRange(1, 1, 1, 6).setValues([[
+      "id", "name", "description", "color", "category", "dueDate"
     ]]);
-    sheet.getRange(1, 1, 1, 13).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 6).setFontWeight("bold");
   }
 
   // Calculate new ID
@@ -239,7 +217,6 @@ function addObjective(objective) {
   
   const now = new Date();
   const tz = Session.getScriptTimeZone();
-  const timestamp = Utilities.formatDate(now, tz, "yyyy-MM-dd HH:mm:ss");
 
   sheet.appendRow([
     newId,
@@ -247,14 +224,7 @@ function addObjective(objective) {
     objective.description || '',
     objective.color || '#3b82f6',
     objective.category || '',
-    objective.dueDate || '',
-    objective.budget || 0,
-    0, // actualSpending - will be calculated
-    objective.targetValue || 0,
-    0, // currentValue - will be calculated
-    0, // healthScore - will be calculated
-    timestamp,
-    objective.relatedFinanceId || ''
+    objective.dueDate || ''
   ]);
 
   return newId;
@@ -269,23 +239,12 @@ function updateObjective(objective) {
   const rowIndex = values.findIndex(row => row[0] === objective.id);
   
   if (rowIndex > 0) {
-    const now = new Date();
-    const tz = Session.getScriptTimeZone();
-    const timestamp = Utilities.formatDate(now, tz, "yyyy-MM-dd HH:mm:ss");
-
-    sheet.getRange(rowIndex + 1, 2, 1, 12).setValues([[
+    sheet.getRange(rowIndex + 1, 2, 1, 5).setValues([[
       objective.name,
       objective.description || '',
       objective.color || '#3b82f6',
       objective.category || '',
-      objective.dueDate || '',
-      objective.budget || 0,
-      0, // actualSpending - will be calculated
-      objective.targetValue || 0,
-      0, // currentValue - will be calculated
-      0, // healthScore - will be calculated
-      timestamp,
-      objective.relatedFinanceId || ''
+      objective.dueDate || ''
     ]]);
     return true;
   }
@@ -504,7 +463,7 @@ function getFinanceRecords() {
 
   if (!sheet) {
     sheet = ss.insertSheet("6_finance");
-    sheet.getRange(1, 1, 1, 16).setValues([[
+    sheet.getRange(1, 1, 1, 15).setValues([[
       "id",
       "date",
       "type",
@@ -519,10 +478,9 @@ function getFinanceRecords() {
       "recurringBillId",
       "relatedTaskId",
       "relatedObjective",
-      "isValueRealization",
-      "hoursNeeded"
+      "isValueRealization"
     ]]);
-    sheet.getRange(1, 1, 1, 16).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 15).setFontWeight("bold");
   }
 
   const values = sheet.getDataRange().getValues();
@@ -554,8 +512,7 @@ function getFinanceRecords() {
       recurringBillId: row[11] || "",
       relatedTaskId: row[12] || "",
       relatedObjective: row[13] || "",
-      isValueRealization: row[14] === true || row[14] === "TRUE",
-      hoursNeeded: Number(row[15] || 0) || 0
+      isValueRealization: row[14] === true || row[14] === "TRUE"
     }));
 }
 
@@ -565,7 +522,7 @@ function saveFinanceRecords(records) {
 
   if (!sheet) {
     sheet = ss.insertSheet("6_finance");
-    sheet.getRange(1, 1, 1, 16).setValues([[
+    sheet.getRange(1, 1, 1, 15).setValues([[
       "id",
       "date",
       "type",
@@ -580,10 +537,9 @@ function saveFinanceRecords(records) {
       "recurringBillId",
       "relatedTaskId",
       "relatedObjective",
-      "isValueRealization",
-      "hoursNeeded"
+      "isValueRealization"
     ]]);
-    sheet.getRange(1, 1, 1, 16).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 15).setFontWeight("bold");
   }
 
   if (sheet.getLastRow() > 1) {
@@ -606,8 +562,7 @@ function saveFinanceRecords(records) {
       record.recurringBillId || "",
       record.relatedTaskId || "",
       record.relatedObjective || "",
-      record.isValueRealization ? true : false,
-      record.hoursNeeded || 0
+      record.isValueRealization ? true : false
     ]);
     sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
     sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
@@ -1426,8 +1381,8 @@ function processRecurringBills() {
   
   if (!financeSheet) {
     financeSheet = ss.insertSheet("6_finance");
-    financeSheet.getRange(1, 1, 1, 16).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus", "recurringBillId", "relatedTaskId", "relatedObjective", "isValueRealization", "hoursNeeded"]]);
-    financeSheet.getRange(1, 1, 1, 16).setFontWeight("bold");
+    financeSheet.getRange(1, 1, 1, 15).setValues([["id", "date", "type", "amount", "category", "note", "recurringMonthly", "recurringFrequency", "recurringNextDueDate", "recurringBillType", "recurringStatus", "recurringBillId", "relatedTaskId", "relatedObjective", "isValueRealization"]]);
+    financeSheet.getRange(1, 1, 1, 15).setFontWeight("bold");
   }
   
   bills.forEach(bill => {
@@ -1460,8 +1415,7 @@ function processRecurringBills() {
         bill.id, // recurringBillId - link to the source recurring bill
         '', // relatedTaskId - empty for bill payments
         '', // relatedObjective - empty for bill payments
-        false, // isValueRealization - false for bill payments
-        0 // hoursNeeded - 0 for bill payments
+        false // isValueRealization - false for bill payments
       ]);
       
       // Update next due date on the recurring bill record
@@ -1590,7 +1544,6 @@ function getDerivedStats(tasks, financeRecords, objectives, categories, statuses
 
 function calculateObjectivesStats(tasks, financeRecords, objectives) {
   const now = new Date();
-  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const objectiveStats = {
     total: objectives.length,
     onTrack: 0,
@@ -1602,28 +1555,7 @@ function calculateObjectivesStats(tasks, financeRecords, objectives) {
     averageHealthScore: 0
   };
 
-  // Get current month's finance records
-  const monthRecords = financeRecords.filter(record => {
-    if (!record.date) return false;
-    const recordDate = new Date(record.date);
-    return recordDate.getFullYear() === currentMonth.getFullYear() && 
-           recordDate.getMonth() === currentMonth.getMonth();
-  });
-
   const objectivesWithProgress = objectives.map(objective => {
-    // Auto-sync budget/targetValue from current month's finance record if relatedFinanceName is set
-    // This ensures objectives always reflect the current month's finance data
-    let budget = objective.budget || 0;
-    let targetValue = objective.targetValue || 0;
-    
-    if (objective.relatedFinanceId) {
-      const financeRecord = monthRecords.find(r => r.id === objective.relatedFinanceId);
-      if (financeRecord) {
-        budget = Number(financeRecord.amount) || 0;
-        targetValue = Number(financeRecord.amount) || 0;
-      }
-    }
-    
     // Get tasks for this objective (using ID)
     const objectiveTasks = tasks.filter(task => task.objectiveId === objective.id);
     const totalTasks = objectiveTasks.length;
@@ -1643,46 +1575,12 @@ function calculateObjectivesStats(tasks, financeRecords, objectives) {
       .filter(record => record.type === 'expense' && objectiveTasks.some(task => task.id == record.relatedTaskId))
       .reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
 
-    // Calculate health score (0-100)
-    let healthScore = 50; // Base score
-
-    // Progress factor (0-40 points)
-    healthScore += Math.min(progressPercent, 40);
-
-    // Overdue penalty (-30 points max)
-    const overduePenalty = Math.min(overdueTasks * 10, 30);
-    healthScore -= overduePenalty;
-
-    // Deadline proximity factor
-    if (objective.dueDate) {
-      const dueDate = new Date(objective.dueDate);
-      const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
-
-      if (daysUntilDue < 0) {
-        // Overdue
-        healthScore -= 20;
-      } else if (daysUntilDue <= 7) {
-        // Due soon - bonus for urgency
-        healthScore += Math.max(0, 10 - (daysUntilDue / 2));
-      } else if (daysUntilDue <= 30) {
-        // Medium term - slight bonus
-        healthScore += 5;
-      }
-    }
-
-    // Task completion rate bonus
-    const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) : 0;
-    healthScore += Math.round(completionRate * 10);
-
-    // Clamp between 0-100
-    healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
-
     // Determine status
     let status = 'pending';
     if (progressPercent >= 100) {
       status = 'completed';
       objectiveStats.completed++;
-    } else if (healthScore < 40 || overdueTasks > 2) {
+    } else if (overdueTasks > 0) {
       status = 'atRisk';
       objectiveStats.atRisk++;
     } else {
@@ -1692,15 +1590,12 @@ function calculateObjectivesStats(tasks, financeRecords, objectives) {
 
     return {
       ...objective,
-      budget: budget, // Use synced budget
-      targetValue: targetValue, // Use synced targetValue
       totalTasks,
       completedTasks,
       overdueTasks,
       progressPercent,
       completedTaskValue,
       spending: objectiveSpending,
-      healthScore,
       status,
       daysUntilDue: objective.dueDate ? Math.ceil((new Date(objective.dueDate) - now) / (1000 * 60 * 60 * 24)) : null
     };
@@ -1710,8 +1605,7 @@ function calculateObjectivesStats(tasks, financeRecords, objectives) {
   const totalProgress = objectivesWithProgress.reduce((sum, obj) => sum + obj.progressPercent, 0);
   objectiveStats.averageProgress = objectives.length > 0 ? Math.round(totalProgress / objectives.length) : 0;
 
-  const totalHealthScore = objectivesWithProgress.reduce((sum, obj) => sum + obj.healthScore, 0);
-  objectiveStats.averageHealthScore = objectives.length > 0 ? Math.round(totalHealthScore / objectives.length) : 0;
+  objectiveStats.averageHealthScore = 0;
 
   objectiveStats.totalValue = objectivesWithProgress.reduce((sum, obj) => sum + obj.completedTaskValue, 0);
   objectiveStats.totalSpending = objectivesWithProgress.reduce((sum, obj) => sum + obj.spending, 0);

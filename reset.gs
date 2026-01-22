@@ -84,34 +84,27 @@ function resetAllSheets() {
   
   // 4_objectives
   const objectivesSheet = ss.insertSheet('4_objectives');
-  objectivesSheet.getRange(1, 1, 1, 13).setValues([[
-    'id', 
-    'name', 
-    'description', 
-    'color', 
+  objectivesSheet.getRange(1, 1, 1, 6).setValues([[
+    'id',
+    'name',
+    'description',
+    'color',
     'category',
-    'dueDate',
-    'budget',
-    'actualSpending',
-    'targetValue',
-    'currentValue',
-    'healthScore',
-    'lastUpdated',
-    'relatedFinanceId'
+    'dueDate'
   ]]);
-  objectivesSheet.getRange(1, 1, 1, 13).setFontWeight('bold');
+  objectivesSheet.getRange(1, 1, 1, 6).setFontWeight('bold');
   objectivesSheet.setColumnWidth(1, 50);  // id
   objectivesSheet.setColumnWidth(2, 150); // name
   objectivesSheet.setColumnWidth(3, 250); // description
   objectivesSheet.setColumnWidth(4, 80);  // color
-  objectivesSheet.setColumnWidth(5, 100); // category
+  objectivesSheet.setColumnWidth(5, 120); // category
   objectivesSheet.setColumnWidth(6, 120); // dueDate
   
   // Add sample objectives
   const sampleObjectives = [
-    [1, 'Work', 'Work-related objectives', '#3b82f6', '', ''],
-    [2, 'Personal', 'Personal development goals', '#10b981', '', ''],
-    [3, 'Health', 'Health and fitness goals', '#ef4444', '', '']
+    [1, 'Work', 'Work-related objectives', '#3b82f6', 'Work', ''],
+    [2, 'Personal', 'Personal development goals', '#10b981', 'Personal', ''],
+    [3, 'Health', 'Health and fitness goals', '#ef4444', 'Health', '']
   ];
   if (sampleObjectives.length > 0) {
     objectivesSheet.getRange(2, 1, sampleObjectives.length, 6).setValues(sampleObjectives);
@@ -119,47 +112,31 @@ function resetAllSheets() {
   
   // 5_tasks
   const dataSheet = ss.insertSheet('5_tasks');
-  dataSheet.getRange(1, 1, 1, 19).setValues([[
+  dataSheet.getRange(1, 1, 1, 9).setValues([[
     'id',
     'task',
-    'category',
     'startDate',
     'startTime',
     'endDate',
     'endTime',
     'color',
     'status',
-    'objectiveId',
-    'priority',
-    'repeatType',
-    'repeatUntil',
-    'impactType',
-    'estimatedValue',
-    'actualValue',
-    'valueRealizedDate',
-    'estimatedHours',
-    'isIncome'
+    'objectiveId'
   ]]);
-  dataSheet.getRange(1, 1, 1, 19).setFontWeight('bold');
+  dataSheet.getRange(1, 1, 1, 9).setFontWeight('bold');
   dataSheet.setColumnWidth(1, 50);  // id
   dataSheet.setColumnWidth(2, 220); // task
-  dataSheet.setColumnWidth(3, 120); // category
-  dataSheet.setColumnWidth(4, 110); // startDate
-  dataSheet.setColumnWidth(5, 90); // startTime
-  dataSheet.setColumnWidth(6, 110); // endDate
-  dataSheet.setColumnWidth(7, 90); // endTime
-  dataSheet.setColumnWidth(8, 90);  // color
-  dataSheet.setColumnWidth(9, 110); // status
-  dataSheet.setColumnWidth(10, 140); // objectiveId
-  dataSheet.setColumnWidth(11, 90); // priority
-  dataSheet.setColumnWidth(12, 110); // repeatType
-  dataSheet.setColumnWidth(13, 110); // repeatUntil
-  dataSheet.setColumnWidth(14, 120); // impactType
-  dataSheet.setColumnWidth(15, 130); // estimatedValue
+  dataSheet.setColumnWidth(3, 110); // startDate
+  dataSheet.setColumnWidth(4, 90); // startTime
+  dataSheet.setColumnWidth(5, 110); // endDate
+  dataSheet.setColumnWidth(6, 90); // endTime
+  dataSheet.setColumnWidth(7, 90);  // color
+  dataSheet.setColumnWidth(8, 110); // status
+  dataSheet.setColumnWidth(9, 140); // objectiveId
 
   // 6_finance
   const financeSheet = ss.insertSheet('6_finance');
-  financeSheet.getRange(1, 1, 1, 16).setValues([[
+  financeSheet.getRange(1, 1, 1, 15).setValues([[
     'id',
     'date',
     'type',
@@ -174,10 +151,9 @@ function resetAllSheets() {
     'recurringBillId',
     'relatedTaskId',
     'relatedObjective',
-    'isValueRealization',
-    'hoursNeeded'
+    'isValueRealization'
   ]]);
-  financeSheet.getRange(1, 1, 1, 16).setFontWeight('bold');
+  financeSheet.getRange(1, 1, 1, 15).setFontWeight('bold');
   financeSheet.setColumnWidth(1, 60);
   financeSheet.setColumnWidth(2, 110);
   financeSheet.setColumnWidth(3, 90);
@@ -324,51 +300,40 @@ function ensureSheetsExist() {
   let objectivesSheet = ss.getSheetByName('4_objectives');
   if (!objectivesSheet) {
     objectivesSheet = ss.insertSheet('4_objectives');
-    objectivesSheet.getRange(1, 1, 1, 13).setValues([[
-      'id', 'name', 'description', 'color', 'category', 'dueDate',
-      'budget', 'actualSpending', 'targetValue', 'currentValue', 'healthScore', 'lastUpdated', 'relatedFinanceId'
+    objectivesSheet.getRange(1, 1, 1, 6).setValues([[
+      'id', 'name', 'description', 'color', 'category', 'dueDate'
     ]]);
-    objectivesSheet.getRange(1, 1, 1, 13).setFontWeight('bold');
+    objectivesSheet.getRange(1, 1, 1, 6).setFontWeight('bold');
   }
   
   // Ensure 5_tasks sheet exists
   let dataSheet = ss.getSheetByName('5_tasks');
   if (!dataSheet) {
     dataSheet = ss.insertSheet('5_tasks');
-    dataSheet.getRange(1, 1, 1, 19).setValues([[
+    dataSheet.getRange(1, 1, 1, 9).setValues([[
       'id',
       'task',
-      'category',
       'startDate',
       'startTime',
       'endDate',
       'endTime',
       'color',
       'status',
-      'objectiveId',
-      'priority',
-      'repeatType',
-      'repeatUntil',
-      'impactType',
-      'estimatedValue',
-      'actualValue',
-      'valueRealizedDate',
-      'estimatedHours',
-      'isIncome'
+      'objectiveId'
     ]]);
-    dataSheet.getRange(1, 1, 1, 19).setFontWeight('bold');
+    dataSheet.getRange(1, 1, 1, 9).setFontWeight('bold');
   }
 
   // Ensure 6_finance sheet exists
   let financeSheet = ss.getSheetByName('6_finance');
   if (!financeSheet) {
     financeSheet = ss.insertSheet('6_finance');
-    financeSheet.getRange(1, 1, 1, 16).setValues([[
+    financeSheet.getRange(1, 1, 1, 15).setValues([[
       'id', 'date', 'type', 'amount', 'category', 'note', 'recurringMonthly',
       'recurringFrequency', 'recurringNextDueDate', 'recurringBillType', 'recurringStatus',
-      'recurringBillId', 'relatedTaskId', 'relatedObjective', 'isValueRealization', 'hoursNeeded'
+      'recurringBillId', 'relatedTaskId', 'relatedObjective', 'isValueRealization'
     ]]);
-    financeSheet.getRange(1, 1, 1, 16).setFontWeight('bold');
+    financeSheet.getRange(1, 1, 1, 15).setFontWeight('bold');
   }
 
   // Ensure 7_financeSettings sheet exists
